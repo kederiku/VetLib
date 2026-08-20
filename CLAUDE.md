@@ -28,12 +28,16 @@ docker-compose.yml  docker/  backend/  frontend-b2c/ (:3000)  frontend-b2b/ (:30
 - UoW : `system_uow()` (flux pré-tenant : login, register) vs `tenant_uow(clinic_id)` (`SET LOCAL ROLE vetolib_app` + `SET LOCAL app.clinic_id`).
 - SQLAlchemy : rester sur 2.0.x (< 2.1) ; TypeScript : rester sur 6.x (TS 7 casse typescript-eslint).
 - Tests d'intégration : testcontainers PostgreSQL (jamais SQLite — RLS/JSONB/SET LOCAL non émulables).
+- **Commentaires pédagogiques** : tout le code (backend, frontends, Docker, tests) est commenté **en français, pour qu'un novice comprenne son fonctionnement** — docstring de module (rôle du fichier dans l'architecture), docstrings de classes/fonctions, et le *pourquoi* des choix (RLS, outbox, cookies HttpOnly…). Maintenir ce niveau sur tout code nouveau ou modifié. Contrainte ruff dans les commentaires Python : ponctuation ASCII (pas de tirets cadratins ni guillemets typographiques ; lettres accentuées OK), lignes ≤ 100.
+- **Frontends : exclusivement des composants `shadcn/ui` et du style Tailwind.** Pas de CSS maison, pas d'autre bibliothèque UI ; les nouveaux composants s'ajoutent via la CLI shadcn dans `src/components/ui/`.
 
 ## Commandes
 
-- `docker compose up -d` : infra + api + worker. Frontends **hors Docker** en dev.
-- Deux fichiers d'env distincts : `.env` racine = interpolation docker-compose (hostnames Docker) ; `backend/.env` (copié de `backend/.env.example`, URLs localhost) = backend lancé hors Docker (`make dev`, alembic, tâches locales).
-- `cd backend && uv run alembic upgrade head` : migrations (connectées via `ALEMBIC_DATABASE_URL`, superuser).
-- `make -C backend lint typecheck test-unit` : qualité backend sans Docker.
-- Après tout changement d'endpoint : `npm run generate:api` dans **les 2** frontends.
+Le **Makefile racine** est le point d'entrée unique de toutes les commandes du projet — Claude est autorisé à utiliser librement ses cibles (`make help` pour la liste ; il délègue à `backend/Makefile`).
+
+- `make up` : infra + api + worker (Docker). Frontends **hors Docker** en dev : `make dev-b2c` / `make dev-b2b`.
+- Deux fichiers d'env distincts (`make env` copie les deux) : `.env` racine = interpolation docker-compose (hostnames Docker) ; `backend/.env` = backend lancé hors Docker (`make dev-api`, alembic, tâches locales — URLs localhost).
+- `make migrate` : migrations Alembic (connectées via `ALEMBIC_DATABASE_URL`, superuser).
+- `make check` : toute la qualité sans Docker (ruff, mypy, tests unit, ESLint, tsc) ; en ciblé : `make lint typecheck test-unit` (backend) ou `make lint-front typecheck-front`.
+- Après tout changement d'endpoint : `make generate-api` (API démarrée sur :8000) — régénère le client Orval des **2** frontends.
 - **Ne jamais éditer `src/lib/api/generated/`** (sortie Orval, committée).
