@@ -15,15 +15,20 @@ import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 export function GuestGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { data: user } = useCurrentUser();
+  const { data: user, isError } = useCurrentUser();
 
   // Redirection en effet (pas pendant le rendu), replace pour ne pas
   // empiler /login dans l'historique du navigateur.
+  // `!isError` est indispensable : quand un refetch d'arriere-plan echoue,
+  // TanStack Query passe en erreur SANS effacer les donnees (data definie ET
+  // isError true en meme temps). Sans ce garde-fou, l'AuthGuard (qui redirige
+  // sur isError) et ce GuestGuard (qui redirigerait sur data seule) se
+  // renverraient l'utilisateur en boucle /account <-> /login.
   useEffect(() => {
-    if (user !== undefined) {
+    if (user !== undefined && !isError) {
       router.replace("/account");
     }
-  }, [user, router]);
+  }, [user, isError, router]);
 
   // Rendu OPTIMISTE : on affiche le formulaire tout de suite, sans
   // attendre la fin de la vérification de session. Le cas nominal sur

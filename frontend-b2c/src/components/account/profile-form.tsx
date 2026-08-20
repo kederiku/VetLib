@@ -128,9 +128,10 @@ export function ProfileForm() {
     setSaved(false);
 
     // Adresse tout-ou-rien : le superRefine du schéma garantit qu'ici
-    // l'adresse est soit entièrement vide, soit complète. line1 suffit
-    // donc comme sentinelle. Le backend attend address: null quand il
-    // n'y a pas d'adresse — JAMAIS un objet aux champs vides (422).
+    // l'adresse est soit entièrement vide (les quatre champs, complément
+    // inclus), soit complète — line1 suffit donc comme sentinelle. Le
+    // backend attend address: null quand il n'y a pas d'adresse — JAMAIS
+    // un objet aux champs vides (422).
     const hasAddress = values.address.line1 !== "";
 
     try {

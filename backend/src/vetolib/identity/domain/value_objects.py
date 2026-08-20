@@ -109,9 +109,11 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
     Role.MANAGER: _MANAGER_PERMISSIONS,
 }
 
-# Code postal francais : exactement 5 chiffres. La validation ne s'applique
-# qu'au pays FR ; pour les autres pays on accepte tel quel (bootstrap).
+# Code postal francais : exactement 5 chiffres. Le format n'est controle que
+# pour FR ; pour les autres pays on exige seulement un code non vide.
 _FR_POSTAL_CODE_RE = re.compile(r"^\d{5}$")
+# Code pays ISO 3166-1 alpha-2 : exactement 2 lettres.
+_COUNTRY_RE = re.compile(r"^[A-Z]{2}$")
 
 
 @dataclass(frozen=True)
@@ -132,7 +134,14 @@ class Address:
     country: str = "FR"
 
     def __post_init__(self) -> None:
-        """Valide et normalise (trim) ; lève DomainValidationError sinon."""
+        """Valide et normalise (trim) ; lève DomainValidationError sinon.
+
+        IMPORTANT : la validation porte sur les valeurs NORMALISÉES (après
+        strip/upper), jamais sur les valeurs brutes. Un schéma Pydantic qui
+        validerait " F" (2 caractères bruts) laisserait passer un pays d'une
+        seule lettre une fois normalisé -- le VO est l'arbitre final, il doit
+        refuser tout ce que la base ne doit jamais contenir.
+        """
         line1 = self.line1.strip()
         city = self.city.strip()
         postal_code = self.postal_code.strip()
@@ -141,6 +150,12 @@ class Address:
             raise DomainValidationError("L'adresse (ligne 1) est requise.")
         if not city:
             raise DomainValidationError("La ville est requise.")
+        if not _COUNTRY_RE.match(country):
+            raise DomainValidationError(f"Code pays invalide : {self.country!r}")
+        # Tout ou rien : un code postal vide est refusé pour TOUS les pays ;
+        # le format 5 chiffres n'est verifié que pour la France.
+        if not postal_code:
+            raise DomainValidationError("Le code postal est requis.")
         if country == "FR" and not _FR_POSTAL_CODE_RE.match(postal_code):
             raise DomainValidationError(f"Code postal invalide : {self.postal_code!r}")
         line2 = self.line2.strip() if self.line2 is not None else None

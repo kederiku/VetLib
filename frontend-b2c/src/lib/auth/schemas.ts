@@ -114,11 +114,15 @@ export const profileSchema = z
     }),
   })
   .superRefine((values, ctx) => {
-    const { line1, postal_code, city } = values.address;
+    const { line1, line2, postal_code, city } = values.address;
 
-    // Aucun des trois champs essentiels rempli : adresse absente, c'est
-    // un état valide (le propriétaire n'est pas obligé d'en donner une).
-    if (line1 === "" && postal_code === "" && city === "") {
+    // Adresse absente = les QUATRE champs vides (y compris le complément) :
+    // c'est un état valide, le propriétaire n'est pas obligé d'en donner
+    // une. Inclure line2 dans ce test évite qu'un complément saisi seul
+    // soit silencieusement jeté ("Profil enregistré" sans adresse) : il
+    // déclenche à la place les erreurs "ligne 1 / code postal / ville
+    // requis" sous les bons champs.
+    if (line1 === "" && line2 === "" && postal_code === "" && city === "") {
       return;
     }
 

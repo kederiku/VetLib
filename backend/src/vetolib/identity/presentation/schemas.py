@@ -23,7 +23,7 @@ triée).
 
 import uuid
 
-from pydantic import BaseModel, EmailStr, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr
 
 from vetolib.identity.application.dto import CurrentOwner, CurrentUser
 from vetolib.identity.domain.value_objects import Role
@@ -119,7 +119,16 @@ class OwnerRegisteredResponse(BaseModel):
 
 
 class AddressPayload(BaseModel):
-    """Adresse structuree exposee/recue par l'API (miroir du VO Address)."""
+    """Adresse structuree exposee/recue par l'API (miroir du VO Address).
+
+    str_strip_whitespace : Pydantic valide les longueurs sur les valeurs
+    NORMALISEES (comme le VO Address), pas sur les valeurs brutes -- sans
+    cela, un pays " F" (2 caracteres bruts) passerait le schema d'entree
+    puis, une fois normalise en "F" par le VO, violerait ce meme schema en
+    SORTIE (OwnerResponse) : 500 au lieu de 422, et donnee invalide en base.
+    """
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
     line1: str = Field(min_length=1, max_length=200)
     line2: str | None = Field(default=None, max_length=200)

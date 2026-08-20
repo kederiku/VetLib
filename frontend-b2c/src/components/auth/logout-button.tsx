@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import type { ApiError } from "@/lib/api/errors";
 import {
@@ -48,13 +49,27 @@ export function LogoutButton() {
   });
 
   return (
-    <Button
-      variant="outline"
-      onClick={() => logoutMutation.mutate()}
-      disabled={logoutMutation.isPending}
-    >
-      {logoutMutation.isPending && <Spinner data-icon="inline-start" />}
-      Se déconnecter
-    </Button>
+    <div className="flex flex-col items-end gap-2">
+      <Button
+        variant="outline"
+        onClick={() => logoutMutation.mutate()}
+        disabled={logoutMutation.isPending}
+      >
+        {logoutMutation.isPending && <Spinner data-icon="inline-start" />}
+        Se déconnecter
+      </Button>
+      {/* Échec (serveur injoignable...) : la session est TOUJOURS ouverte
+          (les cookies HttpOnly n'ont pas été effacés par le serveur) — on
+          l'affiche plutôt que d'échouer en silence, et on ne redirige pas :
+          prétendre être déconnecté serait un mensonge. */}
+      {logoutMutation.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Déconnexion impossible : le serveur est injoignable. Vérifiez votre connexion et
+            réessayez.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
   );
 }

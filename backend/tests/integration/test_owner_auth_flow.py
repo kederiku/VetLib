@@ -186,3 +186,60 @@ async def test_rejet_croise_des_jetons(client: httpx.AsyncClient) -> None:
         response = await forged.get("/api/v1/auth/me")
         assert response.status_code == 401
         assert response.json()["code"] == "identity.invalid_token"
+
+
+async def test_adresse_invalide_refusee_en_422_sans_persistance(
+    client: httpx.AsyncClient,
+) -> None:
+    """Non-regression (revue) : une adresse dont la valeur NORMALISEE viole
+    les regles doit etre refusee en 422 AVANT tout commit -- jamais 500,
+    jamais de donnee invalide en base (qui rendrait ensuite login/me/refresh
+    incapables de serialiser OwnerResponse : compte verrouille)."""
+    await client.post("/api/v1/owner/auth/register", json=OWNER_PAYLOAD)
+    await client.post(
+        "/api/v1/owner/auth/login",
+        json={"email": OWNER_PAYLOAD["email"], "password": OWNER_PAYLOAD["password"]},
+    )
+
+    def payload(address: dict[str, str | None]) -> dict[str, object]:
+        return {
+            "first_name": "Ana",
+            "last_name": "Martin",
+            "phone": None,
+            "address": address,
+            "notification_preferences": {"email": True, "sms": False},
+        }
+
+    # Pays "F " : 2 caracteres bruts mais 1 seul apres normalisation ->
+    # refuse par le schema (str_strip_whitespace) en 422 Pydantic.
+    response = await client.put(
+        "/api/v1/owner/profile",
+        json=payload(
+            {"line1": "1 rue A", "postal_code": "75001", "city": "Paris", "country": "F "}
+        ),
+    )
+    assert response.status_code == 422, response.text
+
+    # Code postal " " (vide apres trim) avec un pays non-FR -> 422 aussi.
+    response = await client.put(
+        "/api/v1/owner/profile",
+        json=payload({"line1": "1 Main St", "postal_code": " ", "city": "NY", "country": "US"}),
+    )
+    assert response.status_code == 422, response.text
+
+    # Pays "1X" : passe le schema (2 caracteres) mais le VO Address le
+    # refuse (lettres exigees) -> 422 domaine, defense en profondeur.
+    response = await client.put(
+        "/api/v1/owner/profile",
+        json=payload(
+            {"line1": "1 rue A", "postal_code": "75001", "city": "Paris", "country": "1X"}
+        ),
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "domain.validation"
+
+    # Rien n'a ete persiste : la fiche est intacte et TOUS les endpoints
+    # OwnerResponse repondent encore (pas de compte verrouille).
+    response = await client.get("/api/v1/owner/auth/me")
+    assert response.status_code == 200
+    assert response.json()["address"] is None
