@@ -72,6 +72,21 @@ class PetReader(Protocol):
     async def get_owned(self, pet_id: uuid.UUID, owner_id: uuid.UUID) -> PetInfo | None: ...
 
 
+class OwnerReader(Protocol):
+    # Existence d'un compte proprietaire (table globale identity.owners).
+    # Sans cette verification, un owner_id inconnu fourni par le staff
+    # violerait la FK au commit -> IntegrityError non traduite -> 500.
+    async def exists(self, owner_id: uuid.UUID) -> bool: ...
+
+
+class StaffUserReader(Protocol):
+    # Existence d'un compte staff, SOUS LA TRANSACTION COURANTE : appele
+    # sous UoW tenant, le SELECT sur users est filtre par la RLS -> un user
+    # d'une AUTRE clinique est invisible, le lien resource.user_id ne peut
+    # jamais pointer hors du tenant (et un id inconnu -> 404, pas 500).
+    async def exists(self, user_id: uuid.UUID) -> bool: ...
+
+
 class SchedulingUnitOfWork(UnitOfWork, Protocol):
     @property
     def resources(self) -> ResourceRepository: ...
@@ -93,6 +108,12 @@ class SchedulingUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def pet_info(self) -> PetReader: ...
+
+    @property
+    def owner_info(self) -> OwnerReader: ...
+
+    @property
+    def staff_info(self) -> StaffUserReader: ...
 
 
 SchedulingUoWFactory = Callable[[], SchedulingUnitOfWork]

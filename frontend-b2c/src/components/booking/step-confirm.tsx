@@ -108,6 +108,12 @@ export function StepConfirm({
       await queryClient.invalidateQueries({
         queryKey: getListMyAppointmentsQueryKey(),
       });
+      // Le creneau reserve n'est plus disponible : sans invalidation,
+      // relancer le wizard vers la meme clinique ressortirait du cache
+      // un mois qui le propose encore. Prefixe de cle = tous les mois.
+      void queryClient.invalidateQueries({
+        queryKey: getListAvailabilitiesQueryKey(clinic.id),
+      });
       onSubmitted();
     } catch (error) {
       const apiError = getApiError(error);

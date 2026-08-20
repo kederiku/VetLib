@@ -67,6 +67,8 @@ export type BookingAction =
   | { type: "GO_TO_STEP"; step: BookingStep }
   /** 409 du backend : le creneau est tombe, retour etape 4 sans creneau. */
   | { type: "SLOT_CONFLICT" }
+  /** 404 du backend : l'animal n'existe plus, retour etape 3 sans animal. */
+  | { type: "PET_INVALID" }
   /** 201 du backend : bascule sur l'ecran de succes. */
   | { type: "SUBMITTED" };
 
@@ -132,6 +134,13 @@ export function bookingReducer(
       // n'est plus propose : on le retire et on ramene l'utilisateur au
       // calendrier pour en choisir un autre.
       return { ...state, slot: null, step: 4 };
+
+    case "PET_INVALID":
+      // L'animal a ete supprime entre-temps (autre onglet) : on le
+      // DESELECTIONNE en plus de revenir a l'etape 3 — un simple
+      // GO_TO_STEP le laisserait coche et le bouton Continuer
+      // renverrait le meme 404 en boucle.
+      return { ...state, pet: null, step: 3 };
 
     case "SUBMITTED":
       return { ...state, submitted: true };

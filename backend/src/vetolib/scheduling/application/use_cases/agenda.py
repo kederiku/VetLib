@@ -5,7 +5,7 @@ partent dans l'outbox avec la meme transaction (pattern habituel).
 """
 
 import uuid
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from vetolib.patients.domain.errors import PetNotFoundError
@@ -24,6 +24,7 @@ from vetolib.scheduling.domain.errors import (
     ResourceNotFoundError,
 )
 from vetolib.shared.application.clock import Clock
+from vetolib.shared.domain.errors import DomainValidationError, EntityNotFoundError
 
 
 class GetAgenda:
@@ -37,6 +38,14 @@ class GetAgenda:
         self._uow_factory = uow_factory
 
     async def execute(self, query: GetAgendaQuery, *, clinic_id: uuid.UUID) -> list[AgendaEntry]:
+        # Bornes saines : date.max + 1 jour leverait OverflowError (500), et
+        # une periode de plusieurs annees ferait des scans inutiles.
+        if not (date(1970, 1, 1) <= query.date_from <= date(2200, 12, 31)) or not (
+            date(1970, 1, 1) <= query.date_to <= date(2200, 12, 31)
+        ):
+            raise DomainValidationError("Periode invalide.")
+        if query.date_to < query.date_from or (query.date_to - query.date_from).days > 62:
+            raise DomainValidationError("La periode demandee ne peut pas depasser 62 jours.")
         async with self._uow_factory() as uow:
             info = await uow.clinic_info.get_info(clinic_id)
             tz = ZoneInfo(info.timezone) if info is not None else ZoneInfo("Europe/Paris")
@@ -71,9 +80,15 @@ class CreateAppointmentByStaff:
                 raise ResourceNotFoundError("Praticien introuvable.")
             # ends_at derive de la duree du type : le front n'envoie que le debut.
             ends_at = cmd.starts_at + timedelta(minutes=appointment_type.duration_minutes)
-            if cmd.owner_id is not None and cmd.pet_id is not None:
-                # L'animal doit appartenir au proprietaire designe.
-                if await uow.pet_info.get_owned(cmd.pet_id, cmd.owner_id) is None:
+            if cmd.owner_id is not None:
+                # Le compte proprietaire doit EXISTER : sans ce controle,
+                # un owner_id inconnu violerait la FK au commit -> 500.
+                if not await uow.owner_info.exists(cmd.owner_id):
+                    raise EntityNotFoundError("Proprietaire introuvable.")
+                # Et l'animal, s'il est designe, doit lui appartenir.
+                if cmd.pet_id is not None and (
+                    await uow.pet_info.get_owned(cmd.pet_id, cmd.owner_id) is None
+                ):
                     raise PetNotFoundError("Cet animal n'appartient pas a ce proprietaire.")
 
             appointment = Appointment.create_by_staff(

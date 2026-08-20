@@ -42,13 +42,20 @@ export function AppointmentTypesTab() {
   const [editingType, setEditingType] =
     useState<AppointmentTypeResponse | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Compteur incrémenté à CHAQUE ouverture : sert de key au dialog pour
+  // le remonter à neuf. Une key basée sur la cible (id ?? "new") ne
+  // suffit pas : rouvrir sur la MÊME cible garderait l'état du
+  // formulaire (saisie abandonnée, erreur serveur) du passage précédent.
+  const [dialogKey, setDialogKey] = useState(0);
 
   const openCreate = () => {
     setEditingType(null);
+    setDialogKey((k) => k + 1);
     setDialogOpen(true);
   };
   const openEdit = (type: AppointmentTypeResponse) => {
     setEditingType(type);
+    setDialogKey((k) => k + 1);
     setDialogOpen(true);
   };
 
@@ -120,11 +127,11 @@ export function AppointmentTypesTab() {
         </div>
       </CardContent>
 
-      {/* key : remonte le dialog quand la cible change (édition d'un
-          autre type, ou passage création <-> édition) — le formulaire
-          repart des bonnes defaultValues sans reset manuel. */}
+      {/* key : remonte le dialog à chaque ouverture — le formulaire
+          repart des bonnes defaultValues sans reset manuel, même en
+          rouvrant sur la même cible. */}
       <AppointmentTypeDialog
-        key={editingType?.id ?? "new"}
+        key={dialogKey}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         type={editingType}

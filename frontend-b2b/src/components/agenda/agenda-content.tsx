@@ -31,6 +31,7 @@ import {
   formatDateRangeLabel,
   getWeekStart,
   toIsoDate,
+  toParisDisplayDate,
 } from "@/lib/date/format";
 
 export function AgendaContent() {
@@ -66,9 +67,10 @@ export function AgendaContent() {
         // (l'union générée inclut la variante 422) — le mutator jette
         // sur tout statut >= 400, on est forcément en 200 ici.
         select: (res) => (res.status === 200 ? res.data : []),
-        // Navigation fluide : la période précédente reste affichée (un
-        // peu périmée) pendant le fetch de la nouvelle, au lieu de
-        // repasser par les squelettes à chaque clic.
+        // Navigation : une période déjà en cache s'affiche instantanément
+        // (refetch en arrière-plan) ; une période inconnue passe par les
+        // squelettes (voir isPlaceholderData plus bas — les entrées de
+        // l'ancienne période ne matcheraient aucun jour de la nouvelle).
         placeholderData: keepPreviousData,
       },
     },
@@ -102,7 +104,13 @@ export function AgendaContent() {
         onPrevious={() => setAnchorDate((date) => addDays(date, -shiftDays))}
         onNext={() => setAnchorDate((date) => addDays(date, shiftDays))}
         onToday={() => setAnchorDate(new Date())}
-        rangeLabel={formatDateRangeLabel(rangeStart, rangeEnd)}
+        rangeLabel={formatDateRangeLabel(
+          // Réancrage à midi UTC : les bornes vivent dans le fuseau du
+          // navigateur, le formatteur en Europe/Paris — sans cela le
+          // libellé glisserait d'un jour pour un poste à l'est.
+          toParisDisplayDate(rangeStart),
+          toParisDisplayDate(rangeEnd),
+        )}
         resourceId={resourceId}
         onResourceChange={setResourceId}
         resources={resourcesQuery.data ?? []}
@@ -113,7 +121,11 @@ export function AgendaContent() {
         entries={agendaQuery.data}
         rangeStart={rangeStart}
         dayCount={dayCount}
-        isPending={agendaQuery.isPending}
+        // isPlaceholderData : pendant la navigation, data contient
+        // l'ANCIENNE période — ses entrées ne matchent aucun jour de la
+        // nouvelle et la liste afficherait "Aucun rendez-vous" à tort.
+        // On repasse par les squelettes le temps du fetch.
+        isPending={agendaQuery.isPending || agendaQuery.isPlaceholderData}
         isError={agendaQuery.isError}
         onRetry={() => void agendaQuery.refetch()}
         onNewAppointment={openNewAppointment}

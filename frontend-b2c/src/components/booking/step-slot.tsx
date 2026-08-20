@@ -26,7 +26,6 @@ import {
   format as formatDateFns,
   isBefore,
   max,
-  startOfDay,
   startOfMonth,
 } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -42,7 +41,12 @@ import type {
   PublicAppointmentTypeResponse,
   PublicClinicResponse,
 } from "@/lib/api/generated/vetoLibAPI.schemas";
-import { formatTime, localDayKey, toParisDateKey } from "@/lib/date/format";
+import {
+  formatTime,
+  localDayKey,
+  parisToday,
+  toParisDateKey,
+} from "@/lib/date/format";
 
 interface StepSlotProps {
   clinic: PublicClinicResponse;
@@ -61,12 +65,13 @@ export function StepSlot({
   // Mois affiche (normalise au 1er) et jour choisi. Etat LOCAL a
   // l'etape : le wizard n'a pas besoin de connaitre le mois consulte,
   // seul le creneau finalement choisi remonte (onSelect).
-  const [month, setMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [month, setMonth] = useState<Date>(() => startOfMonth(parisToday()));
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
 
-  // Recalcule a chaque rendu : minuit local du jour courant, base des
-  // comparaisons "jour passe" et de la troncature de date_from.
-  const today = startOfDay(new Date());
+  // Recalcule a chaque rendu : minuit local du jour courant DE PARIS
+  // (pas du navigateur — voir parisToday), base des comparaisons
+  // "jour passe" et de la troncature de date_from.
+  const today = parisToday();
 
   // Bornes de la requete du mois affiche. max(debut du mois, aujourd'hui) :
   // pour le mois courant, inutile de demander les jours deja passes (et le
@@ -167,6 +172,11 @@ export function StepSlot({
         <Calendar
           mode="single"
           locale={fr}
+          // Pas de jours "voisins" (fin du mois precedent / debut du
+          // suivant) : leur disponibilite appartient a la requete d'un
+          // AUTRE mois — ils apparaitraient toujours grises, meme avec
+          // des creneaux libres. Naviguer de mois charge les vrais.
+          showOutsideDays={false}
           month={month}
           onMonthChange={(newMonth) => {
             setMonth(startOfMonth(newMonth));
@@ -218,6 +228,18 @@ export function StepSlot({
               <h3 className="text-sm font-medium">
                 {formatDateFns(selectedDay, "EEEE d MMMM yyyy", { locale: fr })}
               </h3>
+
+              {/* Jour finalement sans creneau : possible si le jour a ete
+                  clique pendant le chargement du mois (seuls les jours
+                  passes etaient alors grises) ou si les donnees ont
+                  change depuis. On le dit plutot que d'afficher un titre
+                  suivi de rien. */}
+              {dayGroups.size === 0 && !isPending && (
+                <p className="text-sm text-muted-foreground">
+                  Aucun créneau disponible ce jour-là. Choisissez un autre
+                  jour dans le calendrier.
+                </p>
+              )}
 
               {[...dayGroups.entries()].map(([resourceName, groupSlots]) => (
                 <div key={resourceName} className="flex flex-col gap-2">

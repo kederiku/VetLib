@@ -224,6 +224,22 @@ class FakePetReader:
         return pet
 
 
+class FakeOwnerReader:
+    def __init__(self, ids: set[uuid.UUID]) -> None:
+        self._ids = ids
+
+    async def exists(self, owner_id: uuid.UUID) -> bool:
+        return owner_id in self._ids
+
+
+class FakeStaffUserReader:
+    def __init__(self, ids: set[uuid.UUID]) -> None:
+        self._ids = ids
+
+    async def exists(self, user_id: uuid.UUID) -> bool:
+        return user_id in self._ids
+
+
 class FakeSchedulingUnitOfWork:
     """UoW in-memory : satisfait structurellement SchedulingUnitOfWork."""
 
@@ -242,6 +258,10 @@ class FakeSchedulingUnitOfWork:
         self.appointments = FakeAppointmentRepository(self.appointment_store)
         self.clinic_info = FakeClinicInfoReader(self.clinic_store)
         self.pet_info = FakePetReader(self.pet_store)
+        self.owner_ids: set[uuid.UUID] = set()
+        self.staff_ids: set[uuid.UUID] = set()
+        self.owner_info = FakeOwnerReader(self.owner_ids)
+        self.staff_info = FakeStaffUserReader(self.staff_ids)
         self.events: list[DomainEvent] = []
         self.commits = 0
         self.rollbacks = 0

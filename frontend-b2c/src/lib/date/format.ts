@@ -104,6 +104,26 @@ export function toParisDateKey(iso: string): string {
 }
 
 /**
+ * Le jour calendaire d'AUJOURD'HUI a Paris, sous forme d'objet Date
+ * local a minuit — le pont entre "maintenant" et le monde des Date
+ * locales du calendrier.
+ *
+ * new Date() seul ne suffit pas : ses composantes locales refletent le
+ * fuseau du NAVIGATEUR. A 1 h du matin a Paris, un visiteur connecte
+ * depuis Montreal serait encore "hier" — son calendrier grisererait le
+ * mauvais jour et la requete de disponibilites partirait avec un
+ * date_from decale. On determine donc le jour de Paris (toParisDateKey)
+ * puis on le reconstruit en Date locale, comparable aux cases du
+ * calendrier.
+ */
+export function parisToday(): Date {
+  const [year, month, day] = toParisDateKey(new Date().toISOString())
+    .split("-")
+    .map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
  * Cle "YYYY-MM-DD" d'un objet Date de react-day-picker.
  *
  * Le calendrier manipule des Date construites a midi LOCAL pour chaque

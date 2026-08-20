@@ -184,7 +184,7 @@ export function BookingWizard() {
             }}
             onPetInvalid={(message) => {
               setInfoMessage(message);
-              dispatch({ type: "GO_TO_STEP", step: 3 });
+              dispatch({ type: "PET_INVALID" });
             }}
             onSubmitted={() => dispatch({ type: "SUBMITTED" })}
           />

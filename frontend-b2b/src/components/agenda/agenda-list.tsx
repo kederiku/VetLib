@@ -30,6 +30,7 @@ import {
   formatDayLong,
   toIsoDate,
   toParisDayKey,
+  toParisDisplayDate,
 } from "@/lib/date/format";
 
 type AgendaListProps = {
@@ -135,9 +136,12 @@ export function AgendaList({
         return (
           <section key={key} className="flex flex-col gap-2">
             {/* first-letter:uppercase : Intl produit "lundi 24 août" en
-                minuscules, on capitalise seulement l'initiale. */}
+                minuscules, on capitalise seulement l'initiale.
+                toParisDisplayDate : réancre le jour civil à midi UTC
+                avant le formatteur Europe/Paris (sinon, titre décalé
+                d'un jour pour un poste à l'est de la France). */}
             <h2 className="text-sm font-semibold first-letter:uppercase">
-              {formatDayLong(day)}
+              {formatDayLong(toParisDisplayDate(day))}
             </h2>
             {dayEntries.length === 0 ? (
               <p className="rounded-2xl border border-dashed p-3 text-sm text-muted-foreground">

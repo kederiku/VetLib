@@ -17,9 +17,11 @@ from vetolib.scheduling.infrastructure.repositories import (
     SqlAlchemyAppointmentRepository,
     SqlAlchemyAppointmentTypeRepository,
     SqlAlchemyClinicInfoReader,
+    SqlAlchemyOwnerReader,
     SqlAlchemyPetReader,
     SqlAlchemyResourceRepository,
     SqlAlchemyScheduleExceptionRepository,
+    SqlAlchemyStaffUserReader,
     SqlAlchemyWeeklyScheduleRepository,
 )
 from vetolib.shared.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -40,6 +42,8 @@ class SqlAlchemySchedulingUnitOfWork(SqlAlchemyUnitOfWork):
     appointments: SqlAlchemyAppointmentRepository
     clinic_info: SqlAlchemyClinicInfoReader
     pet_info: SqlAlchemyPetReader
+    owner_info: SqlAlchemyOwnerReader
+    staff_info: SqlAlchemyStaffUserReader
 
     async def __aenter__(self) -> Self:
         await super().__aenter__()
@@ -50,6 +54,8 @@ class SqlAlchemySchedulingUnitOfWork(SqlAlchemyUnitOfWork):
         self.appointments = SqlAlchemyAppointmentRepository(self.session)
         self.clinic_info = SqlAlchemyClinicInfoReader(self.session)
         self.pet_info = SqlAlchemyPetReader(self.session)
+        self.owner_info = SqlAlchemyOwnerReader(self.session)
+        self.staff_info = SqlAlchemyStaffUserReader(self.session)
         return self
 
     async def commit(self) -> None:

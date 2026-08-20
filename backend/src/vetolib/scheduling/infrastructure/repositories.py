@@ -16,7 +16,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from vetolib.identity.infrastructure.models import ClinicModel, OwnerModel
+from vetolib.identity.infrastructure.models import ClinicModel, OwnerModel, UserModel
 from vetolib.patients.infrastructure.models import PetModel
 from vetolib.scheduling.application.availability import BusyPeriod
 from vetolib.scheduling.application.dto import (
@@ -536,6 +536,34 @@ class SqlAlchemyClinicInfoReader:
         if row is None:
             return None
         return ClinicInfo(id=row.id, name=row.name, timezone=row.timezone)
+
+
+class SqlAlchemyOwnerReader:
+    """Existence d'un proprietaire (table identity.owners, GLOBALE)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def exists(self, owner_id: uuid.UUID) -> bool:
+        stmt = select(OwnerModel.id).where(
+            OwnerModel.id == owner_id, OwnerModel.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).one_or_none() is not None
+
+
+class SqlAlchemyStaffUserReader:
+    """Existence d'un compte staff SOUS la transaction courante.
+
+    Sous UoW tenant, la RLS de la table users filtre par clinique : un
+    user d'un autre tenant est invisible ici -- c'est voulu.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def exists(self, user_id: uuid.UUID) -> bool:
+        stmt = select(UserModel.id).where(UserModel.id == user_id, UserModel.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).one_or_none() is not None
 
 
 class SqlAlchemyPetReader:

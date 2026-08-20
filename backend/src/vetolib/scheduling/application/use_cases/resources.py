@@ -11,10 +11,14 @@ from vetolib.scheduling.application.dto import (
     ResourceDto,
     UpdateResourceCommand,
 )
-from vetolib.scheduling.application.ports import SchedulingUoWFactory
+from vetolib.scheduling.application.ports import (
+    SchedulingUnitOfWork,
+    SchedulingUoWFactory,
+)
 from vetolib.scheduling.domain.errors import ResourceNotFoundError
 from vetolib.scheduling.domain.resource import Resource
 from vetolib.shared.application.clock import Clock
+from vetolib.shared.domain.errors import EntityNotFoundError
 
 
 def _to_dto(entity: Resource) -> ResourceDto:
@@ -25,6 +29,18 @@ def _to_dto(entity: Resource) -> ResourceDto:
         user_id=entity.user_id,
         active=entity.active,
     )
+
+
+async def _check_user_link(uow: SchedulingUnitOfWork, user_id: uuid.UUID | None) -> None:
+    """Valide un lien resource -> compte staff, sous la transaction TENANT.
+
+    La RLS de la table users filtre par clinique : un user d'un autre
+    tenant est INVISIBLE ici (le lien cross-clinique est donc impossible),
+    et un id inconnu devient un 404 propre au lieu d'une violation de FK
+    au commit (les triggers de FK, eux, ne sont pas soumis a la RLS).
+    """
+    if user_id is not None and not await uow.staff_info.exists(user_id):
+        raise EntityNotFoundError("Utilisateur introuvable dans cette clinique.")
 
 
 class ListResources:
@@ -49,6 +65,7 @@ class CreateResource:
             now=self._clock.now(),
         )
         async with self._uow_factory() as uow:
+            await _check_user_link(uow, cmd.user_id)
             await uow.resources.add(resource)
             await uow.commit()
             return _to_dto(resource)
@@ -63,6 +80,7 @@ class UpdateResource:
             resource = await uow.resources.get_by_id(cmd.resource_id)
             if resource is None:
                 raise ResourceNotFoundError("Praticien introuvable.")
+            await _check_user_link(uow, cmd.user_id)
             resource.update(name=cmd.name, active=cmd.active, user_id=cmd.user_id)
             await uow.resources.update(resource)
             await uow.commit()

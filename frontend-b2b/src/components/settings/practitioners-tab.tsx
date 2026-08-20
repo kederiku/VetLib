@@ -44,13 +44,20 @@ export function PractitionersTab() {
   const [editingResource, setEditingResource] =
     useState<ResourceResponse | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Compteur incrémenté à CHAQUE ouverture : sert de key au dialog pour
+  // le remonter à neuf. Une key basée sur la cible (id ?? "new") ne
+  // suffit pas : rouvrir sur la MÊME cible garderait l'état du
+  // formulaire (saisie abandonnée, erreur serveur) du passage précédent.
+  const [dialogKey, setDialogKey] = useState(0);
 
   const openCreate = () => {
     setEditingResource(null);
+    setDialogKey((k) => k + 1);
     setDialogOpen(true);
   };
   const openEdit = (resource: ResourceResponse) => {
     setEditingResource(resource);
+    setDialogKey((k) => k + 1);
     setDialogOpen(true);
   };
 
@@ -123,10 +130,11 @@ export function PractitionersTab() {
         </div>
       </CardContent>
 
-      {/* key : remonte le dialog quand la cible change, pour repartir
-          des bonnes defaultValues sans reset manuel. */}
+      {/* key : remonte le dialog à chaque ouverture, pour repartir des
+          bonnes defaultValues sans reset manuel, même en rouvrant sur
+          la même cible. */}
       <PractitionerDialog
-        key={editingResource?.id ?? "new"}
+        key={dialogKey}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         resource={editingResource}

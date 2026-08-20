@@ -11,7 +11,10 @@ import uuid
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from vetolib.scheduling.application.availability import compute_available_slots
+from vetolib.scheduling.application.availability import (
+    DEFAULT_HORIZON,
+    compute_available_slots,
+)
 from vetolib.scheduling.application.dto import (
     AppointmentTypeDto,
     AvailabilityQuery,
@@ -80,12 +83,26 @@ class GetPublicAvailabilities:
             names = {r.id: r.name for r in resources}
             tz = ZoneInfo(info.timezone)
 
+            # CLAMP de la periode demandee a [aujourd'hui local, horizon] :
+            # 1. evite l'OverflowError de date.max + 1 jour (une route
+            #    publique repondrait 500 sur date_to=9999-12-31) ;
+            # 2. borne les requetes SQL (exceptions/busy) a la fenetre que
+            #    compute_available_slots exploitera vraiment -- sans clamp,
+            #    un anonyme ferait scanner des annees d'historique pour un
+            #    resultat vide.
+            today_local = now.astimezone(tz).date()
+            horizon_local = (now + DEFAULT_HORIZON).astimezone(tz).date()
+            date_from = max(query.date_from, today_local)
+            date_to = min(query.date_to, horizon_local)
+            if date_to < date_from:
+                return []
+
             schedules = await uow.schedules.list_for_clinic_resources(query.clinic_id, resource_ids)
             # Fenetre UTC LARGE couvrant les jours demandes dans la tz de la
             # clinique (une journee locale deborde sur deux jours UTC).
-            window_start = datetime.combine(query.date_from, time.min, tzinfo=tz).astimezone(UTC)
+            window_start = datetime.combine(date_from, time.min, tzinfo=tz).astimezone(UTC)
             window_end = datetime.combine(
-                query.date_to + timedelta(days=1), time.min, tzinfo=tz
+                date_to + timedelta(days=1), time.min, tzinfo=tz
             ).astimezone(UTC)
             exceptions = await uow.exceptions.list_overlapping(
                 query.clinic_id, resource_ids, window_start, window_end
@@ -100,8 +117,8 @@ class GetPublicAvailabilities:
                 busy=busy,
                 duration_minutes=appointment_type.duration_minutes,
                 tz=tz,
-                date_from=query.date_from,
-                date_to=query.date_to,
+                date_from=date_from,
+                date_to=date_to,
                 now=now,
             )
             return [

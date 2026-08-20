@@ -16,6 +16,7 @@ import uuid
 from datetime import timedelta
 
 from vetolib.patients.domain.errors import PetNotFoundError
+from vetolib.scheduling.application.availability import DEFAULT_HORIZON
 from vetolib.scheduling.application.dto import (
     AppointmentDto,
     AvailabilityQuery,
@@ -54,6 +55,13 @@ class BookAppointmentByOwner:
 
     async def execute(self, cmd: OwnerBookAppointmentCommand) -> AppointmentDto:
         now = self._clock.now()
+
+        # 0. Borne temporelle AVANT tout calcul : un starts_at dans le passe
+        # ou au-dela de l'horizon (60 j) ne correspond a aucun creneau
+        # proposable -- et l'an 9999 leverait un OverflowError (500) dans
+        # l'arithmetique de dates ci-dessous.
+        if not (now <= cmd.starts_at <= now + DEFAULT_HORIZON):
+            raise SlotUnavailableError("Ce creneau n'est plus disponible.")
 
         # 1. Revalidation : le creneau demande doit ENCORE figurer dans les
         # disponibilites calculees du jour demande (aligne ET libre). Couvre

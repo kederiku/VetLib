@@ -121,6 +121,21 @@ export function toIsoDate(date: Date): string {
   return formatDateFns(date, "yyyy-MM-dd");
 }
 
+/**
+ * Instant "sûr" pour AFFICHER un jour de calendrier via les formatteurs
+ * Europe/Paris ci-dessus.
+ *
+ * Les Dates de navigation (ancre, bornes de semaine) vivent dans le
+ * fuseau du NAVIGATEUR : minuit local du 24 août vu depuis Tokyo, c'est
+ * encore le 23 août à Paris — le titre du jour serait décalé d'un jour
+ * pour un poste à l'est de la France. On réancre donc le jour civil
+ * (toIsoDate) à MIDI UTC : 12:00 UTC tombe toujours le même jour en
+ * Europe/Paris (UTC+1 ou +2), quel que soit le fuseau du poste.
+ */
+export function toParisDisplayDate(day: Date): Date {
+  return new Date(`${toIsoDate(day)}T12:00:00Z`);
+}
+
 // Jours de la semaine, convention backend : 0 = lundi ... 6 = dimanche
 // (WeeklyRangePayload.weekday). Sert au formulaire des horaires.
 export const WEEKDAYS = [

@@ -34,6 +34,7 @@ import {
   getListMyAppointmentsQueryKey,
   useCancelMyAppointment,
 } from "@/lib/api/generated/owner-appointments/owner-appointments";
+import { getListAvailabilitiesQueryKey } from "@/lib/api/generated/public-clinics/public-clinics";
 import type { OwnerAppointmentResponse } from "@/lib/api/generated/vetoLibAPI.schemas";
 import { businessErrorMessage } from "@/lib/auth/server-errors";
 import { formatDateLong, formatTime } from "@/lib/date/format";
@@ -62,6 +63,12 @@ export function CancelAppointmentDialog({
       // "Annulé"), et l'apercu du compte aussi (meme cle de cache).
       await queryClient.invalidateQueries({
         queryKey: getListMyAppointmentsQueryKey(),
+      });
+      // L'annulation LIBERE le creneau : les disponibilites de cette
+      // clinique en cache (wizard de reservation) sont perimees.
+      // Prefixe de cle = tous les mois consultes.
+      void queryClient.invalidateQueries({
+        queryKey: getListAvailabilitiesQueryKey(appointment.clinic_id),
       });
     } catch (error) {
       const apiError = getApiError(error);
