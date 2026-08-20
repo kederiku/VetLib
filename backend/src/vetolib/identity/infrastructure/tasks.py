@@ -1,3 +1,27 @@
+"""Tâches asynchrones (TaskIQ) du contexte identity + branchement sur l'outbox.
+
+Rappel du pattern Outbox, utilisé pour TOUT effet de bord asynchrone :
+
+1. un use case enregistre un événement domaine via uow.add_event(...) ;
+2. au commit, le UoW écrit l'événement dans la table outbox_events, DANS
+   LA MÊME transaction que les données métier. Publier directement vers
+   un broker depuis le use case risquerait un état incohérent (données
+   commitées mais message perdu, ou l'inverse) ;
+3. le relais (shared/infrastructure/outbox/relay.py, planifié chaque
+   minute côté worker) lit les événements non traités et appelle le
+   handler enregistré pour chaque event_type -> ce module-ci ;
+4. le handler délègue à une tâche TaskIQ (.kiq = envoi au broker), que le
+   worker exécute.
+
+La livraison est at-least-once : en cas de crash entre le traitement et le
+marquage processed_at, l'événement sera rejoué. Les tâches doivent donc
+être idempotentes (les rejouer ne doit pas causer de dégâts).
+
+Ce module est importé par vetolib.worker : l'enregistrement du handler en
+bas de fichier s'exécute à l'import (le shared ne connaît aucun contexte,
+chaque contexte vient brancher les siens).
+"""
+
 from typing import Any
 
 import structlog
@@ -18,6 +42,12 @@ async def send_welcome_email(clinic_id: str, email: str, clinic_name: str) -> No
 
 
 async def _handle_clinic_registered(payload: dict[str, Any]) -> None:
+    """Handler outbox de l'événement domaine ClinicRegistered.
+
+    Reçoit le payload JSON stocké dans outbox_events et le transforme en
+    tâche TaskIQ. `.kiq(...)` n'exécute pas la fonction : il sérialise
+    l'appel et l'envoie au broker, un worker le traitera plus tard.
+    """
     await send_welcome_email.kiq(
         clinic_id=str(payload["clinic_id"]),
         email=str(payload["manager_email"]),
@@ -25,4 +55,6 @@ async def _handle_clinic_registered(payload: dict[str, Any]) -> None:
     )
 
 
+# Effet de bord d'import volontaire : associe l'event_type (celui émis par
+# l'entité domaine) à son handler dans le registre partagé du relais outbox.
 register_outbox_handler("identity.clinic_registered", _handle_clinic_registered)

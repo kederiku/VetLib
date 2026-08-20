@@ -1,3 +1,18 @@
+"""Ports (interfaces) de la couche application du contexte identity.
+
+Un "port" est un contrat abstrait que la couche application impose vers
+l'extérieur : les use cases ne dépendent que de ces interfaces, jamais
+d'une bibliothèque concrète. Les implémentations réelles (adapters) vivent
+en infrastructure : pwdlib/Argon2 pour PasswordHasher, PyJWT pour
+TokenProvider, SQLAlchemy pour l'IdentityUnitOfWork.
+
+C'est le coeur de l'architecture hexagonale : on peut tester les use cases
+avec des fakes en mémoire et remplacer une techno sans toucher au métier.
+`typing.Protocol` plutôt qu'ABC : le typage est structurel, un fake de
+test satisfait le port dès qu'il expose les bonnes méthodes, sans hériter
+de quoi que ce soit.
+"""
+
 from collections.abc import Callable
 from typing import Protocol
 
@@ -24,6 +39,15 @@ class PasswordHasher(Protocol):
 
 
 class TokenProvider(Protocol):
+    """Émission et décodage des JWT (adapter concret : PyJWT en infra).
+
+    issue_pair construit le "fat token" d'accès (clinic_id, rôle et
+    permissions embarqués -> l'autorisation ne relit pas la base) et le
+    refresh token minimal (user_id seul). Les decode_* valident signature,
+    expiration ET type de jeton (un refresh ne passe jamais pour un access),
+    et lèvent une erreur domaine (InvalidTokenError) en cas de problème.
+    """
+
     def issue_pair(self, user: User) -> TokenPair: ...
 
     def decode_access(self, token: str) -> AccessClaims: ...
@@ -32,6 +56,13 @@ class TokenProvider(Protocol):
 
 
 class IdentityUnitOfWork(UnitOfWork, Protocol):
+    """UoW du contexte identity : une transaction + ses repositories.
+
+    Étend le UnitOfWork partagé (commit/rollback + add_event vers l'outbox)
+    en exposant les repositories du contexte. Tout ce qui passe par le même
+    UoW est commité atomiquement : entités ET événements d'outbox ensemble.
+    """
+
     # Properties (lecture seule) : covariantes — un attribut concret plus
     # spécifique (SqlAlchemyUserRepository, FakeUserRepository) satisfait le port.
     @property
@@ -41,4 +72,9 @@ class IdentityUnitOfWork(UnitOfWork, Protocol):
     def clinics(self) -> ClinicRepository: ...
 
 
+# Les use cases reçoivent une FABRIQUE et non un UoW déjà ouvert : chaque
+# execute() ouvre sa propre transaction via `async with`, courte et bien
+# délimitée. Pour identity (login, register... flux pré-tenant), la DI
+# injecte la fabrique system_uow ; les contextes tenantés utiliseront
+# tenant_uow(clinic_id), qui active la RLS via SET LOCAL ROLE vetolib_app.
 IdentityUoWFactory = Callable[[], IdentityUnitOfWork]

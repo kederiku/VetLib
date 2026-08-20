@@ -6,6 +6,14 @@ Create Date: 2026-08-20
 
 Les policies RLS et les GRANT ne sont pas autogénérés par Alembic :
 ils sont écrits à la main (op.execute) — gabarit pour les contextes suivants.
+
+Contenu, dans l'ordre :
+1. tables clinics, users, outbox_events : PK UUID, soft delete (deleted_at),
+   unicité d'email limitée aux lignes actives (index partiels) ;
+2. rôle applicatif vetolib_app (NOLOGIN NOBYPASSRLS, créé si absent) et
+   GRANT minimaux, volontairement sans DELETE (soft delete uniquement) ;
+3. RLS sur users : policy tenant_isolation filtrant sur app.clinic_id, la
+   variable de session posée par tenant_uow() à chaque transaction tenant.
 """
 
 from collections.abc import Sequence
@@ -24,6 +32,9 @@ APP_ROLE = "vetolib_app"
 
 
 def upgrade() -> None:
+    """Crée le socle identity : tables, rôle applicatif, GRANT et policy RLS."""
+    # clinics est la table des tenants eux-mêmes : pas de clinic_id ni de RLS
+    # ici ; l'isolation s'applique aux tables qui APPARTIENNENT à un tenant.
     op.create_table(
         "clinics",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -38,6 +49,9 @@ def upgrade() -> None:
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     )
+    # Index unique PARTIEL (WHERE deleted_at IS NULL) : conséquence du soft
+    # delete. L'email d'une ligne "supprimée" doit rester réutilisable, ce
+    # qu'une contrainte UNIQUE classique sur toute la table interdirait.
     op.create_index(
         "uq_clinics_email_active",
         "clinics",
@@ -46,6 +60,8 @@ def upgrade() -> None:
         postgresql_where=sa.text("deleted_at IS NULL"),
     )
 
+    # users est une table tenantée : clinic_id rattache chaque ligne à sa
+    # clinique et sert de pivot à la policy RLS posée en bas de fichier.
     op.create_table(
         "users",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -72,6 +88,8 @@ def upgrade() -> None:
             "role IN ('asv', 'veterinarian', 'manager')", name="ck_users_role_valid"
         ),
     )
+    # La policy RLS filtre chaque requête par clinic_id : cet index évite un
+    # parcours complet de la table à chaque accès tenant.
     op.create_index("ix_users_clinic_id", "users", ["clinic_id"])
     op.create_index(
         "uq_users_email_active",
@@ -81,6 +99,9 @@ def upgrade() -> None:
         postgresql_where=sa.text("deleted_at IS NULL"),
     )
 
+    # Pattern Outbox : l'événement est inséré dans la même transaction que le
+    # changement métier (atomicité), puis relayé vers TaskIQ par un job cron.
+    # Table volontairement hors RLS : le relais tourne sans contexte clinique.
     op.create_table(
         "outbox_events",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -89,6 +110,8 @@ def upgrade() -> None:
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
     )
+    # Index partiel sur le backlog (processed_at IS NULL) : le relais ne
+    # balaye jamais l'historique déjà traité, qui ne fait que grossir.
     op.create_index(
         "ix_outbox_events_unprocessed",
         "outbox_events",
@@ -132,6 +155,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Défait la migration en ordre inverse (users avant clinics, à cause des FK)."""
     op.execute("DROP POLICY IF EXISTS tenant_isolation ON users")
     op.execute("ALTER TABLE users DISABLE ROW LEVEL SECURITY")
     op.drop_table("outbox_events")

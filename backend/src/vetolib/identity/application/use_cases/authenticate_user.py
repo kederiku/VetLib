@@ -1,3 +1,19 @@
+"""Use case AuthenticateUser : login par email + mot de passe.
+
+Orchestration pure : la vérification Argon2 passe par le port
+PasswordHasher, l'émission des JWT par le port TokenProvider. La pose des
+cookies HttpOnly (vetolib_access / vetolib_refresh) reste dans la couche
+presentation : le use case ne sait pas que HTTP existe.
+
+Flux pré-tenant (UoW système) : au moment du login on ne connaît pas
+encore la clinique, la recherche par email doit donc voir tous les tenants.
+
+Sécurité : toute cause d'échec côté identifiants (email mal formé, email
+inconnu, mauvais mot de passe) produit la même InvalidCredentialsError et,
+autant que possible, le même temps de réponse - on ne donne aucun indice
+permettant d'énumérer les comptes existants.
+"""
+
 from vetolib.identity.application.dto import CurrentUser, LoginCommand, TokenPair
 from vetolib.identity.application.mappers import to_current_user
 from vetolib.identity.application.ports import (
@@ -27,6 +43,13 @@ class AuthenticateUser:
         self._tokens = tokens
 
     async def execute(self, cmd: LoginCommand) -> tuple[TokenPair, CurrentUser]:
+        """Déroulé : normaliser l'email, vérifier le hash Argon2, contrôler
+        is_active, rehash transparent si besoin, puis émettre les tokens et
+        la projection CurrentUser (les deux repartent vers la presentation,
+        qui posera les cookies et sérialisera la réponse)."""
+        # Un email mal formé lève une erreur de validation du value object :
+        # on la convertit en la MÊME erreur générique qu'un mauvais mot de
+        # passe, pour ne jamais révéler si un compte existe.
         try:
             email = Email(cmd.email)
         except Exception as exc:
@@ -45,17 +68,25 @@ class AuthenticateUser:
             )
             if not valid:
                 raise InvalidCredentialsError("Identifiants invalides.")
+            # Mot de passe vérifié AVANT is_active : un compte désactivé ne
+            # révèle son état qu'à qui connaît déjà le bon mot de passe.
             if not user.is_active:
                 raise UserInactiveError("Compte désactivé.")
 
             if new_hash is not None:
                 # Rehash transparent si les paramètres Argon2 ont évolué.
+                # Seul cas d'écriture du login : on commite immédiatement
+                # pour ne pas perdre le hash renforcé si la suite échouait.
                 user.change_password(HashedPassword(new_hash))
                 await uow.users.update(user)
                 await uow.commit()
 
+            # Le nom de la clinique enrichit la projection CurrentUser
+            # (affiché en en-tête des deux frontends dès le login).
             clinic = await uow.clinics.get_by_id(user.clinic_id)
             if clinic is None:
                 raise ClinicNotFoundError("Clinique introuvable.")
 
+            # Pas de commit ici : lecture seule (hors rehash) et les JWT
+            # sont stateless, rien à persister pour ouvrir la session.
             return self._tokens.issue_pair(user), to_current_user(user, clinic.name)
