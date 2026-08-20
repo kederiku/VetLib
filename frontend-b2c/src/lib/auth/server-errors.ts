@@ -13,6 +13,31 @@ import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 
 import { getApiError } from "@/lib/api/errors";
 
+// Libelles francais des codes metier NON lies a un champ de formulaire
+// (conflits de reservation, regles d'annulation...). Ils sont ranges
+// dans une table plutot que dans le switch d'applyServerErrors car
+// certains ecrans doivent les afficher HORS formulaire (Alert dans une
+// carte de rendez-vous, bandeau du wizard) via businessErrorMessage.
+const BUSINESS_ERROR_MESSAGES: Record<string, string> = {
+  "scheduling.slot_already_booked":
+    "Ce créneau vient d'être réservé, choisissez-en un autre.",
+  "scheduling.slot_unavailable": "Ce créneau n'est plus disponible.",
+  "scheduling.cancellation_too_late":
+    "Ce rendez-vous commence dans moins de 24 h : il ne peut plus être annulé en ligne. Contactez la clinique.",
+  "patients.pet_not_found": "Cet animal n'existe plus dans votre compte.",
+};
+
+/**
+ * Libelle francais d'un code metier "hors formulaire", ou null si le
+ * code est inconnu (l'appelant retombe alors sur apiError.detail ou un
+ * message generique). Consultee par applyServerErrors ET appelable
+ * directement par les ecrans sans formulaire (annulation d'un
+ * rendez-vous, conflit de creneau dans le wizard).
+ */
+export function businessErrorMessage(code: string): string | null {
+  return BUSINESS_ERROR_MESSAGES[code] ?? null;
+}
+
 /**
  * Applique une erreur survenue pendant la soumission sur le formulaire.
  *
@@ -81,9 +106,15 @@ export function applyServerErrors<T extends FieldValues>(
     case "identity.user_inactive":
       setError("root.server", { message: "Ce compte est désactivé." });
       return;
-    default:
-      // Code inconnu ou HTTPException sans code : on affiche le detail
-      // brut du backend, faute de mieux.
-      setError("root.server", { message: apiError.detail });
+    default: {
+      // Codes metier "hors formulaire" (scheduling, patients...) : la
+      // table partagee fournit le libelle francais. A defaut, on affiche
+      // le detail brut du backend, faute de mieux.
+      const businessMessage =
+        apiError.code !== undefined ? businessErrorMessage(apiError.code) : null;
+      setError("root.server", {
+        message: businessMessage ?? apiError.detail,
+      });
+    }
   }
 }

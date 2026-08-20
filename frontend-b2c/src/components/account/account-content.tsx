@@ -1,19 +1,17 @@
 /**
  * Contenu de la page /account : la fiche du propriétaire connecté.
  *
- * Deux cartes : "Mon profil" (formulaire d'édition, composant dédié
- * ProfileForm) et "Mon compte" (email en lecture seule + déconnexion),
- * suivies d'un aperçu de la suite du portail (espace animaux à venir).
- * Client Component : il lit la session via useCurrentUser, un hook
- * TanStack Query.
+ * Trois cartes : "Prochains rendez-vous" (aperçu, composant dédié
+ * UpcomingAppointments), "Mon profil" (formulaire d'édition, composant
+ * dédié ProfileForm) et "Mon compte" (email en lecture seule +
+ * déconnexion). Client Component : il lit la session via useCurrentUser,
+ * un hook TanStack Query.
  */
 "use client";
 
-import { PawPrint } from "lucide-react";
-
 import { LogoutButton } from "@/components/auth/logout-button";
 import { ProfileForm } from "@/components/account/profile-form";
-import { Badge } from "@/components/ui/badge";
+import { UpcomingAppointments } from "@/components/account/upcoming-appointments";
 import {
   Card,
   CardContent,
@@ -46,10 +44,14 @@ export function AccountContent() {
         </p>
       </div>
 
-      {/* Carte a) : le formulaire complet de la fiche propriétaire. */}
+      {/* Carte a) : l'aperçu des prochains rendez-vous (cache partagé
+          avec la page /rendez-vous, même queryKey). */}
+      <UpcomingAppointments />
+
+      {/* Carte b) : le formulaire complet de la fiche propriétaire. */}
       <ProfileForm />
 
-      {/* Carte b) : les informations de connexion, hors formulaire. */}
+      {/* Carte c) : les informations de connexion, hors formulaire. */}
       <Card>
         <CardHeader>
           <CardTitle>Mon compte</CardTitle>
@@ -80,14 +82,6 @@ export function AccountContent() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Aperçu de la suite du portail : l'espace animaux (contexte
-          patients du backend) n'est pas encore implémenté. */}
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <PawPrint className="size-4" aria-hidden />
-        Vos animaux et vos rendez-vous apparaîtront bientôt ici.
-        <Badge variant="secondary">Bientôt</Badge>
-      </p>
     </main>
   );
 }
