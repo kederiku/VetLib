@@ -1,5 +1,5 @@
 /**
- * Bouton de déconnexion.
+ * Bouton de déconnexion (pied de la sidebar).
  *
  * POST /api/v1/auth/logout : le backend invalide la session et efface
  * les cookies (Set-Cookie d'expiration). Côté frontend, il reste deux
@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -44,13 +45,22 @@ export function LogoutButton() {
   });
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    // Pleine largeur, variante ghost : le bouton vit dans le pied de la
+    // sidebar et s'aligne visuellement sur les items de navigation.
+    <div className="flex w-full flex-col gap-2">
       <Button
-        variant="outline"
+        variant="ghost"
+        className="w-full justify-start"
         onClick={() => logoutMutation.mutate()}
         disabled={logoutMutation.isPending}
       >
-        {logoutMutation.isPending && <Spinner data-icon="inline-start" />}
+        {/* Le spinner REMPLACE l'icône pendant l'appel (même emplacement,
+            pas de saut de mise en page). */}
+        {logoutMutation.isPending ? (
+          <Spinner data-icon="inline-start" />
+        ) : (
+          <LogOut data-icon="inline-start" />
+        )}
         Se déconnecter
       </Button>
       {/* Échec (serveur injoignable...) : la session est TOUJOURS ouverte

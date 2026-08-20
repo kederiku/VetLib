@@ -1,10 +1,10 @@
 /**
- * Contenu du tableau de bord (placeholder du squelette d'auth).
+ * Contenu du tableau de bord.
  *
- * Premier écran "connecté" du portail : il affiche le profil de
- * l'utilisateur courant pour prouver que toute la chaîne fonctionne
- * (cookies -> /me -> cache TanStack -> UI). Les vrais écrans métier
- * (planning, patients) le remplaceront. Client Component : il lit la
+ * Premier écran après connexion : la carte "À confirmer" (rendez-vous
+ * pending des 7 prochains jours, le travail du jour de l'accueil) suivie
+ * de la carte profil de l'utilisateur courant. La déconnexion a migré
+ * dans le pied de la sidebar (AppShell). Client Component : il lit la
  * session via useCurrentUser, un hook TanStack Query.
  */
 "use client";
@@ -17,18 +17,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { LogoutButton } from "@/components/auth/logout-button";
+import { PendingAppointmentsCard } from "@/components/dashboard/pending-appointments-card";
+import { ROLE_LABELS } from "@/lib/auth/roles";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import type { Role } from "@/lib/api/generated/vetoLibAPI.schemas";
-
-// Traduction des rôles techniques du backend vers les libellés du métier.
-// Record<Role, string> : TypeScript exige une entrée par rôle, donc un
-// nouveau rôle backend provoquera une erreur de compilation ici (voulu).
-const ROLE_LABELS: Record<Role, string> = {
-  asv: "ASV",
-  veterinarian: "Vétérinaire",
-  manager: "Gérant",
-};
 
 export function DashboardContent() {
   const { data: user } = useCurrentUser();
@@ -41,11 +32,12 @@ export function DashboardContent() {
   }
 
   return (
-    <main className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 p-8">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
-        <LogoutButton />
-      </div>
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-8">
+      <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
+
+      {/* Rendez-vous en attente de confirmation : l'info la plus
+          actionnable du tableau de bord, donc au-dessus du profil. */}
+      <PendingAppointmentsCard />
 
       <Card>
         <CardHeader>
@@ -74,6 +66,6 @@ export function DashboardContent() {
           </div>
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }
