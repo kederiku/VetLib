@@ -1,0 +1,72 @@
+[project]
+name = "vetolib"
+version = "0.1.0"
+description = "VetoLib — API de gestion de cliniques vétérinaires (architecture hexagonale + DDD)"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi~=0.141.1",
+    "uvicorn[standard]~=0.52.4",
+    "sqlalchemy>=2.0.52,<2.1",
+    # greenlet est requis par SQLAlchemy async + asyncpg mais n'est pas toujours
+    # tiré automatiquement selon la plateforme -> dépendance directe explicite.
+    "greenlet~=3.5",
+    "asyncpg~=0.31.0",
+    "alembic~=1.19",
+    "pydantic~=2.13",
+    "pydantic-settings~=2.15",
+    "email-validator>=2.2",
+    "pyjwt~=2.13",
+    "pwdlib[argon2]~=0.3.1",
+    "orjson~=3.12",
+    "structlog~=26.1",
+    "redis[hiredis]~=8.1",
+    "taskiq~=0.12.4",
+    "taskiq-redis~=1.2",
+    "taskiq-fastapi~=0.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest~=9.1",
+    "pytest-asyncio~=1.4",
+    "httpx~=0.28.1",
+    "testcontainers[postgres,redis]~=4.15",
+    "ruff==0.16.3",
+    "mypy~=2.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vetolib"]
+
+[tool.alembic]
+script_location = "migrations"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "ASYNC", "S", "T20", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+files = ["src/vetolib", "tests"]
+exclude = ["migrations/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# Tests ET fixtures sur la même boucle session : l'engine SQLAlchemy async,
+# le client Redis et testcontainers doivent partager le même event loop.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
