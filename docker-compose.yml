@@ -1,12 +1,30 @@
 # VetoLib — stack de développement.
 # Variables interpolées depuis .env (cp .env.example .env). Frontends sous profile "frontend" :
 #   docker compose --profile frontend up -d
+#
+# Piège classique - il existe DEUX fichiers d'environnement, pour deux points de vue réseau :
+#   - .env (racine)  : lu par docker-compose pour interpoler les ${...} ci-dessous. Ses URLs
+#     utilisent les hostnames Docker (postgres, redis, minio) car elles sont résolues DEPUIS
+#     les conteneurs, sur le réseau "vetolib" défini en bas de ce fichier.
+#   - backend/.env   : lu par le backend lancé HORS Docker (make dev, alembic, scripts locaux).
+#     Ses URLs pointent vers localhost, puisque les ports sont publiés sur la machine hôte.
+# Mélanger les deux donne des erreurs de connexion difficiles à diagnostiquer.
 
+# Ancre YAML (&backend-env) : bloc d'environnement partagé par les trois processus backend
+# (api, worker, scheduler), repris plus bas via "<<: *backend-env". Une seule source de
+# vérité : impossible de désynchroniser la config entre l'API et ses workers.
 x-backend-env: &backend-env
+  # Connexion runtime de l'app ; pour chaque requête tenant, le code bascule ensuite sur le
+  # rôle restreint via SET LOCAL ROLE ${APP_DB_ROLE} (voir tenant_uow), ce qui active la RLS.
   DATABASE_URL: ${DATABASE_URL}
+  # Connexion superuser réservée aux migrations Alembic (créer tables, policies RLS, GRANT).
   ALEMBIC_DATABASE_URL: ${ALEMBIC_DATABASE_URL}
+  # Nom du rôle applicatif non-superuser NOBYPASSRLS (créé par docker/postgres-init/02-app-role.sh).
   APP_DB_ROLE: ${APP_DB_ROLE:-vetolib_app}
+  # Redis : broker des tâches TaskIQ (relais outbox, jobs asynchrones).
   REDIS_URL: ${REDIS_URL}
+  # Auth JWT double token en cookies HttpOnly : access 15 min, refresh 7 j.
+  # COOKIE_SECURE=false en dev (pas de HTTPS local), true en prod.
   JWT_SECRET: ${JWT_SECRET}
   JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS}
   JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS}
@@ -14,39 +32,63 @@ x-backend-env: &backend-env
   ENV: ${ENV}
   LOG_JSON: ${LOG_JSON}
   CORS_ORIGINS: ${CORS_ORIGINS}
+  # Stockage objet (documents) : en dev, MinIO joue le rôle de S3.
   S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
   S3_BUCKET_DOCUMENTS: ${S3_BUCKET_DOCUMENTS}
   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
   MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
 
+# Ancre de build partagée : api, worker et scheduler utilisent la MEME image
+# (vetolib-backend:dev) ; seule la commande de démarrage diffère. On ne construit
+# donc l'image qu'une fois. "target: dev" sélectionne le stage dev du Dockerfile
+# multi-stage (dépendances de dev incluses).
 x-backend-build: &backend-build
   context: ./backend
   dockerfile: ../docker/backend/Dockerfile
   target: dev
 
 services:
+  # ----- PostgreSQL : la base de données, et la clé de voûte du multi-tenant -----
+  # Toute l'isolation entre cliniques repose sur la Row-Level Security (RLS) de Postgres :
+  # les policies filtrent chaque requête par app.clinic_id. C'est pour cela que les tests
+  # d'intégration utilisent un vrai Postgres (testcontainers), jamais SQLite.
   postgres:
     image: postgres:18.6-trixie
     environment:
+      # POSTGRES_* : superuser créé par l'image officielle. Il sert aux migrations Alembic
+      # et, en dev, au pool de l'application (qui bascule ensuite en rôle restreint via
+      # SET LOCAL ROLE vetolib_app à chaque transaction tenant, voir le UoW).
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # APP_DB_* : identifiants du rôle applicatif restreint, consommés par 02-app-role.sh.
       APP_DB_USER: ${APP_DB_USER}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
     volumes:
       # PG18 : PGDATA est désormais sous /var/lib/postgresql (plus /var/lib/postgresql/data).
       - pgdata:/var/lib/postgresql
+      # Scripts d'init exécutés par l'entrypoint dans l'ordre alphabétique (01-extensions.sql
+      # puis 02-app-role.sh), et UNIQUEMENT au premier démarrage (volume pgdata vierge).
+      # Pour les rejouer : docker compose down -v (détruit les données !).
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     ports:
+      # Port publié sur l'hôte : permet psql/alembic/tests lancés hors Docker (backend/.env).
       - "5432:5432"
     healthcheck:
+      # pg_isready vérifie que Postgres accepte les connexions ; les services qui déclarent
+      # "condition: service_healthy" attendent ce feu vert avant de démarrer.
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # ----- Redis : broker de tâches -----
+  # File d'attente entre l'API et le worker TaskIQ : l'API n'exécute jamais d'effet de bord
+  # lent ou faillible en ligne (email, publication d'événement...), elle enfile une tâche.
   redis:
     image: redis:8.10.0-alpine3.23
+    # --appendonly yes : journal AOF sur disque, pour ne pas perdre les tâches en file
+    # si le conteneur redémarre (Redis est en mémoire par défaut).
     command: redis-server --appendonly yes
     volumes:
       - redisdata:/data
@@ -58,6 +100,10 @@ services:
       timeout: 5s
       retries: 10
 
+  # ----- MinIO : stockage objet compatible S3 -----
+  # Émule S3 en local pour les documents (pièces jointes, ordonnances...). Le backend parle
+  # le protocole S3 standard : en prod il suffit de changer S3_ENDPOINT_URL vers le vrai S3.
+  # Port 9000 = API S3 ; port 9001 = console web d'administration.
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     command: server /data --console-address ":9001"
@@ -75,6 +121,10 @@ services:
       timeout: 5s
       retries: 10
 
+  # ----- minio-init : conteneur "one-shot" d'initialisation -----
+  # Lance le client mc pour créer le bucket documents, puis se termine (restart: "no").
+  # L'api attend sa fin via "condition: service_completed_successfully" : au premier
+  # démarrage, le bucket existe donc toujours avant la première requête.
   minio-init:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z
     entrypoint: ["/bin/sh", "/create-buckets.sh"]
@@ -89,16 +139,25 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # ----- api : le serveur FastAPI -----
   api:
     image: vetolib-backend:dev
     build: *backend-build
+    # --reload : uvicorn redémarre à chaque modification du code source. Combiné au
+    # bind-mount de ./backend/src ci-dessous, on édite sur l'hôte et le conteneur
+    # recharge aussitôt, sans rebuild d'image.
     command: uvicorn vetolib.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
+      # Fusion YAML : injecte tel quel le bloc &backend-env défini en tête de fichier.
       <<: *backend-env
     volumes:
+      # Bind-mount du code par-dessus la copie faite au build (dev uniquement).
       - ./backend/src:/app/src
     ports:
+      # 8000 publié sur l'hôte : consommé par les frontends (localhost:8000) et par curl/docs.
       - "8000:8000"
+    # depends_on avec conditions : l'API ne démarre qu'une fois Postgres et Redis sains
+    # (healthcheck vert) et le bucket MinIO créé. Évite les crashs de connexion au boot.
     depends_on:
       postgres:
         condition: service_healthy
@@ -108,12 +167,19 @@ services:
         condition: service_completed_successfully
     healthcheck:
       # Pas de curl dans python:slim — on passe par urllib.
+      # /healthz est l'endpoint de vivacité exposé par le contexte shared du backend.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      # Délai de grâce au démarrage : le temps d'importer l'app avant de compter les échecs.
       start_period: 15s
 
+  # ----- worker : l'exécutant des tâches asynchrones -----
+  # Même image que l'api (voir &backend-build), seule la commande change : il consomme les
+  # tâches TaskIQ depuis Redis. C'est notamment lui qui fait vivre le pattern Outbox : les
+  # événements écrits dans outbox_events (dans la MEME transaction que l'écriture métier)
+  # sont relayés ici, hors requête HTTP. Garantie : jamais d'événement publié sans commit.
   worker:
     image: vetolib-backend:dev
     build: *backend-build
@@ -128,6 +194,9 @@ services:
       redis:
         condition: service_healthy
 
+  # ----- scheduler : le "cron" de la stack -----
+  # Déclenche les tâches périodiques (ex. balayage régulier de l'outbox) : il ne fait que
+  # les planifier et les pousser dans Redis ; c'est le worker qui les exécute.
   scheduler:
     image: vetolib-backend:dev
     build: *backend-build
@@ -142,9 +211,15 @@ services:
       redis:
         condition: service_healthy
 
+  # ----- Frontends Next.js (profile "frontend" : optionnels) -----
+  # En dev courant, les frontends tournent HORS Docker (npm run dev dans chaque dossier) :
+  # HMR plus rapide, tooling natif. Ces deux services n'existent que pour une stack 100 %
+  # conteneurisée : docker compose --profile frontend up -d (sans le profile, ils sont ignorés).
+  # frontend-portal = B2C (:3000, propriétaires d'animaux).
   frontend-portal:
     profiles: ["frontend"]
     build:
+      # Contexte = racine du repo : le Dockerfile est mutualisé et choisit l'app via APP_DIR.
       context: .
       dockerfile: docker/frontend/Dockerfile
       target: dev
@@ -152,13 +227,19 @@ services:
         APP_DIR: frontend-b2c
     command: npm run dev
     environment:
+      # Variable NEXT_PUBLIC_* : embarquée dans le JS servi au NAVIGATEUR de l'hôte.
+      # D'où localhost:8000 (et non http://api:8000) même quand le frontend est en conteneur :
+      # c'est le navigateur, pas le conteneur, qui appelle l'API.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     volumes:
       - ./frontend-b2c:/app
+      # Volume anonyme : masque le node_modules de l'hôte (binaires natifs macOS/Windows
+      # incompatibles avec l'Alpine du conteneur) au profit de celui installé au build.
       - /app/node_modules
     ports:
       - "3000:3000"
 
+  # frontend-clinic = B2B (:3001, portail cliniques). Mêmes principes que frontend-portal.
   frontend-clinic:
     profiles: ["frontend"]
     build:
@@ -176,11 +257,17 @@ services:
     ports:
       - "3001:3001"
 
+# Volumes nommés, gérés par Docker : les données survivent aux "docker compose down"
+# et aux rebuilds d'images. Seul "docker compose down -v" les détruit (ce qui, pour
+# pgdata, redéclenche les scripts d'init Postgres au démarrage suivant).
 volumes:
   pgdata:
   redisdata:
   miniodata:
 
+# Réseau unique nommé "vetolib" : chaque service y est joignable par son nom de service
+# (postgres, redis, minio...) via le DNS interne de Docker. Ce sont exactement ces
+# hostnames que l'on retrouve dans les URLs du .env racine.
 networks:
   default:
     name: vetolib
