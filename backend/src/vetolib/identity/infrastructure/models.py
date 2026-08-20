@@ -18,7 +18,7 @@ pour les tables liées à une clinique, clinic_id -> cible des policies RLS.
 
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, Index, String, text
+from sqlalchemy import Boolean, CheckConstraint, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,6 +44,20 @@ class ClinicModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Adresse structurée aplatie en colonnes, tout-ou-rien : même modèle que
+    # OwnerModel (la règle est portée par le value object Address et le
+    # schéma Pydantic, pas par une contrainte SQL).
+    address_line1: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    # Fuseau IANA en Text (longueur libre), validé par le VO Timezone côté
+    # domaine. Le server_default sert les lignes créées hors ORM et les
+    # cliniques d'avant la migration 0003.
+    timezone: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'Europe/Paris'")
+    )
 
     __table_args__ = (
         # Unicité restreinte aux lignes vivantes (soft delete).

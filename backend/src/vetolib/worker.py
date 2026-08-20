@@ -18,6 +18,7 @@ from taskiq.schedule_sources import LabelScheduleSource
 # L'import des modules de tâches les enregistre auprès du broker
 # (et enregistre les handlers outbox de chaque contexte).
 import vetolib.identity.infrastructure.tasks
+import vetolib.scheduling.infrastructure.tasks
 import vetolib.shared.infrastructure.outbox.relay  # noqa: F401
 from vetolib.shared.infrastructure.taskiq.broker import broker
 

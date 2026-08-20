@@ -22,6 +22,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from vetolib.config import get_settings
 from vetolib.identity.presentation.router import IDENTITY_ERROR_STATUS, identity_router
 from vetolib.logging import configure_logging
+from vetolib.patients.presentation.router import PATIENTS_ERROR_STATUS, patients_router
+from vetolib.scheduling.presentation.router import (
+    SCHEDULING_ERROR_STATUS,
+    scheduling_router,
+)
 from vetolib.shared.infrastructure.db.engine import create_engine_and_sessionmaker
 from vetolib.shared.infrastructure.taskiq.broker import broker
 from vetolib.shared.presentation.error_handlers import register_error_handlers
@@ -76,12 +81,19 @@ def create_app() -> FastAPI:
     # Pose request_id et contexte structlog : corrèle les logs d'une requête.
     app.middleware("http")(request_context_middleware)
     # Traduit les erreurs du domaine en réponses HTTP : le domaine ignore HTTP,
-    # c'est la table IDENTITY_ERROR_STATUS qui porte le mapping erreur -> code.
-    register_error_handlers(app, IDENTITY_ERROR_STATUS)
+    # chaque contexte apporte sa table de mapping erreur -> code, fusionnées
+    # ici en un seul dict (les clés sont des classes distinctes par contexte,
+    # aucune collision possible).
+    register_error_handlers(
+        app,
+        {**IDENTITY_ERROR_STATUS, **PATIENTS_ERROR_STATUS, **SCHEDULING_ERROR_STATUS},
+    )
     # /healthz hors /api/v1 : sonde technique (Docker, orchestrateur), pas métier.
     app.include_router(health_router)
     # Versionnement par le chemin : toutes les routes métier vivent sous /api/v1.
     app.include_router(identity_router, prefix="/api/v1")
+    app.include_router(patients_router, prefix="/api/v1")
+    app.include_router(scheduling_router, prefix="/api/v1")
     return app
 
 

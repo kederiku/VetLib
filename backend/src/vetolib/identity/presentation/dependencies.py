@@ -26,18 +26,20 @@ import structlog
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from vetolib.config import Settings, get_settings
 from vetolib.identity.application.dto import CurrentOwner, CurrentUser
 from vetolib.identity.application.ports import IdentityUnitOfWork, IdentityUoWFactory
 from vetolib.identity.application.use_cases import (
     AuthenticateOwner,
     AuthenticateUser,
+    GetClinicProfile,
     GetCurrentOwner,
     GetCurrentUser,
+    ListPublicClinics,
     RefreshOwnerToken,
     RefreshToken,
     RegisterClinic,
     RegisterOwner,
+    UpdateClinicProfile,
     UpdateOwnerProfile,
 )
 from vetolib.identity.infrastructure.password_hasher import PwdlibPasswordHasher
@@ -48,6 +50,16 @@ from vetolib.identity.infrastructure.token_provider import (
 from vetolib.identity.infrastructure.uow import SqlAlchemyIdentityUnitOfWork
 from vetolib.identity.presentation.cookies import ACCESS_COOKIE, OWNER_ACCESS_COOKIE
 from vetolib.shared.infrastructure.clock import SystemClock
+
+# Plomberie transverse remontée dans shared : ré-exportée ici (X as X =
+# re-export explicite pour mypy strict) pour ne pas casser les imports
+# existants. Les nouveaux contextes importent depuis shared directement.
+from vetolib.shared.presentation.dependencies import (
+    SettingsDep as SettingsDep,
+)
+from vetolib.shared.presentation.dependencies import (
+    get_sessionmaker as get_sessionmaker,
+)
 
 # Composition root minimaliste : FastAPI Depends suffit à cette taille — les
 # singletons coûteux (engine, sessionmaker) vivent dans app.state (lifespan),
@@ -68,20 +80,6 @@ def get_clock() -> SystemClock:
 
 def get_password_hasher() -> PwdlibPasswordHasher:
     return _hasher
-
-
-# get_settings est décoré @lru_cache : les Settings ne sont lus qu'une fois.
-SettingsDep = Annotated[Settings, Depends(get_settings)]
-
-
-def get_sessionmaker(request: Request) -> async_sessionmaker[AsyncSession]:
-    """Récupère le sessionmaker créé une seule fois au démarrage (lifespan).
-
-    L'engine SQLAlchemy et son pool de connexions sont coûteux : ils vivent
-    dans app.state, et cette dépendance ne fait que les exposer par requête.
-    """
-    sessionmaker: async_sessionmaker[AsyncSession] = request.app.state.sessionmaker
-    return sessionmaker
 
 
 def get_token_provider(settings: SettingsDep) -> PyJWTTokenProvider:
@@ -143,6 +141,23 @@ def get_refresh_token(uow_factory: UoWFactoryDep, tokens: TokenProviderDep) -> R
 
 def get_get_current_user(uow_factory: UoWFactoryDep, tokens: TokenProviderDep) -> GetCurrentUser:
     return GetCurrentUser(uow_factory, tokens)
+
+
+# Fiche clinique et annuaire public : ces use cases tournent sur la UoW
+# systeme (la table clinics, celle des tenants eux-memes, est hors RLS ;
+# l'acces se fait par PK = cid du token, ou en liste pour l'annuaire).
+
+
+def get_get_clinic_profile(uow_factory: UoWFactoryDep) -> GetClinicProfile:
+    return GetClinicProfile(uow_factory)
+
+
+def get_update_clinic_profile(uow_factory: UoWFactoryDep) -> UpdateClinicProfile:
+    return UpdateClinicProfile(uow_factory)
+
+
+def get_list_public_clinics(uow_factory: UoWFactoryDep) -> ListPublicClinics:
+    return ListPublicClinics(uow_factory)
 
 
 async def get_current_user(

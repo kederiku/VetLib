@@ -25,7 +25,12 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr
 
-from vetolib.identity.application.dto import CurrentOwner, CurrentUser
+from vetolib.identity.application.dto import (
+    ClinicProfile,
+    CurrentOwner,
+    CurrentUser,
+    PublicClinic,
+)
 from vetolib.identity.domain.value_objects import Role
 
 # Les tokens ne transitent JAMAIS dans un body JSON : cookies HttpOnly uniquement.
@@ -200,3 +205,75 @@ class OwnerResponse(BaseModel):
                 sms=current.notification_preferences.sms,
             ),
         )
+
+
+# --- Schemas du profil CLINIQUE (espace staff B2B) --------------------------
+
+
+class ClinicProfileResponse(BaseModel):
+    """Fiche de la clinique (GET et PUT /clinics/me).
+
+    L'email figure en LECTURE seule : present dans la reponse (affichage)
+    mais absent d'UpdateClinicProfileRequest (identifiant d'inscription,
+    non modifiable ici).
+    """
+
+    id: uuid.UUID
+    name: str
+    email: str
+    phone: str | None
+    address: AddressPayload | None
+    timezone: str
+
+    @classmethod
+    def from_dto(cls, profile: ClinicProfile) -> "ClinicProfileResponse":
+        """Aplatit la projection application (VO Address) en schema API."""
+        address = profile.address
+        return cls(
+            id=profile.id,
+            name=profile.name,
+            email=profile.email,
+            phone=profile.phone,
+            address=(
+                AddressPayload(
+                    line1=address.line1,
+                    line2=address.line2,
+                    postal_code=address.postal_code,
+                    city=address.city,
+                    country=address.country,
+                )
+                if address is not None
+                else None
+            ),
+            timezone=profile.timezone,
+        )
+
+
+class UpdateClinicProfileRequest(BaseModel):
+    """Fiche editable de la clinique. Pas d'email (identifiant d'inscription,
+    exclu du schema donc immuable ici, comme pour la fiche owner).
+
+    L'adresse est un bloc optionnel TOUT-OU-RIEN : soit absente (null), soit
+    complete -- le sous-schema AddressPayload impose alors line1, postal_code
+    et city non vides. La timezone n'est validee ici que non-vide : l'arbitre
+    est le value object Timezone (zoneinfo), un identifiant IANA inconnu
+    donne un 422 domaine.
+    """
+
+    name: str = Field(min_length=2, max_length=200)
+    phone: str | None = Field(default=None, max_length=30)
+    address: AddressPayload | None = None
+    timezone: str = Field(min_length=1)
+
+
+class PublicClinicResponse(BaseModel):
+    """Entree de l'annuaire public (GET /public/clinics) : projection
+    volontairement minimale, l'endpoint est accessible sans authentification."""
+
+    id: uuid.UUID
+    name: str
+    city: str | None
+
+    @classmethod
+    def from_dto(cls, clinic: PublicClinic) -> "PublicClinicResponse":
+        return cls(id=clinic.id, name=clinic.name, city=clinic.city)

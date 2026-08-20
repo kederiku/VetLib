@@ -24,6 +24,7 @@ from vetolib.identity.presentation.routers.auth import router as auth_router
 from vetolib.identity.presentation.routers.clinics import router as clinics_router
 from vetolib.identity.presentation.routers.owner_auth import router as owner_auth_router
 from vetolib.identity.presentation.routers.owner_profile import router as owner_profile_router
+from vetolib.identity.presentation.routers.public_clinics import router as public_clinics_router
 from vetolib.shared.domain.errors import DomainError
 
 # Point d'inclusion unique du contexte pour main.py.
@@ -33,6 +34,8 @@ identity_router.include_router(clinics_router)
 # Espace PROPRIETAIRES (B2C) : sessions et cookies distincts du staff.
 identity_router.include_router(owner_auth_router)
 identity_router.include_router(owner_profile_router)
+# Annuaire public (aucune auth) : prefixe /public pour une intention lisible.
+identity_router.include_router(public_clinics_router)
 
 # Statuts HTTP spécifiques au contexte (fusionnés avec les défauts par main.py).
 IDENTITY_ERROR_STATUS: dict[type[DomainError], int] = {

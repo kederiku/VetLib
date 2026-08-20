@@ -1,5 +1,5 @@
-"""Couche domain du contexte patients (squelette vide).
+"""Couche domain du contexte patients.
 
-Accueillera les entités pures, value objects et ports repository,
-sans aucun import de framework.
+Entités pures (Pet), erreurs métier et ports repository, sans aucun import
+de framework (règle de la couche domain, comme dans identity).
 """

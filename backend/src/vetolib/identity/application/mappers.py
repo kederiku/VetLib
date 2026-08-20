@@ -6,7 +6,8 @@ explicitement ce qui sort - le hash du mot de passe, par exemple, reste
 confiné dans l'entité User et ne traverse jamais cette frontière.
 """
 
-from vetolib.identity.application.dto import CurrentOwner, CurrentUser
+from vetolib.identity.application.dto import ClinicProfile, CurrentOwner, CurrentUser
+from vetolib.identity.domain.clinic import Clinic
 from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.user import User
 
@@ -48,4 +49,21 @@ def to_current_owner(owner: Owner) -> CurrentOwner:
         phone=owner.phone,
         address=owner.address,
         notification_preferences=owner.notification_preferences,
+    )
+
+
+def to_clinic_profile(clinic: Clinic) -> ClinicProfile:
+    """Projette une Clinic en fiche exposable (GET et PUT /clinics/me).
+
+    L'email (value object) est aplati en str ; l'adresse (value object
+    immuable) traverse telle quelle, la couche presentation l'aplatira en
+    schéma Pydantic (AddressPayload).
+    """
+    return ClinicProfile(
+        id=clinic.id,
+        name=clinic.name,
+        email=clinic.email.value,
+        phone=clinic.phone,
+        address=clinic.address,
+        timezone=clinic.timezone,
     )

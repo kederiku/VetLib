@@ -1,5 +1,5 @@
-"""Couche infrastructure du contexte patients (squelette vide).
+"""Couche infrastructure du contexte patients.
 
-Accueillera les modèles SQLAlchemy async, repos concrets et adapters,
-sur le modèle du contexte identity.
+Modèle SQLAlchemy PetModel, repository concret et Unit of Work, sur le
+modèle du contexte identity.
 """

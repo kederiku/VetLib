@@ -1,5 +1,5 @@
-"""Couche application du contexte patients (squelette vide).
+"""Couche application du contexte patients.
 
-Accueillera les use cases, DTOs frozen et ports techniques,
-sur le modèle du contexte identity.
+Use cases du CRUD des animaux (ListMyPets, CreatePet, UpdatePet, DeletePet),
+DTOs frozen et port UnitOfWork, sur le modèle du contexte identity.
 """

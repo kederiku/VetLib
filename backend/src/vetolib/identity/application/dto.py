@@ -129,6 +129,61 @@ class CurrentUser:
     permissions: frozenset[str]
 
 
+# --- DTOs du profil des cliniques -----------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class ClinicProfile:
+    """Projection de la fiche clinique pour /clinics/me (lecture et écriture).
+
+    L'email figure en lecture seule : identifiant d'inscription de la
+    clinique, il est affichable mais non modifiable par updateMyClinic.
+    """
+
+    id: uuid.UUID
+    name: str
+    email: str
+    phone: str | None
+    address: Address | None
+    timezone: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class UpdateClinicProfileCommand:
+    """Entrée d'UpdateClinicProfile : la fiche éditable de la clinique.
+
+    clinic_id vient TOUJOURS du token de la session staff (claim cid du
+    "fat token"), jamais du body : un manager ne peut modifier que SA
+    clinique. Champs primitifs uniquement : le use case construit les value
+    objects (Address, Timezone) et déclenche ainsi la validation domaine.
+    """
+
+    clinic_id: uuid.UUID
+    name: str
+    phone: str | None
+    address_line1: str | None
+    address_line2: str | None
+    postal_code: str | None
+    city: str | None
+    country: str
+    timezone: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class PublicClinic:
+    """Projection MINIMALE d'une clinique pour l'annuaire public (B2C).
+
+    Volontairement réduite : l'annuaire est accessible sans authentification,
+    on n'expose ni email, ni téléphone, ni adresse complète -- juste de quoi
+    choisir une clinique (nom et ville, None tant que l'adresse n'est pas
+    renseignée).
+    """
+
+    id: uuid.UUID
+    name: str
+    city: str | None
+
+
 # --- DTOs des propriétaires (comptes B2C) ---------------------------------
 
 

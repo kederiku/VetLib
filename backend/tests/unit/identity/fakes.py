@@ -53,6 +53,17 @@ class FakeClinicRepository:
     async def exists_with_email(self, email: Email) -> bool:
         return any(c.email == email for c in self._store.values())
 
+    async def update(self, clinic: Clinic) -> None:
+        self._store[clinic.id] = clinic
+
+    async def list_active(self, *, limit: int, offset: int) -> list[Clinic]:
+        # Reproduit la requete reelle : lignes vivantes, tri par nom, page
+        # limit/offset -- l'ordre est requis pour une pagination stable.
+        alive = sorted(
+            (c for c in self._store.values() if c.deleted_at is None), key=lambda c: c.name
+        )
+        return alive[offset : offset + limit]
+
 
 class FakeUserRepository:
     """Implémentation dict du port UserRepository.

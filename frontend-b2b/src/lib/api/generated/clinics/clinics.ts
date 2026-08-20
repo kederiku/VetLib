@@ -4,23 +4,51 @@
  * VetoLib API
  * OpenAPI spec version: 0.1.0
  */
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
 
 import type {
+  ClinicProfileResponse,
   ClinicRegisteredResponse,
   HTTPValidationError,
   RegisterClinicRequest,
+  UpdateClinicProfileRequest,
 } from "../vetoLibAPI.schemas";
 
 import { customFetch } from "../../mutator";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+const withQueryKey = <T extends object, K>(
+  query: T,
+  queryKey: K,
+): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === "queryKey") continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
 
 export type registerClinicResponse201 = {
   data: ClinicRegisteredResponse;
@@ -135,4 +163,261 @@ export const useRegisterClinic = <
   TContext
 > => {
   return useMutation(getRegisterClinicMutationOptions(options), queryClient);
+};
+export type getMyClinicResponse200 = {
+  data: ClinicProfileResponse;
+  status: 200;
+};
+
+export type getMyClinicResponseSuccess = getMyClinicResponse200 & {
+  headers: Headers;
+};
+export type getMyClinicResponse = getMyClinicResponseSuccess;
+
+export const getGetMyClinicUrl = () => {
+  return `/api/v1/clinics/me`;
+};
+
+/**
+ * Fiche de la clinique du manager connecté (adresse, timezone...).
+ * @summary Get My Clinic
+ */
+export const getMyClinic = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<getMyClinicResponse> => {
+  return customFetch<getMyClinicResponse>(getGetMyClinicUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyClinicQueryKey = () => {
+  return [`/api/v1/clinics/me`] as const;
+};
+
+export const getGetMyClinicQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyClinic>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<Awaited<ReturnType<typeof getMyClinic>>, TError, TData>
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyClinicQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyClinic>>> = ({
+    signal,
+  }) => getMyClinic({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyClinic>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetMyClinicQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyClinic>>
+>;
+export type GetMyClinicQueryError = unknown;
+
+export function useGetMyClinic<
+  TData = Awaited<ReturnType<typeof getMyClinic>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyClinic>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyClinic>>,
+          TError,
+          Awaited<ReturnType<typeof getMyClinic>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMyClinic<
+  TData = Awaited<ReturnType<typeof getMyClinic>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyClinic>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyClinic>>,
+          TError,
+          Awaited<ReturnType<typeof getMyClinic>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMyClinic<
+  TData = Awaited<ReturnType<typeof getMyClinic>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyClinic>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get My Clinic
+ */
+
+export function useGetMyClinic<
+  TData = Awaited<ReturnType<typeof getMyClinic>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyClinic>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetMyClinicQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type updateMyClinicResponse200 = {
+  data: ClinicProfileResponse;
+  status: 200;
+};
+
+export type updateMyClinicResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type updateMyClinicResponseSuccess = updateMyClinicResponse200 & {
+  headers: Headers;
+};
+export type updateMyClinicResponseError = updateMyClinicResponse422 & {
+  headers: Headers;
+};
+
+export type updateMyClinicResponse =
+  updateMyClinicResponseSuccess | updateMyClinicResponseError;
+
+export const getUpdateMyClinicUrl = () => {
+  return `/api/v1/clinics/me`;
+};
+
+/**
+ * PUT (remplacement complet de la fiche) : le formulaire du front envoie
+ * toujours tous les champs -- plus simple et plus prévisible qu'un PATCH
+ * partiel. Pas d'email : absent du schéma, donc immuable ici.
+ * @summary Update My Clinic
+ */
+export const updateMyClinic = async (
+  updateClinicProfileRequest: UpdateClinicProfileRequest,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<updateMyClinicResponse> => {
+  return customFetch<updateMyClinicResponse>(getUpdateMyClinicUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateClinicProfileRequest),
+  });
+};
+
+export const getUpdateMyClinicMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMyClinic>>,
+    TError,
+    { data: UpdateClinicProfileRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMyClinic>>,
+  TError,
+  { data: UpdateClinicProfileRequest },
+  TContext
+> => {
+  const mutationKey = ["updateMyClinic"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMyClinic>>,
+    { data: UpdateClinicProfileRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateMyClinic(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMyClinicMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMyClinic>>
+>;
+export type UpdateMyClinicMutationBody = UpdateClinicProfileRequest;
+export type UpdateMyClinicMutationError = HTTPValidationError;
+
+/**
+ * @summary Update My Clinic
+ */
+export const useUpdateMyClinic = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateMyClinic>>,
+      TError,
+      { data: UpdateClinicProfileRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateMyClinic>>,
+  TError,
+  { data: UpdateClinicProfileRequest },
+  TContext
+> => {
+  return useMutation(getUpdateMyClinicMutationOptions(options), queryClient);
 };

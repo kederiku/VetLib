@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from vetolib.identity.domain.events import ClinicRegistered
-from vetolib.identity.domain.value_objects import Email
+from vetolib.identity.domain.value_objects import Address, Email, Timezone
 from vetolib.shared.domain.entity import Entity
 
 
@@ -32,6 +32,14 @@ class Clinic(Entity):
     name: str
     email: Email  # value object : email déjà validé et normalisé, par construction
     phone: str | None = None
+    # Adresse structuree "tout ou rien" (meme modele que Owner) : absente a
+    # l'inscription, renseignee ensuite via updateMyClinic. Indispensable a
+    # l'annuaire public (recherche par ville) et a la future facturation.
+    address: Address | None = None
+    # Fuseau IANA (str deja validee par le VO Timezone au moment de l'ecrire) :
+    # l'agenda interpretera les horaires d'ouverture dans CE fuseau, la base
+    # stockant tout en UTC. Defaut France, marche principal du produit.
+    timezone: str = "Europe/Paris"
 
     @classmethod
     def register(
@@ -60,3 +68,22 @@ class Clinic(Entity):
             manager_email=email.value,
         )
         return clinic, event
+
+    def update_profile(
+        self, *, name: str, phone: str | None, address: Address | None, timezone: Timezone
+    ) -> None:
+        """Met à jour la fiche publique et les réglages de la clinique.
+
+        Volontairement SANS email : c'est l'identifiant d'inscription de la
+        clinique (celui du gérant fondateur) -- son changement exigera un flux
+        vérifié dédié, comme pour les comptes. L'exclure d'ici rend l'oubli
+        impossible par construction (même règle qu'Owner.update_profile).
+
+        `timezone` arrive en value object (déjà validé par zoneinfo) et est
+        stocké aplati en str : l'entité ne peut donc recevoir que des fuseaux
+        valides, sans revalider elle-même.
+        """
+        self.name = name
+        self.phone = phone
+        self.address = address
+        self.timezone = timezone.value

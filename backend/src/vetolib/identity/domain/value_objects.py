@@ -8,6 +8,7 @@ chaque use case. Zéro import de framework, comme partout dans domain/.
 """
 
 import re
+import zoneinfo
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -164,6 +165,36 @@ class Address:
         object.__setattr__(self, "postal_code", postal_code)
         object.__setattr__(self, "city", city)
         object.__setattr__(self, "country", country)
+
+
+@dataclass(frozen=True)
+class Timezone:
+    """Fuseau horaire IANA d'une clinique (ex : "Europe/Paris").
+
+    Pourquoi un value object : les horaires d'ouverture et l'agenda d'une
+    clinique s'interpretent dans SON fuseau local (la base stocke tout en
+    UTC) ; un identifiant invalide rendrait toute conversion impossible. La
+    validation s'appuie sur zoneinfo (stdlib, autorisee en domain : ce n'est
+    pas un framework), qui connait la base de donnees IANA officielle --
+    aucune liste a maintenir a la main.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        """Valide l'identifiant via zoneinfo ; leve DomainValidationError sinon.
+
+        ZoneInfo leve ZoneInfoNotFoundError pour un nom inconnu, mais aussi
+        ValueError (chemin absolu, nom vide) ou KeyError selon la forme de
+        l'entree : on attrape les trois pour une frontiere etanche.
+        """
+        try:
+            zoneinfo.ZoneInfo(self.value)
+        except (zoneinfo.ZoneInfoNotFoundError, ValueError, KeyError) as exc:
+            raise DomainValidationError(f"Fuseau horaire invalide : {self.value!r}") from exc
+
+    def __str__(self) -> str:
+        return self.value
 
 
 @dataclass(frozen=True)

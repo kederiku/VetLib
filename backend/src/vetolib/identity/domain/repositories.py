@@ -41,6 +41,15 @@ class ClinicRepository(Protocol):
     # Test d'unicité pour l'inscription (use case RegisterClinic).
     async def exists_with_email(self, email: Email) -> bool: ...
 
+    # Persiste les mutations d'une entité (update_profile) : les entités
+    # domaine sont des dataclasses détachées de la session, il faut les
+    # re-fusionner explicitement (merge) côté infrastructure.
+    async def update(self, clinic: Clinic) -> None: ...
+
+    # Annuaire public (portail B2C) : uniquement les cliniques vivantes,
+    # triées par nom pour une pagination stable (limit/offset).
+    async def list_active(self, *, limit: int, offset: int) -> list[Clinic]: ...
+
 
 class UserRepository(Protocol):
     """Port d'accès aux utilisateurs ; implémenté en infrastructure.

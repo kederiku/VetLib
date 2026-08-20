@@ -42,7 +42,21 @@ from vetolib.identity.infrastructure.models import ClinicModel, OwnerModel, User
 
 
 def _clinic_to_entity(model: ClinicModel) -> Clinic:
-    """Reconstruit l'entité domaine Clinic depuis une ligne de la table."""
+    """Reconstruit l'entité domaine Clinic depuis une ligne de la table.
+
+    L'adresse n'est reconstruite que si line1 est renseignée (règle "tout ou
+    rien", comme pour Owner) : la validation du value object se rejoue à la
+    relecture.
+    """
+    address: Address | None = None
+    if model.address_line1 is not None:
+        address = Address(
+            line1=model.address_line1,
+            line2=model.address_line2,
+            postal_code=model.postal_code or "",
+            city=model.city or "",
+            country=model.country or "FR",
+        )
     return Clinic(
         id=model.id,
         created_at=model.created_at,
@@ -50,11 +64,14 @@ def _clinic_to_entity(model: ClinicModel) -> Clinic:
         name=model.name,
         email=Email(model.email),
         phone=model.phone,
+        address=address,
+        timezone=model.timezone,
     )
 
 
 def _clinic_to_model(entity: Clinic) -> ClinicModel:
     """Aplatit l'entité Clinic en ligne SQL (les value objects -> str)."""
+    address = entity.address
     return ClinicModel(
         id=entity.id,
         created_at=entity.created_at,
@@ -62,6 +79,12 @@ def _clinic_to_model(entity: Clinic) -> ClinicModel:
         name=entity.name,
         email=entity.email.value,
         phone=entity.phone,
+        address_line1=address.line1 if address else None,
+        address_line2=address.line2 if address else None,
+        postal_code=address.postal_code if address else None,
+        city=address.city if address else None,
+        country=address.country if address else None,
+        timezone=entity.timezone,
     )
 
 
@@ -128,6 +151,28 @@ class SqlAlchemyClinicRepository:
         )
         count = (await self._session.execute(stmt)).scalar_one()
         return count > 0
+
+    async def update(self, clinic: Clinic) -> None:
+        # merge : re-fusionne l'entité détachée dans la session (SELECT puis
+        # UPDATE au flush) -- même approche que pour User et Owner.
+        await self._session.merge(_clinic_to_model(clinic))
+
+    async def list_active(self, *, limit: int, offset: int) -> list[Clinic]:
+        """Page de l'annuaire public : cliniques vivantes, triées par nom.
+
+        Le tri (order_by) est indispensable à la pagination limit/offset :
+        sans ordre stable, deux pages consécutives pourraient répéter ou
+        sauter des lignes.
+        """
+        stmt = (
+            select(ClinicModel)
+            .where(ClinicModel.deleted_at.is_(None))
+            .order_by(ClinicModel.name)
+            .limit(limit)
+            .offset(offset)
+        )
+        models = (await self._session.execute(stmt)).scalars().all()
+        return [_clinic_to_entity(model) for model in models]
 
 
 class SqlAlchemyUserRepository:

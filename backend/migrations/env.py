@@ -24,6 +24,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # L'import des models enregistre les tables dans Base.metadata — tout nouveau
 # contexte doit être importé ici, sinon l'autogenerate le rate.
 import vetolib.identity.infrastructure.models
+import vetolib.patients.infrastructure.models
+import vetolib.scheduling.infrastructure.models
 import vetolib.shared.infrastructure.outbox.model  # noqa: F401
 from vetolib.config import get_settings
 from vetolib.shared.infrastructure.db.base import Base

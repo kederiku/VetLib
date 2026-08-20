@@ -108,7 +108,17 @@ async def client(app_env: dict[str, str]) -> AsyncIterator[httpx.AsyncClient]:
     """
     engine = create_async_engine(app_env["DATABASE_URL"])
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE users, clinics, owners, outbox_events"))
+        # CASCADE : PostgreSQL refuse de tronquer une table référencée par une
+        # FK d'une table absente de la liste ; CASCADE étend le TRUNCATE aux
+        # tables référençantes (appointments -> pets/clinics...) sans devoir
+        # tenir cette liste à jour à chaque nouveau contexte.
+        await connection.execute(
+            text(
+                "TRUNCATE users, clinics, owners, pets, appointments, "
+                "schedule_exceptions, weekly_schedules, appointment_types, "
+                "resources, outbox_events CASCADE"
+            )
+        )
     await engine.dispose()
 
     from vetolib.main import create_app

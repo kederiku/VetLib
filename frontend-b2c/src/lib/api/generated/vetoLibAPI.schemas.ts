@@ -6,6 +6,12 @@
  */
 /**
  * Adresse structuree exposee/recue par l'API (miroir du VO Address).
+ *
+ * str_strip_whitespace : Pydantic valide les longueurs sur les valeurs
+ * NORMALISEES (comme le VO Address), pas sur les valeurs brutes -- sans
+ * cela, un pays " F" (2 caracteres bruts) passerait le schema d'entree
+ * puis, une fois normalise en "F" par le VO, violerait ce meme schema en
+ * SORTIE (OwnerResponse) : 500 au lieu de 422, et donnee invalide en base.
  */
 export interface AddressPayload {
   /**
@@ -32,11 +38,164 @@ export interface AddressPayload {
 }
 
 /**
+ * Etats de la machine a etats stricte d'un rendez-vous.
+ *
+ * pending -> confirmed -> completed, et pending|confirmed -> cancelled.
+ * Toute autre transition est une erreur metier (InvalidAppointmentTransitionError).
+ */
+export type AppointmentStatus =
+  (typeof AppointmentStatus)[keyof typeof AppointmentStatus];
+
+export const AppointmentStatus = {
+  pending: "pending",
+  confirmed: "confirmed",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+/**
+ * Ligne d'agenda enrichie (noms denormalises pour l'affichage direct).
+ */
+export interface AgendaEntryResponse {
+  id: string;
+  resource_id: string;
+  resource_name: string;
+  appointment_type_id: string;
+  appointment_type_name: string;
+  starts_at: string;
+  ends_at: string;
+  status: AppointmentStatus;
+  reason: string | null;
+  cancelled_reason: string | null;
+  owner_id: string | null;
+  owner_first_name: string | null;
+  owner_last_name: string | null;
+  owner_phone: string | null;
+  pet_name: string | null;
+  pet_species: string | null;
+  guest_name: string | null;
+  guest_pet_name: string | null;
+}
+
+export interface AppointmentResponse {
+  id: string;
+  resource_id: string;
+  appointment_type_id: string;
+  owner_id: string | null;
+  pet_id: string | null;
+  guest_name: string | null;
+  guest_pet_name: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: AppointmentStatus;
+  reason: string | null;
+  cancelled_reason: string | null;
+}
+
+export interface AppointmentTypeResponse {
+  id: string;
+  name: string;
+  duration_minutes: number;
+  active: boolean;
+}
+
+/**
+ * Creneau proposable, en ISO UTC : le front FORMATE seulement (fuseau
+ * de la clinique), il ne calcule jamais.
+ */
+export interface AvailabilitySlotResponse {
+  resource_id: string;
+  resource_name: string;
+  starts_at: string;
+  ends_at: string;
+}
+
+export interface CancelAppointmentRequest {
+  cancelled_reason?: string | null;
+}
+
+/**
+ * Fiche de la clinique (GET et PUT /clinics/me).
+ *
+ * L'email figure en LECTURE seule : present dans la reponse (affichage)
+ * mais absent d'UpdateClinicProfileRequest (identifiant d'inscription,
+ * non modifiable ici).
+ */
+export interface ClinicProfileResponse {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  address: AddressPayload | null;
+  timezone: string;
+}
+
+/**
  * Réponse 201 de /clinics/register : juste les identifiants créés.
  */
 export interface ClinicRegisteredResponse {
   clinic_id: string;
   user_id: string;
+}
+
+export interface CreateAppointmentTypeRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  /**
+   * @maximum 480
+   * @exclusiveMinimum 0
+   */
+  duration_minutes: number;
+}
+
+/**
+ * Espèces reconnues par la plateforme, volontairement grossières.
+ *
+ * Ce n'est pas une taxonomie médicale : l'espèce sert au tri des agendas
+ * (un vétérinaire NAC ne voit pas les mêmes créneaux) et à l'affichage.
+ * NAC = nouveaux animaux de compagnie (lapins, furets, reptiles...).
+ * StrEnum : chaque membre EST une str (Species.DOG == "dog"), ce qui
+ * simplifie le stockage en base et la sérialisation JSON -- même choix que
+ * Role dans identity. Doit rester synchronisé avec la contrainte CHECK
+ * ck_pets_species_valid de la table pets.
+ */
+export type Species = (typeof Species)[keyof typeof Species];
+
+export const Species = {
+  dog: "dog",
+  cat: "cat",
+  nac: "nac",
+  other: "other",
+} as const;
+
+/**
+ * Corps de POST /owner/pets : tous les champs de la fiche sont requis.
+ */
+export interface CreatePetRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  species: Species;
+}
+
+export interface CreateResourceRequest {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  user_id?: string | null;
+}
+
+export interface CreateScheduleExceptionRequest {
+  starts_at: string;
+  ends_at: string;
+  reason?: string | null;
 }
 
 export type ValidationErrorCtx = { [key: string]: unknown };
@@ -73,6 +232,34 @@ export interface NotificationPreferencesPayload {
   sms?: boolean;
 }
 
+export interface OwnerAppointmentResponse {
+  id: string;
+  clinic_id: string;
+  clinic_name: string;
+  appointment_type_name: string;
+  resource_name: string;
+  pet_id: string | null;
+  pet_name: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: AppointmentStatus;
+  reason: string | null;
+  cancelled_reason: string | null;
+}
+
+/**
+ * clinic_id = la clinique CHOISIE (tenant cible) ; owner_id vient du
+ * token, jamais du body.
+ */
+export interface OwnerBookAppointmentRequest {
+  clinic_id: string;
+  appointment_type_id: string;
+  resource_id: string;
+  starts_at: string;
+  pet_id: string;
+  reason?: string | null;
+}
+
 /**
  * 201 : l'inscription ne connecte pas, le front enchaine un login.
  */
@@ -91,6 +278,31 @@ export interface OwnerResponse {
   phone: string | null;
   address: AddressPayload | null;
   notification_preferences: NotificationPreferencesPayload;
+}
+
+/**
+ * Fiche d'un animal (liste, création et édition).
+ */
+export interface PetResponse {
+  id: string;
+  name: string;
+  species: Species;
+}
+
+export interface PublicAppointmentTypeResponse {
+  id: string;
+  name: string;
+  duration_minutes: number;
+}
+
+/**
+ * Entree de l'annuaire public (GET /public/clinics) : projection
+ * volontairement minimale, l'endpoint est accessible sans authentification.
+ */
+export interface PublicClinicResponse {
+  id: string;
+  name: string;
+  city: string | null;
 }
 
 /**
@@ -140,6 +352,27 @@ export interface RegisterOwnerRequest {
 }
 
 /**
+ * Nature d'une ressource reservable.
+ *
+ * Phase 1 du MVP : uniquement les veterinaires. Le document de conception
+ * prevoit d'autres natures (salles, equipements) en phase 2 : l'enum et la
+ * colonne kind sont la pour les accueillir sans migration structurelle.
+ */
+export type ResourceKind = (typeof ResourceKind)[keyof typeof ResourceKind];
+
+export const ResourceKind = {
+  veterinarian: "veterinarian",
+} as const;
+
+export interface ResourceResponse {
+  id: string;
+  kind: ResourceKind;
+  name: string;
+  user_id: string | null;
+  active: boolean;
+}
+
+/**
  * Rôles du personnel d'une clinique, du moins au plus privilégié.
  *
  * StrEnum : chaque membre EST une str (Role.MANAGER == "manager"), ce qui
@@ -152,6 +385,88 @@ export const Role = {
   veterinarian: "veterinarian",
   manager: "manager",
 } as const;
+
+export interface ScheduleExceptionResponse {
+  id: string;
+  resource_id: string;
+  starts_at: string;
+  ends_at: string;
+  reason: string | null;
+}
+
+/**
+ * Une plage horaire LOCALE (interpretee dans la timezone de la clinique).
+ *
+ * weekday : 0 = lundi ... 6 = dimanche (meme convention que le front).
+ */
+export interface WeeklyRangePayload {
+  /**
+   * @minimum 0
+   * @maximum 6
+   */
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
+/**
+ * Remplacement COMPLET de la semaine type du praticien.
+ */
+export interface SetWeeklySchedulesRequest {
+  items: WeeklyRangePayload[];
+}
+
+/**
+ * RDV cree par la clinique : soit un compte (owner_id +/- pet_id), soit
+ * un client de passage (guest_name obligatoire alors). ends_at est derive
+ * de la duree du type cote backend -- le front n'envoie que le debut.
+ */
+export interface StaffCreateAppointmentRequest {
+  resource_id: string;
+  appointment_type_id: string;
+  starts_at: string;
+  owner_id?: string | null;
+  pet_id?: string | null;
+  guest_name?: string | null;
+  guest_pet_name?: string | null;
+  reason?: string | null;
+}
+
+export interface UpdateAppointmentTypeRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  /**
+   * @maximum 480
+   * @exclusiveMinimum 0
+   */
+  duration_minutes: number;
+  active: boolean;
+}
+
+/**
+ * Fiche editable de la clinique. Pas d'email (identifiant d'inscription,
+ * exclu du schema donc immuable ici, comme pour la fiche owner).
+ *
+ * L'adresse est un bloc optionnel TOUT-OU-RIEN : soit absente (null), soit
+ * complete -- le sous-schema AddressPayload impose alors line1, postal_code
+ * et city non vides. La timezone n'est validee ici que non-vide : l'arbitre
+ * est le value object Timezone (zoneinfo), un identifiant IANA inconnu
+ * donne un 422 domaine.
+ */
+export interface UpdateClinicProfileRequest {
+  /**
+   * @minLength 2
+   * @maxLength 200
+   */
+  name: string;
+  phone?: string | null;
+  address?: AddressPayload | null;
+  /** @minLength 1 */
+  timezone: string;
+}
 
 /**
  * Fiche personnelle editable. Ni email (identifiant de connexion, son
@@ -179,6 +494,28 @@ export interface UpdateOwnerProfileRequest {
 }
 
 /**
+ * Corps de PATCH /owner/pets/x : édition PARTIELLE, tout est optionnel.
+ *
+ * None (ou champ absent) = inchangé -- la sémantique PATCH est portée
+ * jusqu'à l'entité (Pet.update n'écrase que le non-None). Un body vide est
+ * donc accepté et ne modifie rien.
+ */
+export interface UpdatePetRequest {
+  name?: string | null;
+  species?: Species | null;
+}
+
+export interface UpdateResourceRequest {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  active: boolean;
+  user_id?: string | null;
+}
+
+/**
  * Profil renvoyé par /auth/login, /auth/refresh et /auth/me.
  *
  * Le front s'en sert pour afficher l'utilisateur et adapter l'UI selon
@@ -196,4 +533,34 @@ export interface UserResponse {
   permissions: string[];
 }
 
+export interface WeeklyScheduleResponse {
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
 export type Healthz200 = { [key: string]: unknown };
+
+export type ListClinicsParams = {
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * @minimum 0
+   */
+  offset?: number;
+};
+
+export type GetAgendaParams = {
+  date_from: string;
+  date_to: string;
+  resource_id?: string | null;
+};
+
+export type ListAvailabilitiesParams = {
+  appointment_type_id: string;
+  date_from: string;
+  date_to: string;
+};
