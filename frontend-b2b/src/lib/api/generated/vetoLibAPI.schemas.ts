@@ -4,6 +4,36 @@
  * VetoLib API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * Adresse structuree exposee/recue par l'API (miroir du VO Address).
+ */
+export interface AddressPayload {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  line1: string;
+  line2?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 10
+   */
+  postal_code: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  city: string;
+  /**
+   * @minLength 2
+   * @maxLength 2
+   */
+  country?: string;
+}
+
+/**
+ * Réponse 201 de /clinics/register : juste les identifiants créés.
+ */
 export interface ClinicRegisteredResponse {
   clinic_id: string;
   user_id: string;
@@ -23,11 +53,49 @@ export interface HTTPValidationError {
   detail?: ValidationError[];
 }
 
+/**
+ * Corps de POST /auth/login.
+ *
+ * Pas de min_length sur le password ici : la contrainte ne vaut qu'à la
+ * création ; au login, toute valeur est comparée au hash (réponse 401
+ * uniforme, sans indice sur la règle de validation).
+ */
 export interface LoginRequest {
   email: string;
   password: string;
 }
 
+/**
+ * Preferences de notification (rappels RDV/vaccins) : opt-in par canal.
+ */
+export interface NotificationPreferencesPayload {
+  email?: boolean;
+  sms?: boolean;
+}
+
+/**
+ * 201 : l'inscription ne connecte pas, le front enchaine un login.
+ */
+export interface OwnerRegisteredResponse {
+  owner_id: string;
+}
+
+/**
+ * Profil proprietaire (login, refresh, /me et update du profil).
+ */
+export interface OwnerResponse {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  address: AddressPayload | null;
+  notification_preferences: NotificationPreferencesPayload;
+}
+
+/**
+ * Corps de POST /clinics/register (onboarding d'une clinique).
+ */
 export interface RegisterClinicRequest {
   /**
    * @minLength 2
@@ -50,6 +118,33 @@ export interface RegisterClinicRequest {
   last_name: string;
 }
 
+/**
+ * Inscription d'un proprietaire : memes exigences de mot de passe que le
+ * staff (min 12), pas de nom de clinique -- le compte est global.
+ */
+export interface RegisterOwnerRequest {
+  email: string;
+  /** @minLength 12 */
+  password: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  first_name: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  last_name: string;
+  phone?: string | null;
+}
+
+/**
+ * Rôles du personnel d'une clinique, du moins au plus privilégié.
+ *
+ * StrEnum : chaque membre EST une str (Role.MANAGER == "manager"), ce qui
+ * simplifie le stockage en base et la sérialisation JSON/JWT.
+ */
 export type Role = (typeof Role)[keyof typeof Role];
 
 export const Role = {
@@ -58,6 +153,38 @@ export const Role = {
   manager: "manager",
 } as const;
 
+/**
+ * Fiche personnelle editable. Ni email (identifiant de connexion, son
+ * changement exigera une verification par lien) ni mot de passe (flux
+ * dedie futur) : les exclure du schema rend la modification impossible.
+ *
+ * L'adresse est un bloc optionnel TOUT-OU-RIEN : soit absente (null),
+ * soit complete -- le sous-schema AddressPayload impose alors line1,
+ * postal_code et city non vides.
+ */
+export interface UpdateOwnerProfileRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  first_name: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  last_name: string;
+  phone?: string | null;
+  address?: AddressPayload | null;
+  notification_preferences?: NotificationPreferencesPayload;
+}
+
+/**
+ * Profil renvoyé par /auth/login, /auth/refresh et /auth/me.
+ *
+ * Le front s'en sert pour afficher l'utilisateur et adapter l'UI selon
+ * role/permissions (l'autorité reste le backend : cacher un bouton n'est
+ * pas une protection, require_permission oui).
+ */
 export interface UserResponse {
   id: string;
   clinic_id: string;

@@ -47,6 +47,12 @@ export const getRegisterClinicUrl = () => {
 };
 
 /**
+ * Crée la clinique et son gérant ; 201 avec les deux UUID créés.
+ *
+ * Notez que la réponse ne pose PAS de cookies : l'inscription ne connecte
+ * pas automatiquement, l'utilisateur passe ensuite par /auth/login. Un
+ * email déjà pris (user ou clinique) -> EmailAlreadyExistsError -> 409.
+ * La route ne fait que traduire schéma HTTP <-> commande applicative.
  * @summary Register Clinic
  */
 export const registerClinic = async (

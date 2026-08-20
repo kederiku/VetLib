@@ -72,6 +72,12 @@ export const getLoginUrl = () => {
 };
 
 /**
+ * Vérifie email + mot de passe puis ouvre la session via les cookies.
+ *
+ * Utilise la UoW système (pas de RLS) : avant l'authentification, on ne
+ * connaît pas encore la clinique de l'utilisateur. En cas d'échec, le use
+ * case lève InvalidCredentialsError -> 401 sans préciser si c'est l'email
+ * ou le mot de passe qui est faux (anti-énumération de comptes).
  * @summary Login
  */
 export const login = async (
@@ -167,6 +173,12 @@ export const getRefreshTokenUrl = () => {
 };
 
 /**
+ * Renouvelle la session quand l'access token (15 min) a expiré.
+ *
+ * Le cookie vetolib_refresh n'est envoyé par le navigateur que sur ce
+ * chemin précis (path=/api/v1/auth/refresh) : on le lit donc à la main
+ * dans la requête, sans passer par get_current_user qui, lui, attend
+ * l'access token.
  * @summary Refresh
  */
 export const refreshToken = async (
@@ -257,6 +269,10 @@ export const getLogoutUrl = () => {
 };
 
 /**
+ * Ferme la session en expirant les deux cookies côté navigateur.
+ *
+ * Volontairement sans CurrentUserDep : un logout doit réussir même avec un
+ * access token déjà expiré. 204 No Content : rien à renvoyer.
  * @summary Logout
  */
 export const logout = async (
@@ -347,6 +363,11 @@ export const getGetCurrentUserUrl = () => {
 };
 
 /**
+ * Profil de l'utilisateur connecté (hook Orval useGetCurrentUser).
+ *
+ * Tout le travail est fait par la dépendance CurrentUserDep : cookie ->
+ * JWT -> rechargement en base. C'est l'appel que font les frontends au
+ * chargement pour savoir si une session est ouverte.
  * @summary Me
  */
 export const getCurrentUser = async (

@@ -57,6 +57,9 @@ export const getHealthzUrl = () => {
 
 /**
  * Hors /api/v1, sans auth : sonde DB + Redis pour les healthchecks Docker.
+ *
+ * Répond 200 si tout va bien, 503 sinon, avec le détail par dépendance :
+ * {"status": "ok"|"degraded", "checks": {"database": ..., "redis": ...}}.
  * @summary Healthz
  */
 export const healthz = async (
