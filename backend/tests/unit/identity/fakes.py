@@ -83,10 +83,10 @@ class FakeHasher:
     def __init__(self) -> None:
         self.verify_calls: list[tuple[str, str]] = []
 
-    def hash(self, plain: str) -> str:
+    async def hash(self, plain: str) -> str:
         return f"h:{plain}"
 
-    def verify_and_update(self, plain: str, hashed: str) -> tuple[bool, str | None]:
+    async def verify_and_update(self, plain: str, hashed: str) -> tuple[bool, str | None]:
         self.verify_calls.append((plain, hashed))
         return (hashed == f"h:{plain}", None)
 

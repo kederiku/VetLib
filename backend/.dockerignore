@@ -1,0 +1,14 @@
+# Contexte de build = ./backend (docker/backend/Dockerfile).
+# Ni le venv de l'hôte ni les secrets ne doivent entrer dans l'image.
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml

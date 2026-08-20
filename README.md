@@ -11,7 +11,8 @@ Plateforme SaaS B2B2C de prise de rendez-vous et de gestion pour cliniques vét�
 ## Quickstart
 
 ```bash
-cp .env.example .env
+cp .env.example .env                              # lu par docker-compose (hostnames Docker)
+cp backend/.env.example backend/.env              # lu par le backend lancé HORS Docker (localhost)
 docker compose up -d          # postgres, redis, minio (+ buckets), api :8000, worker
 cd backend && uv run alembic upgrade head && cd ..
 cd frontend-b2c && npm install && npm run dev     # http://localhost:3000

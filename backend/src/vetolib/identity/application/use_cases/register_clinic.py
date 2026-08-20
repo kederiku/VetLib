@@ -24,6 +24,9 @@ class RegisterClinic:
     async def execute(self, cmd: RegisterClinicCommand) -> RegisterClinicResult:
         email = Email(cmd.email)
         now = self._clock.now()
+        # Hash AVANT d'ouvrir la transaction : ~50 ms de CPU Argon2 ne doivent
+        # pas retenir une connexion du pool.
+        hashed_password = HashedPassword(await self._hasher.hash(cmd.password))
         async with self._uow_factory() as uow:
             email_taken = await uow.users.get_by_email(
                 email
@@ -39,7 +42,7 @@ class RegisterClinic:
             manager = User.create(
                 clinic_id=clinic.id,
                 email=email,
-                hashed_password=HashedPassword(self._hasher.hash(cmd.password)),
+                hashed_password=hashed_password,
                 first_name=cmd.first_name,
                 last_name=cmd.last_name,
                 role=Role.MANAGER,

@@ -8,9 +8,12 @@ from vetolib.shared.application.uow import UnitOfWork
 
 
 class PasswordHasher(Protocol):
-    def hash(self, plain: str) -> str: ...
+    """Async : un hash/verify Argon2 coûte des dizaines de ms de CPU — il ne
+    doit jamais s'exécuter sur l'event loop (l'adapter délègue au threadpool)."""
 
-    def verify_and_update(self, plain: str, hashed: str) -> tuple[bool, str | None]:
+    async def hash(self, plain: str) -> str: ...
+
+    async def verify_and_update(self, plain: str, hashed: str) -> tuple[bool, str | None]:
         """(mot de passe valide ?, nouveau hash si rehash nécessaire)."""
         ...
 

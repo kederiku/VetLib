@@ -63,6 +63,48 @@ async def test_register_login_me_refresh_logout(client: httpx.AsyncClient) -> No
     assert response.status_code == 401
 
 
+async def test_violation_unicite_concurrente_traduite_en_conflit(
+    client: httpx.AsyncClient, app_env: dict[str, str]
+) -> None:
+    """Deux register concurrents passent tous deux le contrôle applicatif
+    (SELECT) : l'index unique partiel est l'arbitre final, et sa violation doit
+    remonter en EmailAlreadyExistsError (409), pas en IntegrityError (500).
+    On simule le perdant de la course en insérant sans passer par le contrôle."""
+    import uuid
+    from datetime import UTC, datetime
+
+    import pytest
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from vetolib.identity.domain.errors import EmailAlreadyExistsError
+    from vetolib.identity.domain.user import User
+    from vetolib.identity.domain.value_objects import Email, HashedPassword, Role
+    from vetolib.identity.infrastructure.uow import SqlAlchemyIdentityUnitOfWork
+
+    response = await client.post("/api/v1/clinics/register", json=REGISTER_PAYLOAD)
+    assert response.status_code == 201
+    clinic_id = uuid.UUID(response.json()["clinic_id"])
+
+    engine = create_async_engine(app_env["DATABASE_URL"])
+    try:
+        sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+        async with SqlAlchemyIdentityUnitOfWork(sessionmaker, app_db_role="vetolib_app") as uow:
+            duplicate = User.create(
+                clinic_id=clinic_id,
+                email=Email(REGISTER_PAYLOAD["email"]),
+                hashed_password=HashedPassword("irrelevant"),
+                first_name="Doublon",
+                last_name="Perdant",
+                role=Role.ASV,
+                now=datetime.now(UTC),
+            )
+            await uow.users.add(duplicate)
+            with pytest.raises(EmailAlreadyExistsError):
+                await uow.commit()
+    finally:
+        await engine.dispose()
+
+
 async def test_login_avec_mauvais_mot_de_passe(client: httpx.AsyncClient) -> None:
     await client.post("/api/v1/clinics/register", json=REGISTER_PAYLOAD)
     response = await client.post(

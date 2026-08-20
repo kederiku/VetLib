@@ -4,17 +4,12 @@
  * VetoLib API
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type {
-  DataTag,
-  DefinedInitialDataOptions,
-  DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
-  QueryFunction,
-  QueryKey,
-  UndefinedInitialDataOptions,
-  UseQueryOptions,
-  UseQueryResult,
+  UseMutationOptions,
+  UseMutationResult,
 } from "@tanstack/react-query";
 
 import type {
@@ -26,24 +21,6 @@ import type {
 import { customFetch } from "../../mutator";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
-
-const withQueryKey = <T extends object, K>(
-  query: T,
-  queryKey: K,
-): T & { queryKey: K } => {
-  const result = { queryKey } as T & { queryKey: K };
-  for (const key of Object.keys(query)) {
-    // The explicit queryKey always wins, matching the previous
-    // `{ ...query, queryKey }` spread where it was set last.
-    if (key === "queryKey") continue;
-    Object.defineProperty(result, key, {
-      enumerable: true,
-      configurable: true,
-      get: () => (query as Record<string, unknown>)[key],
-    });
-  }
-  return result;
-};
 
 export type registerClinicResponse201 = {
   data: ClinicRegisteredResponse;
@@ -84,134 +61,72 @@ export const registerClinic = async (
   });
 };
 
-export const getRegisterClinicQueryKey = (
-  registerClinicRequest?: RegisterClinicRequest,
-) => {
-  return ["POST", `/api/v1/clinics/register`, registerClinicRequest] as const;
-};
-
-export const getRegisterClinicQueryOptions = <
-  TData = Awaited<ReturnType<typeof registerClinic>>,
+export const getRegisterClinicMutationOptions = <
   TError = HTTPValidationError,
->(
-  registerClinicRequest: RegisterClinicRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof registerClinic>>, TError, TData>
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ?? getRegisterClinicQueryKey(registerClinicRequest);
-
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof registerClinic>>> = ({
-    signal,
-  }) => registerClinic(registerClinicRequest, { signal, ...requestOptions });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof registerClinic>>,
     TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
+    { data: RegisterClinicRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerClinic>>,
+  TError,
+  { data: RegisterClinicRequest },
+  TContext
+> => {
+  const mutationKey = ["registerClinic"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerClinic>>,
+    { data: RegisterClinicRequest }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerClinic(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type RegisterClinicQueryResult = NonNullable<
+export type RegisterClinicMutationResult = NonNullable<
   Awaited<ReturnType<typeof registerClinic>>
 >;
-export type RegisterClinicQueryError = HTTPValidationError;
+export type RegisterClinicMutationBody = RegisterClinicRequest;
+export type RegisterClinicMutationError = HTTPValidationError;
 
-export function useRegisterClinic<
-  TData = Awaited<ReturnType<typeof registerClinic>>,
-  TError = HTTPValidationError,
->(
-  registerClinicRequest: RegisterClinicRequest,
-  options: {
-    query: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof registerClinic>>, TError, TData>
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof registerClinic>>,
-          TError,
-          Awaited<ReturnType<typeof registerClinic>>
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRegisterClinic<
-  TData = Awaited<ReturnType<typeof registerClinic>>,
-  TError = HTTPValidationError,
->(
-  registerClinicRequest: RegisterClinicRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof registerClinic>>, TError, TData>
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof registerClinic>>,
-          TError,
-          Awaited<ReturnType<typeof registerClinic>>
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useRegisterClinic<
-  TData = Awaited<ReturnType<typeof registerClinic>>,
-  TError = HTTPValidationError,
->(
-  registerClinicRequest: RegisterClinicRequest,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof registerClinic>>, TError, TData>
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
 /**
  * @summary Register Clinic
  */
-
-export function useRegisterClinic<
-  TData = Awaited<ReturnType<typeof registerClinic>>,
+export const useRegisterClinic = <
   TError = HTTPValidationError,
+  TContext = unknown,
 >(
-  registerClinicRequest: RegisterClinicRequest,
   options?: {
-    query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof registerClinic>>, TError, TData>
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof registerClinic>>,
+      TError,
+      { data: RegisterClinicRequest },
+      TContext
     >;
     request?: SecondParameter<typeof customFetch>;
   },
   queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getRegisterClinicQueryOptions(
-    registerClinicRequest,
-    options,
-  );
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
+): UseMutationResult<
+  Awaited<ReturnType<typeof registerClinic>>,
+  TError,
+  { data: RegisterClinicRequest },
+  TContext
+> => {
+  return useMutation(getRegisterClinicMutationOptions(options), queryClient);
+};

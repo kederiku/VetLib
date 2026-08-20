@@ -37,10 +37,10 @@ class AuthenticateUser:
             if user is None:
                 # Email inconnu : on vérifie quand même un hash factice pour
                 # un temps de réponse constant, et même message d'erreur.
-                self._hasher.verify_and_update(cmd.password, self._hasher.dummy_hash())
+                await self._hasher.verify_and_update(cmd.password, self._hasher.dummy_hash())
                 raise InvalidCredentialsError("Identifiants invalides.")
 
-            valid, new_hash = self._hasher.verify_and_update(
+            valid, new_hash = await self._hasher.verify_and_update(
                 cmd.password, user.hashed_password.value
             )
             if not valid:

@@ -6,6 +6,8 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi~=0.141.1",
     "uvicorn[standard]~=0.52.4",
+    # Utilisé directement (threadpool Argon2) — pas seulement via starlette.
+    "anyio>=4",
     "sqlalchemy>=2.0.52,<2.1",
     # greenlet est requis par SQLAlchemy async + asyncpg mais n'est pas toujours
     # tiré automatiquement selon la plateforme -> dépendance directe explicite.

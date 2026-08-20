@@ -1,0 +1,15 @@
+# Contexte de build = racine (docker/frontend/Dockerfile via ARG APP_DIR).
+.git/
+node_modules/
+frontend-b2c/node_modules/
+frontend-b2c/.next/
+frontend-b2b/node_modules/
+frontend-b2b/.next/
+backend/.venv/
+backend/.mypy_cache/
+backend/.pytest_cache/
+backend/.ruff_cache/
+.env
+.env.*
+!.env.example
+backend/.env

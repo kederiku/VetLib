@@ -9,9 +9,11 @@ export default defineConfig({
       client: "react-query",
       httpClient: "fetch",
       clean: true,
+      // Pas d'override.query : les défauts Orval sont corrects
+      // (GET -> useQuery, non-GET -> useMutation). Forcer les deux à true
+      // génèrerait des hooks useQuery sur les POST.
       override: {
         mutator: { path: "src/lib/api/mutator.ts", name: "customFetch" },
-        query: { useQuery: true, useMutation: true },
       },
     },
     hooks: { afterAllFilesWrite: "prettier --write" },

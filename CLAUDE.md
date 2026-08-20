@@ -32,6 +32,7 @@ docker-compose.yml  docker/  backend/  frontend-b2c/ (:3000)  frontend-b2b/ (:30
 ## Commandes
 
 - `docker compose up -d` : infra + api + worker. Frontends **hors Docker** en dev.
+- Deux fichiers d'env distincts : `.env` racine = interpolation docker-compose (hostnames Docker) ; `backend/.env` (copié de `backend/.env.example`, URLs localhost) = backend lancé hors Docker (`make dev`, alembic, tâches locales).
 - `cd backend && uv run alembic upgrade head` : migrations (connectées via `ALEMBIC_DATABASE_URL`, superuser).
 - `make -C backend lint typecheck test-unit` : qualité backend sans Docker.
 - Après tout changement d'endpoint : `npm run generate:api` dans **les 2** frontends.
