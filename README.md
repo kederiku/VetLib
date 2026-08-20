@@ -50,16 +50,24 @@ cd ../frontend-b2b && npm run generate:api
 
 Le dossier `src/lib/api/generated/` est **committé** (les builds CI ne dépendent pas d'un backend démarré) et ne doit **jamais être édité à la main**.
 
-## Commandes courantes (backend)
+## Commandes courantes
+
+Toutes les commandes du projet (Docker, backend, frontends, migrations, qualité)
+sont regroupées dans le [Makefile](Makefile) racine, auto-documenté :
 
 ```bash
-cd backend
-make install        # uv sync
-make dev            # uvicorn --reload (hors Docker)
-make lint           # ruff check + format --check
-make typecheck      # mypy strict
-make test           # pytest (unit + integration, Docker requis pour l'intégration)
-make test-unit      # pytest unit seulement (sans Docker)
-make migrate        # alembic upgrade head
-make revision m="description"
+make help
 ```
+
+Quelques exemples :
+
+```bash
+make env            # copie les .env d'exemple
+make up             # infra + api + worker (Docker)
+make migrate        # alembic upgrade head
+make dev-b2c        # frontend B2C sur :3000 (make dev-b2b pour le B2B sur :3001)
+make check          # toute la qualité sans Docker (lint, mypy, tests unit, ESLint, tsc)
+```
+
+Le Makefile racine délègue au [Makefile du backend](backend/Makefile) (`make -C backend ...`),
+qui reste utilisable directement depuis `backend/`.
