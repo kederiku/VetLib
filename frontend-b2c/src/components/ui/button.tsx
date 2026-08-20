@@ -1,12 +1,35 @@
+/**
+ * Composant Button (généré par la CLI shadcn, preset du design system).
+ *
+ * Philosophie shadcn : le composant est copié DANS le projet (pas importé
+ * d'une librairie), donc librement modifiable. Il assemble :
+ * - Base UI (@base-ui/react) : la primitive accessible, sans style, qui gère
+ *   la sémantique et les attributs ARIA du bouton ;
+ * - CVA (class-variance-authority) : la déclaration des variantes visuelles
+ *   sous forme de classes Tailwind ;
+ * - cn() (clsx + tailwind-merge) : la fusion des classes sans conflits.
+ */
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// cva(base, { variants, defaultVariants }) construit une fonction
+// buttonVariants({ variant, size, className }) qui concatène :
+// 1) les classes de base (1er argument), communes à tous les boutons :
+//    focus ring, états disabled/aria-invalid, taille des icônes svg... ;
+// 2) les classes de la variante visuelle ("variant") et de la taille ("size")
+//    choisies ;
+// 3) un éventuel className additionnel passé par l'appelant.
+// TypeScript en déduit le type des props via VariantProps<typeof
+// buttonVariants> : passer variant="foo" est une erreur de compilation.
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
+      // Les couleurs (primary, muted, destructive...) sont des tokens CSS du
+      // thème définis dans globals.css : le bouton s'adapte au mode sombre
+      // sans logique JavaScript.
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
@@ -19,6 +42,8 @@ const buttonVariants = cva(
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // Les variantes "icon*" produisent un bouton carré (size-N) pour les
+      // boutons ne contenant qu'une icône.
       size: {
         default:
           "h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
@@ -38,6 +63,11 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * Bouton du design system. Usage : <Button variant="outline" size="sm">.
+ * Toutes les autres props (onClick, disabled, type...) sont transmises telles
+ * quelles à la primitive Base UI via {...props}.
+ */
 function Button({
   className,
   variant = "default",
@@ -46,7 +76,12 @@ function Button({
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
+      // data-slot : marqueur ciblable en CSS par les composants parents
+      // (convention shadcn pour styler un enfant sans le connaître).
       data-slot="button"
+      // cn() fusionne les classes des variantes avec le className fourni par
+      // l'appelant ; en cas de conflit Tailwind (ex : deux bg-*), c'est la
+      // classe de l'appelant qui gagne (tailwind-merge garde la dernière).
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
