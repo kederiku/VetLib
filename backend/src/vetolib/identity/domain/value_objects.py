@@ -108,3 +108,57 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
     Role.VETERINARIAN: _VETERINARIAN_PERMISSIONS,
     Role.MANAGER: _MANAGER_PERMISSIONS,
 }
+
+# Code postal francais : exactement 5 chiffres. La validation ne s'applique
+# qu'au pays FR ; pour les autres pays on accepte tel quel (bootstrap).
+_FR_POSTAL_CODE_RE = re.compile(r"^\d{5}$")
+
+
+@dataclass(frozen=True)
+class Address:
+    """Adresse postale structurée d'un propriétaire (value object).
+
+    "Structurée" (par champs) et non un simple texte libre : indispensable
+    plus tard pour la facturation (mentions légales) et la recherche de
+    cliniques à proximité. Une adresse est soit complète, soit absente
+    (Owner.address = None) : pas de demi-adresse en base, la règle
+    "tout ou rien" est verrouillée ici par la validation à la construction.
+    """
+
+    line1: str
+    line2: str | None
+    postal_code: str
+    city: str
+    country: str = "FR"
+
+    def __post_init__(self) -> None:
+        """Valide et normalise (trim) ; lève DomainValidationError sinon."""
+        line1 = self.line1.strip()
+        city = self.city.strip()
+        postal_code = self.postal_code.strip()
+        country = self.country.strip().upper()
+        if not line1:
+            raise DomainValidationError("L'adresse (ligne 1) est requise.")
+        if not city:
+            raise DomainValidationError("La ville est requise.")
+        if country == "FR" and not _FR_POSTAL_CODE_RE.match(postal_code):
+            raise DomainValidationError(f"Code postal invalide : {self.postal_code!r}")
+        line2 = self.line2.strip() if self.line2 is not None else None
+        object.__setattr__(self, "line1", line1)
+        object.__setattr__(self, "line2", line2 or None)
+        object.__setattr__(self, "postal_code", postal_code)
+        object.__setattr__(self, "city", city)
+        object.__setattr__(self, "country", country)
+
+
+@dataclass(frozen=True)
+class NotificationPreferences:
+    """Préférences de notification d'un propriétaire (rappels de RDV, vaccins).
+
+    Défauts volontaires : email actif (canal gratuit et attendu), SMS inactif
+    (canal payant, opt-in explicite). Stocké en JSONB côté infrastructure :
+    on pourra ajouter des canaux (push...) sans migration de schéma.
+    """
+
+    email: bool = True
+    sms: bool = False

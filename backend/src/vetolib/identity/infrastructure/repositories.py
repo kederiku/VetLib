@@ -22,9 +22,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from vetolib.identity.domain.clinic import Clinic
+from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.user import User
-from vetolib.identity.domain.value_objects import Email, HashedPassword, Role
-from vetolib.identity.infrastructure.models import ClinicModel, UserModel
+from vetolib.identity.domain.value_objects import (
+    Address,
+    Email,
+    HashedPassword,
+    NotificationPreferences,
+    Role,
+)
+from vetolib.identity.infrastructure.models import ClinicModel, OwnerModel, UserModel
 
 # Mapping explicite model <-> entité : les models SQLAlchemy ne fuient
 # jamais hors de la couche infrastructure.
@@ -152,3 +159,90 @@ class SqlAlchemyUserRepository:
         # la même PK : SQLAlchemy recharge la ligne, recopie les champs et
         # émettra un UPDATE au flush. Plus simple que de tracer les objets.
         await self._session.merge(_user_to_model(user))
+
+
+def _owner_to_entity(model: OwnerModel) -> Owner:
+    """Reconstruit l'entité Owner (avec ses value objects) depuis la ligne SQL.
+
+    L'adresse n'est reconstruite que si line1 est renseignée : la règle
+    "tout ou rien" garantit qu'alors postal_code et city le sont aussi.
+    """
+    address: Address | None = None
+    if model.address_line1 is not None:
+        address = Address(
+            line1=model.address_line1,
+            line2=model.address_line2,
+            postal_code=model.postal_code or "",
+            city=model.city or "",
+            country=model.country or "FR",
+        )
+    prefs = model.notification_preferences
+    return Owner(
+        id=model.id,
+        created_at=model.created_at,
+        deleted_at=model.deleted_at,
+        email=Email(model.email),
+        hashed_password=HashedPassword(model.hashed_password),
+        first_name=model.first_name,
+        last_name=model.last_name,
+        phone=model.phone,
+        address=address,
+        notification_preferences=NotificationPreferences(
+            email=bool(prefs.get("email", True)), sms=bool(prefs.get("sms", False))
+        ),
+    )
+
+
+def _owner_to_model(entity: Owner) -> OwnerModel:
+    """Aplatit l'entité Owner en ligne SQL (adresse en colonnes, prefs en JSONB)."""
+    address = entity.address
+    return OwnerModel(
+        id=entity.id,
+        created_at=entity.created_at,
+        deleted_at=entity.deleted_at,
+        email=entity.email.value,
+        hashed_password=entity.hashed_password.value,
+        first_name=entity.first_name,
+        last_name=entity.last_name,
+        phone=entity.phone,
+        address_line1=address.line1 if address else None,
+        address_line2=address.line2 if address else None,
+        postal_code=address.postal_code if address else None,
+        city=address.city if address else None,
+        country=address.country if address else None,
+        notification_preferences={
+            "email": entity.notification_preferences.email,
+            "sms": entity.notification_preferences.sms,
+        },
+    )
+
+
+class SqlAlchemyOwnerRepository:
+    """Implémente le port OwnerRepository (comptes B2C globaux).
+
+    Pas de filtre clinic_id (la table est hors tenant) ; le filtre
+    soft delete reste systématique, comme partout.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(self, owner_id: uuid.UUID) -> Owner | None:
+        stmt = select(OwnerModel).where(OwnerModel.id == owner_id, OwnerModel.deleted_at.is_(None))
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return None if model is None else _owner_to_entity(model)
+
+    async def get_by_email(self, email: Email) -> Owner | None:
+        stmt = select(OwnerModel).where(
+            OwnerModel.email == email.value, OwnerModel.deleted_at.is_(None)
+        )
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return None if model is None else _owner_to_entity(model)
+
+    async def add(self, owner: Owner) -> None:
+        self._session.add(_owner_to_model(owner))
+
+    async def update(self, owner: Owner) -> None:
+        # merge : re-fusionne l'entité détachée dans la session (SELECT puis
+        # UPDATE) — même approche que pour User, simple et suffisante ici.
+        await self._session.merge(_owner_to_model(owner))

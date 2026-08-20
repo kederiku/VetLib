@@ -16,8 +16,19 @@ de quoi que ce soit.
 from collections.abc import Callable
 from typing import Protocol
 
-from vetolib.identity.application.dto import AccessClaims, RefreshClaims, TokenPair
-from vetolib.identity.domain.repositories import ClinicRepository, UserRepository
+from vetolib.identity.application.dto import (
+    AccessClaims,
+    OwnerAccessClaims,
+    OwnerRefreshClaims,
+    RefreshClaims,
+    TokenPair,
+)
+from vetolib.identity.domain.owner import Owner
+from vetolib.identity.domain.repositories import (
+    ClinicRepository,
+    OwnerRepository,
+    UserRepository,
+)
 from vetolib.identity.domain.user import User
 from vetolib.shared.application.uow import UnitOfWork
 
@@ -55,6 +66,22 @@ class TokenProvider(Protocol):
     def decode_refresh(self, token: str) -> RefreshClaims: ...
 
 
+class OwnerTokenProvider(Protocol):
+    """Émission et décodage des JWT PROPRIÉTAIRES (adapter : PyJWT en infra).
+
+    Port distinct de TokenProvider (et non des méthodes en plus) : le typage
+    rend impossible d'injecter le provider staff dans un use case owner. Les
+    jetons portent un claim `kind` vérifié au décodage — un token staff n'est
+    JAMAIS accepté ici, et réciproquement (cloisonnement B2B / B2C).
+    """
+
+    def issue_pair(self, owner: Owner) -> TokenPair: ...
+
+    def decode_access(self, token: str) -> OwnerAccessClaims: ...
+
+    def decode_refresh(self, token: str) -> OwnerRefreshClaims: ...
+
+
 class IdentityUnitOfWork(UnitOfWork, Protocol):
     """UoW du contexte identity : une transaction + ses repositories.
 
@@ -70,6 +97,12 @@ class IdentityUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def clinics(self) -> ClinicRepository: ...
+
+    # owners est global (hors tenant) mais reste dans le contexte identity :
+    # même session, même outbox, même traduction des erreurs d'intégrité.
+    # Toujours atteint via la UoW système (les flux owner sont pré-tenant).
+    @property
+    def owners(self) -> OwnerRepository: ...
 
 
 # Les use cases reçoivent une FABRIQUE et non un UoW déjà ouvert : chaque

@@ -108,7 +108,7 @@ async def client(app_env: dict[str, str]) -> AsyncIterator[httpx.AsyncClient]:
     """
     engine = create_async_engine(app_env["DATABASE_URL"])
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE users, clinics, outbox_events"))
+        await connection.execute(text("TRUNCATE users, clinics, owners, outbox_events"))
     await engine.dispose()
 
     from vetolib.main import create_app

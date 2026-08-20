@@ -1,4 +1,4 @@
-"""Adapter JWT (PyJWT) : implémente le port TokenProvider de la couche application.
+"""Adapters JWT (PyJWT) : ports TokenProvider (staff) et OwnerTokenProvider (B2C).
 
 Un JWT est composé de trois parties encodées en base64url : un en-tête
 (algorithme), des "claims" (les données) et une SIGNATURE HMAC calculée
@@ -11,9 +11,20 @@ Rappels sur le flux d'auth VetoLib :
   et le refresh (7 j, sert uniquement à obtenir une nouvelle paire) ;
 - transportés en cookies HttpOnly par la couche presentation (illisibles
   en JavaScript -> vol par XSS impossible), jamais dans un body JSON ;
-- l'access est "fat" : il embarque rôle et permissions, donc chaque
+- l'access STAFF est "fat" : il embarque rôle et permissions, donc chaque
   requête API est autorisée SANS requête en base. Contrepartie : une
   révocation ne prend effet qu'à l'expiration, d'où le TTL court (15 min).
+
+Cloisonnement B2B / B2C — le claim `kind` :
+Deux populations de comptes coexistent (staff de clinique et propriétaires
+d'animaux) avec les MEMES secret/issuer/audience. Sans marquage, un jeton
+signé pour l'une serait cryptographiquement valide pour l'autre. Chaque
+jeton émis porte donc `kind: "staff"` ou `kind: "owner"`, vérifié au
+décodage : un jeton staff n'est jamais accepté par un endpoint owner, et
+réciproquement. Défense en profondeur : les cookies ont aussi des noms
+distincts, et un access owner n'a de toute façon ni cid ni role (le
+retypage staff échouerait) — mais le `kind` reste la barrière officielle,
+vérifiée en premier.
 """
 
 import uuid
@@ -23,8 +34,15 @@ from typing import Any
 import jwt
 
 from vetolib.config import Settings
-from vetolib.identity.application.dto import AccessClaims, RefreshClaims, TokenPair
+from vetolib.identity.application.dto import (
+    AccessClaims,
+    OwnerAccessClaims,
+    OwnerRefreshClaims,
+    RefreshClaims,
+    TokenPair,
+)
 from vetolib.identity.domain.errors import InvalidTokenError
+from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.user import User
 from vetolib.identity.domain.value_objects import Role
 from vetolib.shared.application.clock import Clock
@@ -33,9 +51,62 @@ from vetolib.shared.application.clock import Clock
 # tant qu'un seul service émet ET vérifie les jetons.
 _ALGORITHM = "HS256"  # Monolithe. Multi-services : passer RS256/EdDSA (pyjwt[crypto]).
 
+_KIND_STAFF = "staff"
+_KIND_OWNER = "owner"
+
+
+def _decode_and_check(
+    token: str,
+    *,
+    secret: str,
+    issuer: str,
+    audience: str,
+    expected_type: str,
+    expected_kind: str,
+    allow_missing_kind: bool,
+) -> dict[str, Any]:
+    """Décode et vérifie un JWT : crypto, type (access/refresh) et kind.
+
+    `jwt.decode` fait tout le travail cryptographique : signature HMAC,
+    exp/iat, audience et issuer. `algorithms=[...]` est OBLIGATOIRE et
+    fermé : accepter l'algorithme annoncé par le jeton lui-même est une
+    faille classique (attaque alg=none). `require` refuse un jeton où un
+    claim attendu manquerait. Toute erreur PyJWT est traduite en
+    InvalidTokenError (erreur domaine) : la presentation la mappe en 401
+    sans exposer de détail technique.
+
+    `allow_missing_kind` : rétrocompatibilité STAFF uniquement. Les jetons
+    émis avant l'introduction du claim `kind` n'en portent pas ; les refresh
+    restent valides 7 jours (jwt_refresh_ttl_seconds). On tolère donc
+    `kind` absent côté staff pendant cette fenêtre.
+    TODO (7 jours après le déploiement du claim kind) : passer
+    allow_missing_kind=False côté staff pour exiger `kind == "staff"`.
+    """
+    try:
+        claims: dict[str, Any] = jwt.decode(
+            token,
+            secret,
+            algorithms=[_ALGORITHM],
+            audience=audience,
+            issuer=issuer,
+            options={"require": ["exp", "iat", "sub"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise InvalidTokenError("Jeton invalide ou expiré.") from exc
+    # Contrôle anti-confusion : un refresh (7 j) présenté comme access
+    # serait sinon accepté partout pendant 7 jours.
+    if claims.get("type") != expected_type:
+        raise InvalidTokenError("Type de jeton inattendu.")
+    # Cloisonnement B2B / B2C : voir docstring de module.
+    kind = claims.get("kind")
+    kind_ok = kind == expected_kind or (kind is None and allow_missing_kind)
+    if not kind_ok:
+        raise InvalidTokenError("Jeton invalide pour cet espace.")
+    return claims
+
 
 class PyJWTTokenProvider:
-    """Double token « fat » : l'access embarque rôle + permissions (cid = clinic_id).
+    """Jetons STAFF : access « fat » (cid + rôle + permissions), kind="staff".
 
     Le claim `type` est contrôlé strictement : un refresh ne passe jamais
     pour un access, et inversement.
@@ -64,6 +135,7 @@ class PyJWTTokenProvider:
             "iss": self._issuer,
             "aud": self._audience,
             "sub": str(user.id),
+            "kind": _KIND_STAFF,
         }
         access_token = jwt.encode(
             {
@@ -105,32 +177,16 @@ class PyJWTTokenProvider:
         )
 
     def _decode(self, token: str, expected_type: str) -> dict[str, Any]:
-        """Vérifie signature, expiration, iss/aud et type, puis rend les claims.
-
-        `jwt.decode` fait tout le travail cryptographique : signature HMAC,
-        exp/iat, audience et issuer. `algorithms=[...]` est OBLIGATOIRE et
-        fermé : accepter l'algorithme annoncé par le jeton lui-même est une
-        faille classique (attaque alg=none). `require` refuse un jeton où
-        un claim attendu manquerait. Toute erreur PyJWT est traduite en
-        InvalidTokenError (erreur domaine) : la presentation la mappe en
-        401 sans exposer de détail technique.
-        """
-        try:
-            claims: dict[str, Any] = jwt.decode(
-                token,
-                self._secret,
-                algorithms=[_ALGORITHM],
-                audience=self._audience,
-                issuer=self._issuer,
-                options={"require": ["exp", "iat", "sub"]},
-            )
-        except jwt.PyJWTError as exc:
-            raise InvalidTokenError("Jeton invalide ou expiré.") from exc
-        # Contrôle anti-confusion : un refresh (7 j) présenté comme access
-        # serait sinon accepté partout pendant 7 jours.
-        if claims.get("type") != expected_type:
-            raise InvalidTokenError("Type de jeton inattendu.")
-        return claims
+        """Décodage staff : tolère `kind` absent (jetons émis avant le claim)."""
+        return _decode_and_check(
+            token,
+            secret=self._secret,
+            issuer=self._issuer,
+            audience=self._audience,
+            expected_type=expected_type,
+            expected_kind=_KIND_STAFF,
+            allow_missing_kind=True,
+        )
 
     def decode_access(self, token: str) -> AccessClaims:
         """Valide un access token et le convertit en DTO typé AccessClaims."""
@@ -153,5 +209,91 @@ class PyJWTTokenProvider:
         claims = self._decode(token, "refresh")
         try:
             return RefreshClaims(user_id=uuid.UUID(str(claims["sub"])), jti=str(claims["jti"]))
+        except (KeyError, ValueError) as exc:
+            raise InvalidTokenError("Jeton malformé.") from exc
+
+
+class PyJWTOwnerTokenProvider:
+    """Jetons PROPRIÉTAIRES (B2C) : maigres (sub + jti), kind="owner" strict.
+
+    Pas de "fat token" : un owner n'a ni clinique, ni rôle, ni permissions.
+    Aucun jeton owner "legacy" n'existe -> `kind == "owner"` est exigé sans
+    tolérance (allow_missing_kind=False).
+    """
+
+    def __init__(self, settings: Settings, clock: Clock) -> None:
+        self._secret = settings.jwt_secret.get_secret_value()
+        self._issuer = settings.jwt_issuer
+        self._audience = settings.jwt_audience
+        self._access_ttl = timedelta(seconds=settings.jwt_access_ttl_seconds)
+        self._refresh_ttl = timedelta(seconds=settings.jwt_refresh_ttl_seconds)
+        self._clock = clock
+
+    def issue_pair(self, owner: Owner) -> TokenPair:
+        """Émet la paire access + refresh pour un propriétaire authentifié."""
+        now = self._clock.now()
+        access_expires_at = now + self._access_ttl
+        refresh_expires_at = now + self._refresh_ttl
+        base_claims: dict[str, Any] = {
+            "iat": int(now.timestamp()),
+            "iss": self._issuer,
+            "aud": self._audience,
+            "sub": str(owner.id),
+            "kind": _KIND_OWNER,
+        }
+        access_token = jwt.encode(
+            {
+                **base_claims,
+                "exp": int(access_expires_at.timestamp()),
+                "type": "access",
+                "jti": str(uuid.uuid4()),
+            },
+            self._secret,
+            algorithm=_ALGORITHM,
+        )
+        refresh_token = jwt.encode(
+            {
+                **base_claims,
+                "exp": int(refresh_expires_at.timestamp()),
+                "type": "refresh",
+                "jti": str(uuid.uuid4()),
+            },
+            self._secret,
+            algorithm=_ALGORITHM,
+        )
+        return TokenPair(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            access_expires_at=access_expires_at,
+            refresh_expires_at=refresh_expires_at,
+        )
+
+    def _decode(self, token: str, expected_type: str) -> dict[str, Any]:
+        """Décodage owner : `kind == "owner"` exigé strictement."""
+        return _decode_and_check(
+            token,
+            secret=self._secret,
+            issuer=self._issuer,
+            audience=self._audience,
+            expected_type=expected_type,
+            expected_kind=_KIND_OWNER,
+            allow_missing_kind=False,
+        )
+
+    def decode_access(self, token: str) -> OwnerAccessClaims:
+        """Valide un access token owner -> OwnerAccessClaims."""
+        claims = self._decode(token, "access")
+        try:
+            return OwnerAccessClaims(owner_id=uuid.UUID(str(claims["sub"])), jti=str(claims["jti"]))
+        except (KeyError, ValueError) as exc:
+            raise InvalidTokenError("Jeton malformé.") from exc
+
+    def decode_refresh(self, token: str) -> OwnerRefreshClaims:
+        """Valide un refresh token owner -> OwnerRefreshClaims."""
+        claims = self._decode(token, "refresh")
+        try:
+            return OwnerRefreshClaims(
+                owner_id=uuid.UUID(str(claims["sub"])), jti=str(claims["jti"])
+            )
         except (KeyError, ValueError) as exc:
             raise InvalidTokenError("Jeton malformé.") from exc

@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from vetolib.identity.domain.errors import EmailAlreadyExistsError
 from vetolib.identity.infrastructure.repositories import (
     SqlAlchemyClinicRepository,
+    SqlAlchemyOwnerRepository,
     SqlAlchemyUserRepository,
 )
 from vetolib.shared.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -26,7 +27,11 @@ from vetolib.shared.infrastructure.db.uow import SqlAlchemyUnitOfWork
 # Noms des index uniques partiels (voir models.py) qu'on reconnaît dans le
 # message d'erreur PostgreSQL pour distinguer "email déjà pris" des autres
 # violations d'intégrité.
-_EMAIL_UNIQUE_CONSTRAINTS = ("uq_users_email_active", "uq_clinics_email_active")
+_EMAIL_UNIQUE_CONSTRAINTS = (
+    "uq_users_email_active",
+    "uq_clinics_email_active",
+    "uq_owners_email_active",
+)
 
 
 class SqlAlchemyIdentityUnitOfWork(SqlAlchemyUnitOfWork):
@@ -34,6 +39,7 @@ class SqlAlchemyIdentityUnitOfWork(SqlAlchemyUnitOfWork):
 
     users: SqlAlchemyUserRepository
     clinics: SqlAlchemyClinicRepository
+    owners: SqlAlchemyOwnerRepository
 
     async def __aenter__(self) -> Self:
         # Le parent ouvre la session (et pose rôle + clinic_id en mode
@@ -42,6 +48,7 @@ class SqlAlchemyIdentityUnitOfWork(SqlAlchemyUnitOfWork):
         await super().__aenter__()
         self.users = SqlAlchemyUserRepository(self.session)
         self.clinics = SqlAlchemyClinicRepository(self.session)
+        self.owners = SqlAlchemyOwnerRepository(self.session)
         return self
 
     async def commit(self) -> None:

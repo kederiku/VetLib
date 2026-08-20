@@ -58,3 +58,25 @@ async def _handle_clinic_registered(payload: dict[str, Any]) -> None:
 # Effet de bord d'import volontaire : associe l'event_type (celui émis par
 # l'entité domaine) à son handler dans le registre partagé du relais outbox.
 register_outbox_handler("identity.clinic_registered", _handle_clinic_registered)
+
+
+@broker.task(task_name="identity.send_owner_welcome_email")
+async def send_owner_welcome_email(owner_id: str, email: str, first_name: str) -> None:
+    """Tâche de démonstration : « envoie » l'email de bienvenue au propriétaire.
+
+    Log uniquement (pas d'envoi réel au bootstrap). Idempotente par nature
+    (relais outbox = at-least-once).
+    """
+    logger.info("owner_welcome_email_sent", owner_id=owner_id, email=email, first_name=first_name)
+
+
+async def _handle_owner_registered(payload: dict[str, Any]) -> None:
+    """Handler outbox de l'événement domaine OwnerRegistered."""
+    await send_owner_welcome_email.kiq(
+        owner_id=str(payload["owner_id"]),
+        email=str(payload["email"]),
+        first_name=str(payload["first_name"]),
+    )
+
+
+register_outbox_handler("identity.owner_registered", _handle_owner_registered)

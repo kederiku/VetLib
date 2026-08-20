@@ -16,7 +16,10 @@ conventions du projet : PK UUID, created_at, soft delete (deleted_at) et,
 pour les tables liées à une clinique, clinic_id -> cible des policies RLS.
 """
 
+from typing import Any
+
 from sqlalchemy import Boolean, CheckConstraint, Index, String, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from vetolib.shared.infrastructure.db.base import (
@@ -83,6 +86,51 @@ class UserModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Tena
         # fait par email seul, avant de connaître la clinique de l'utilisateur.
         Index(
             "uq_users_email_active",
+            "email",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+class OwnerModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
+    """Table `owners` : les propriétaires d'animaux (comptes du portail B2C).
+
+    Pas de TenantMixin ni de RLS : un propriétaire est un compte GLOBAL,
+    hors tenant — il consultera potentiellement plusieurs cliniques. Le
+    rattachement owner <-> clinique passera par les tables tenantées des
+    autres contextes (patients, scheduling), jamais par une clé de tenant
+    ici. Espace de comptes indépendant de `users` : le même email peut
+    exister dans les deux tables (index uniques séparés).
+    """
+
+    __tablename__ = "owners"
+
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Adresse structurée, aplatie en colonnes (pas de table dédiée : une
+    # seule adresse par compte au bootstrap). Tout-ou-rien : soit les champs
+    # obligatoires (line1, postal_code, city) sont tous renseignés, soit
+    # tous NULL — la règle est portée par le value object Address et le
+    # schéma Pydantic, pas par une contrainte SQL (bootstrap).
+    address_line1: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    # JSONB (choix du document de conception pour les préférences) : on
+    # pourra ajouter des canaux (push...) sans migration de schéma.
+    notification_preferences: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text('\'{"email": true, "sms": false}\'::jsonb')
+    )
+
+    __table_args__ = (
+        # Unicité restreinte aux comptes vivants (soft delete), comme users.
+        Index(
+            "uq_owners_email_active",
             "email",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),

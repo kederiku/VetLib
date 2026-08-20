@@ -25,7 +25,7 @@ import uuid
 
 from pydantic import BaseModel, EmailStr, Field, SecretStr
 
-from vetolib.identity.application.dto import CurrentUser
+from vetolib.identity.application.dto import CurrentOwner, CurrentUser
 from vetolib.identity.domain.value_objects import Role
 
 # Les tokens ne transitent JAMAIS dans un body JSON : cookies HttpOnly uniquement.
@@ -95,4 +95,99 @@ class UserResponse(BaseModel):
             # frozenset -> liste triée : sortie JSON déterministe (tests,
             # caches HTTP et comparaisons côté front stables).
             permissions=sorted(current.permissions),
+        )
+
+
+# --- Schemas des PROPRIETAIRES (portail B2C) -------------------------------
+
+
+class RegisterOwnerRequest(BaseModel):
+    """Inscription d'un proprietaire : memes exigences de mot de passe que le
+    staff (min 12), pas de nom de clinique -- le compte est global."""
+
+    email: EmailStr
+    password: SecretStr = Field(min_length=12)
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
+
+
+class OwnerRegisteredResponse(BaseModel):
+    """201 : l'inscription ne connecte pas, le front enchaine un login."""
+
+    owner_id: uuid.UUID
+
+
+class AddressPayload(BaseModel):
+    """Adresse structuree exposee/recue par l'API (miroir du VO Address)."""
+
+    line1: str = Field(min_length=1, max_length=200)
+    line2: str | None = Field(default=None, max_length=200)
+    postal_code: str = Field(min_length=1, max_length=10)
+    city: str = Field(min_length=1, max_length=100)
+    country: str = Field(default="FR", min_length=2, max_length=2)
+
+
+class NotificationPreferencesPayload(BaseModel):
+    """Preferences de notification (rappels RDV/vaccins) : opt-in par canal."""
+
+    email: bool = True
+    sms: bool = False
+
+
+class UpdateOwnerProfileRequest(BaseModel):
+    """Fiche personnelle editable. Ni email (identifiant de connexion, son
+    changement exigera une verification par lien) ni mot de passe (flux
+    dedie futur) : les exclure du schema rend la modification impossible.
+
+    L'adresse est un bloc optionnel TOUT-OU-RIEN : soit absente (null),
+    soit complete -- le sous-schema AddressPayload impose alors line1,
+    postal_code et city non vides.
+    """
+
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
+    address: AddressPayload | None = None
+    notification_preferences: NotificationPreferencesPayload = Field(
+        default_factory=NotificationPreferencesPayload
+    )
+
+
+class OwnerResponse(BaseModel):
+    """Profil proprietaire (login, refresh, /me et update du profil)."""
+
+    id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    phone: str | None
+    address: AddressPayload | None
+    notification_preferences: NotificationPreferencesPayload
+
+    @classmethod
+    def from_current_owner(cls, current: CurrentOwner) -> "OwnerResponse":
+        """Aplatit la projection application (VOs domaine) en schema API."""
+        address = current.address
+        return cls(
+            id=current.id,
+            email=current.email,
+            first_name=current.first_name,
+            last_name=current.last_name,
+            phone=current.phone,
+            address=(
+                AddressPayload(
+                    line1=address.line1,
+                    line2=address.line2,
+                    postal_code=address.postal_code,
+                    city=address.city,
+                    country=address.country,
+                )
+                if address is not None
+                else None
+            ),
+            notification_preferences=NotificationPreferencesPayload(
+                email=current.notification_preferences.email,
+                sms=current.notification_preferences.sms,
+            ),
         )

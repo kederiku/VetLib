@@ -6,7 +6,8 @@ explicitement ce qui sort - le hash du mot de passe, par exemple, reste
 confiné dans l'entité User et ne traverse jamais cette frontière.
 """
 
-from vetolib.identity.application.dto import CurrentUser
+from vetolib.identity.application.dto import CurrentOwner, CurrentUser
+from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.user import User
 
 
@@ -29,4 +30,22 @@ def to_current_user(user: User, clinic_name: str) -> CurrentUser:
         last_name=user.last_name,
         role=user.role,
         permissions=user.permissions,
+    )
+
+
+def to_current_owner(owner: Owner) -> CurrentOwner:
+    """Projette un Owner en CurrentOwner (fiche exposable).
+
+    Le hash du mot de passe reste confiné dans l'entité ; l'adresse et les
+    préférences (value objects immuables) traversent tels quels, la couche
+    presentation les aplatira en schéma Pydantic.
+    """
+    return CurrentOwner(
+        id=owner.id,
+        email=owner.email.value,
+        first_name=owner.first_name,
+        last_name=owner.last_name,
+        phone=owner.phone,
+        address=owner.address,
+        notification_preferences=owner.notification_preferences,
     )

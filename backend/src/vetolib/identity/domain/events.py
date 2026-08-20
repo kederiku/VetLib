@@ -47,3 +47,26 @@ class ClinicRegistered(DomainEvent):
             "clinic_name": self.clinic_name,
             "manager_email": self.manager_email,
         }
+
+
+@dataclass(frozen=True, kw_only=True)
+class OwnerRegistered(DomainEvent):
+    """Un propriétaire d'animaux (compte B2C) vient de s'inscrire.
+
+    Émis par la factory Owner.register ; consommateur actuel : l'email de
+    bienvenue (tâche de démonstration). Même contrat que ClinicRegistered :
+    event_type stable, payload en types primitifs pour l'outbox.
+    """
+
+    event_type: ClassVar[str] = "identity.owner_registered"
+
+    owner_id: uuid.UUID
+    email: str
+    first_name: str
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "owner_id": str(self.owner_id),
+            "email": self.email,
+            "first_name": self.first_name,
+        }

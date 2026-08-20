@@ -20,6 +20,7 @@ import uuid
 from typing import Protocol
 
 from vetolib.identity.domain.clinic import Clinic
+from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.user import User
 from vetolib.identity.domain.value_objects import Email
 
@@ -61,3 +62,21 @@ class UserRepository(Protocol):
     # de la session SQLAlchemy : rien ne trace leurs modifications, il faut
     # les re-fusionner explicitement (merge) côté infrastructure.
     async def update(self, user: User) -> None: ...
+
+
+class OwnerRepository(Protocol):
+    """Port d'accès aux propriétaires (comptes B2C globaux, hors tenant).
+
+    Mêmes conventions que UserRepository : pas de commit, pas de delete
+    (soft delete), None traduit par le use case. get_by_email ne cherche QUE
+    dans owners : les espaces de comptes staff et owner sont indépendants.
+    """
+
+    async def get_by_id(self, owner_id: uuid.UUID) -> Owner | None: ...
+
+    async def get_by_email(self, email: Email) -> Owner | None: ...
+
+    async def add(self, owner: Owner) -> None: ...
+
+    # Rehash transparent au login et mise à jour de la fiche (update_profile).
+    async def update(self, owner: Owner) -> None: ...

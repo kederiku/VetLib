@@ -80,3 +80,54 @@ def clear_auth_cookies(response: Response, settings: Settings) -> None:
         secure=settings.cookie_secure,
         samesite="lax",
     )
+
+
+# --- Cookies des PROPRIETAIRES (portail B2C) -------------------------------
+# Noms DISTINCTS des cookies staff : les deux sessions (un membre du staff
+# sur le B2B, un proprietaire sur le B2C) coexistent sur le meme host sans
+# s'ecraser -- indispensable en dev ou tout tourne sur localhost, et sain en
+# prod. Le refresh owner n'est envoye que sur SON endpoint (path restreint),
+# comme le refresh staff.
+OWNER_ACCESS_COOKIE = "vetolib_owner_access"
+OWNER_REFRESH_COOKIE = "vetolib_owner_refresh"
+OWNER_REFRESH_COOKIE_PATH = "/api/v1/owner/auth/refresh"
+
+
+def set_owner_auth_cookies(response: Response, pair: TokenPair, settings: Settings) -> None:
+    """Pose les deux cookies owner (memes flags et TTL que le staff)."""
+    response.set_cookie(
+        OWNER_ACCESS_COOKIE,
+        pair.access_token,
+        max_age=settings.jwt_access_ttl_seconds,
+        path="/",
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+    )
+    response.set_cookie(
+        OWNER_REFRESH_COOKIE,
+        pair.refresh_token,
+        max_age=settings.jwt_refresh_ttl_seconds,
+        path=OWNER_REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+    )
+
+
+def clear_owner_auth_cookies(response: Response, settings: Settings) -> None:
+    """Expire les deux cookies owner (delete_cookie doit repeter path/flags)."""
+    response.delete_cookie(
+        OWNER_ACCESS_COOKIE,
+        path="/",
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        OWNER_REFRESH_COOKIE,
+        path=OWNER_REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+    )

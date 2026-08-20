@@ -19,9 +19,16 @@ from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from typing import Self
 
-from vetolib.identity.application.dto import AccessClaims, RefreshClaims, TokenPair
+from vetolib.identity.application.dto import (
+    AccessClaims,
+    OwnerAccessClaims,
+    OwnerRefreshClaims,
+    RefreshClaims,
+    TokenPair,
+)
 from vetolib.identity.domain.clinic import Clinic
 from vetolib.identity.domain.errors import InvalidTokenError
+from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.user import User
 from vetolib.identity.domain.value_objects import Email, Role
 from vetolib.shared.domain.events import DomainEvent
@@ -77,6 +84,33 @@ class FakeUserRepository:
         self._store[user.id] = user
 
 
+class FakeOwnerRepository:
+    """Double de test du port OwnerRepository (dict en memoire).
+
+    Memes conventions que FakeUserRepository : filtre soft delete, pas de
+    commit (role du UoW).
+    """
+
+    def __init__(self, store: dict[uuid.UUID, Owner]) -> None:
+        self._store = store
+
+    async def get_by_id(self, owner_id: uuid.UUID) -> Owner | None:
+        owner = self._store.get(owner_id)
+        return owner if owner is not None and owner.deleted_at is None else None
+
+    async def get_by_email(self, email: Email) -> Owner | None:
+        for owner in self._store.values():
+            if owner.email == email and owner.deleted_at is None:
+                return owner
+        return None
+
+    async def add(self, owner: Owner) -> None:
+        self._store[owner.id] = owner
+
+    async def update(self, owner: Owner) -> None:
+        self._store[owner.id] = owner
+
+
 class FakeIdentityUnitOfWork:
     """UoW in-memory : implémente le port IdentityUnitOfWork sans IO.
 
@@ -91,8 +125,10 @@ class FakeIdentityUnitOfWork:
     def __init__(self) -> None:
         self.clinic_store: dict[uuid.UUID, Clinic] = {}
         self.user_store: dict[uuid.UUID, User] = {}
+        self.owner_store: dict[uuid.UUID, Owner] = {}
         self.clinics = FakeClinicRepository(self.clinic_store)
         self.users = FakeUserRepository(self.user_store)
+        self.owners = FakeOwnerRepository(self.owner_store)
         self.events: list[DomainEvent] = []
         self.commits = 0
         self.rollbacks = 0
@@ -200,3 +236,37 @@ class FakeTokenProvider:
         if not token.startswith("refresh:"):
             raise InvalidTokenError("Jeton invalide.")
         return RefreshClaims(user_id=uuid.UUID(token.removeprefix("refresh:")), jti="fake-jti")
+
+
+class FakeOwnerTokenProvider:
+    """Double de test du port OwnerTokenProvider.
+
+    Tokens en clair prefixes ("owner_access:<id>") : les decode_* rejettent
+    tout autre prefixe, ce qui mime naturellement le controle du claim
+    `kind` — un token du FakeTokenProvider staff ("access:<id>") est refuse
+    ici, comme en production. Le controle sur les VRAIS adapters PyJWT est
+    couvert par test_owner_tokens.py.
+    """
+
+    def issue_pair(self, owner: Owner) -> TokenPair:
+        now = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+        return TokenPair(
+            access_token=f"owner_access:{owner.id}",
+            refresh_token=f"owner_refresh:{owner.id}",
+            access_expires_at=now + timedelta(minutes=15),
+            refresh_expires_at=now + timedelta(days=7),
+        )
+
+    def decode_access(self, token: str) -> OwnerAccessClaims:
+        if not token.startswith("owner_access:"):
+            raise InvalidTokenError("Jeton invalide.")
+        return OwnerAccessClaims(
+            owner_id=uuid.UUID(token.removeprefix("owner_access:")), jti="fake-jti"
+        )
+
+    def decode_refresh(self, token: str) -> OwnerRefreshClaims:
+        if not token.startswith("owner_refresh:"):
+            raise InvalidTokenError("Jeton invalide.")
+        return OwnerRefreshClaims(
+            owner_id=uuid.UUID(token.removeprefix("owner_refresh:")), jti="fake-jti"
+        )

@@ -24,7 +24,11 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from vetolib.identity.domain.value_objects import Role
+from vetolib.identity.domain.value_objects import (
+    Address,
+    NotificationPreferences,
+    Role,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -123,3 +127,82 @@ class CurrentUser:
     last_name: str
     role: Role
     permissions: frozenset[str]
+
+
+# --- DTOs des propriétaires (comptes B2C) ---------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class RegisterOwnerCommand:
+    """Entrée de RegisterOwner : inscription d'un propriétaire d'animaux."""
+
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    phone: str | None
+
+
+@dataclass(frozen=True, kw_only=True)
+class RegisterOwnerResult:
+    """Sortie de RegisterOwner. Pas de token : le front enchaîne un login."""
+
+    owner_id: uuid.UUID
+
+
+@dataclass(frozen=True, kw_only=True)
+class OwnerAccessClaims:
+    """Contenu décodé d'un access token propriétaire.
+
+    Volontairement maigre (pas de "fat token" comme le staff) : un owner
+    n'a ni clinique, ni rôle, ni permissions à embarquer — l'identité
+    (owner_id) et le jti suffisent.
+    """
+
+    owner_id: uuid.UUID
+    jti: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class OwnerRefreshClaims:
+    """Contenu décodé d'un refresh token propriétaire (minimal, comme le staff)."""
+
+    owner_id: uuid.UUID
+    jti: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class UpdateOwnerProfileCommand:
+    """Entrée d'UpdateOwnerProfile : la fiche personnelle éditable.
+
+    owner_id vient TOUJOURS du token de la session (dépendance
+    CurrentOwnerDep), jamais du body : un propriétaire ne peut modifier que
+    sa propre fiche. Ni email ni mot de passe ici (flux dédiés futurs).
+    L'adresse arrive en champs primitifs ; le use case construit le value
+    object Address (validation domaine), None si aucune adresse fournie.
+    """
+
+    owner_id: uuid.UUID
+    first_name: str
+    last_name: str
+    phone: str | None
+    address_line1: str | None
+    address_line2: str | None
+    postal_code: str | None
+    city: str | None
+    country: str
+    notify_email: bool
+    notify_sms: bool
+
+
+@dataclass(frozen=True, kw_only=True)
+class CurrentOwner:
+    """Projection du propriétaire courant pour /owner/auth/me et la fiche."""
+
+    id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    phone: str | None
+    address: Address | None
+    notification_preferences: NotificationPreferences

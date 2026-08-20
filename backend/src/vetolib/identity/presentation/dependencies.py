@@ -27,18 +27,26 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from vetolib.config import Settings, get_settings
-from vetolib.identity.application.dto import CurrentUser
+from vetolib.identity.application.dto import CurrentOwner, CurrentUser
 from vetolib.identity.application.ports import IdentityUnitOfWork, IdentityUoWFactory
 from vetolib.identity.application.use_cases import (
+    AuthenticateOwner,
     AuthenticateUser,
+    GetCurrentOwner,
     GetCurrentUser,
+    RefreshOwnerToken,
     RefreshToken,
     RegisterClinic,
+    RegisterOwner,
+    UpdateOwnerProfile,
 )
 from vetolib.identity.infrastructure.password_hasher import PwdlibPasswordHasher
-from vetolib.identity.infrastructure.token_provider import PyJWTTokenProvider
+from vetolib.identity.infrastructure.token_provider import (
+    PyJWTOwnerTokenProvider,
+    PyJWTTokenProvider,
+)
 from vetolib.identity.infrastructure.uow import SqlAlchemyIdentityUnitOfWork
-from vetolib.identity.presentation.cookies import ACCESS_COOKIE
+from vetolib.identity.presentation.cookies import ACCESS_COOKIE, OWNER_ACCESS_COOKIE
 from vetolib.shared.infrastructure.clock import SystemClock
 
 # Composition root minimaliste : FastAPI Depends suffit à cette taille — les
@@ -181,3 +189,71 @@ def require_permission(
         return current
 
     return checker
+
+
+# --- Dépendances des PROPRIETAIRES (portail B2C) ---------------------------
+# Chaîne parallèle à celle du staff : même UoW système, même hasher, mais un
+# provider de jetons DEDIE (kind="owner") et un cookie distinct. Le typage
+# des ports rend impossible d'injecter le provider staff dans un use case
+# owner (et réciproquement).
+
+
+def get_owner_token_provider(settings: SettingsDep) -> PyJWTOwnerTokenProvider:
+    """Provider de jetons owner : leger, construit à la requête."""
+    return PyJWTOwnerTokenProvider(settings, _clock)
+
+
+OwnerTokenProviderDep = Annotated[PyJWTOwnerTokenProvider, Depends(get_owner_token_provider)]
+
+
+def get_register_owner(
+    uow_factory: UoWFactoryDep,
+    hasher: Annotated[PwdlibPasswordHasher, Depends(get_password_hasher)],
+    clock: Annotated[SystemClock, Depends(get_clock)],
+) -> RegisterOwner:
+    return RegisterOwner(uow_factory, hasher, clock)
+
+
+def get_authenticate_owner(
+    uow_factory: UoWFactoryDep,
+    hasher: Annotated[PwdlibPasswordHasher, Depends(get_password_hasher)],
+    tokens: OwnerTokenProviderDep,
+) -> AuthenticateOwner:
+    return AuthenticateOwner(uow_factory, hasher, tokens)
+
+
+def get_refresh_owner_token(
+    uow_factory: UoWFactoryDep, tokens: OwnerTokenProviderDep
+) -> RefreshOwnerToken:
+    return RefreshOwnerToken(uow_factory, tokens)
+
+
+def get_get_current_owner(
+    uow_factory: UoWFactoryDep, tokens: OwnerTokenProviderDep
+) -> GetCurrentOwner:
+    return GetCurrentOwner(uow_factory, tokens)
+
+
+def get_update_owner_profile(uow_factory: UoWFactoryDep) -> UpdateOwnerProfile:
+    return UpdateOwnerProfile(uow_factory)
+
+
+async def get_current_owner(
+    request: Request,
+    use_case: Annotated[GetCurrentOwner, Depends(get_get_current_owner)],
+) -> CurrentOwner:
+    """Résout la session owner : cookie vetolib_owner_access -> CurrentOwner.
+
+    Toute route qui déclare CurrentOwnerDep est automatiquement protégée
+    (401 sans cookie owner valide). Un cookie STAFF posé au même endroit
+    serait rejeté par le décodage (kind != "owner").
+    """
+    token = request.cookies.get(OWNER_ACCESS_COOKIE)
+    if token is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Non authentifié.")
+    current = await use_case.execute(token)
+    structlog.contextvars.bind_contextvars(owner_id=str(current.id))
+    return current
+
+
+CurrentOwnerDep = Annotated[CurrentOwner, Depends(get_current_owner)]
