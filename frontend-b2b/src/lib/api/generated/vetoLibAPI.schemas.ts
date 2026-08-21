@@ -172,7 +172,29 @@ export const Species = {
 } as const;
 
 /**
- * Corps de POST /owner/pets : tous les champs de la fiche sont requis.
+ * Sexe de l'animal, avec "inconnu" comme VALEUR et non comme absence.
+ *
+ * Trois membres et une colonne NOT NULL, plutôt qu'un enum à deux membres
+ * et une colonne nullable : sinon "je ne sais pas" s'écrirait de DEUX
+ * façons (NULL et 'unknown'), et toute comparaison deviendrait un piège.
+ * L'affichage a ainsi toujours une valeur à montrer.
+ *
+ * Doit rester synchronisé avec la contrainte CHECK ck_pets_sex_valid.
+ */
+export type Sex = (typeof Sex)[keyof typeof Sex];
+
+export const Sex = {
+  male: "male",
+  female: "female",
+  unknown: "unknown",
+} as const;
+
+/**
+ * Corps de POST /owner/pets : nom et espèce requis, le reste facultatif.
+ *
+ * Les champs de la fiche enrichie ont tous un défaut : un client qui
+ * n'envoie que {name, species} reste parfaitement valide. C'est ce qui rend
+ * l'enrichissement RETRO-COMPATIBLE.
  */
 export interface CreatePetRequest {
   /**
@@ -181,6 +203,10 @@ export interface CreatePetRequest {
    */
   name: string;
   species: Species;
+  birth_date?: string | null;
+  sex?: Sex;
+  breed?: string | null;
+  sterilized?: boolean | null;
 }
 
 export interface CreateResourceRequest {
@@ -281,12 +307,16 @@ export interface OwnerResponse {
 }
 
 /**
- * Fiche d'un animal (liste, création et édition).
+ * Fiche d'un animal (liste, lecture unitaire, création et édition).
  */
 export interface PetResponse {
   id: string;
   name: string;
   species: Species;
+  birth_date: string | null;
+  sex: Sex;
+  breed: string | null;
+  sterilized: boolean | null;
 }
 
 export interface PublicAppointmentTypeResponse {
@@ -507,15 +537,30 @@ export interface UpdateOwnerProfileRequest {
 }
 
 /**
- * Corps de PATCH /owner/pets/x : édition PARTIELLE, tout est optionnel.
+ * Corps de PUT /owner/pets/x : REPRESENTATION COMPLETE de la fiche.
  *
- * None (ou champ absent) = inchangé -- la sémantique PATCH est portée
- * jusqu'à l'entité (Pet.update n'écrase que le non-None). Un body vide est
- * donc accepté et ne modifie rien.
+ * Un champ facultatif OMIS vaut null, donc EFFACE la valeur existante.
+ * C'est volontaire, et c'est la seule facon d'effacer une race ou une date
+ * de naissance saisie par erreur.
+ *
+ * Pourquoi pas un PATCH partiel : il faudrait distinguer "absent" de
+ * "null", ce qu'OpenAPI ne sait pas exprimer -- le client genere par Orval
+ * produirait `breed?: string | null` sans moyen fiable de faire la
+ * difference. On aurait paye la complexite sans obtenir la garantie. Meme
+ * parti pris que PUT /owner/profile dans identity, et le formulaire du
+ * portail envoie de toute facon la fiche entiere.
  */
 export interface UpdatePetRequest {
-  name?: string | null;
-  species?: Species | null;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  name: string;
+  species: Species;
+  birth_date?: string | null;
+  sex?: Sex;
+  breed?: string | null;
+  sterilized?: boolean | null;
 }
 
 export interface UpdateResourceRequest {

@@ -7,7 +7,7 @@
  * Le GuestGuard n'est PAS posé ici mais À L'INTÉRIEUR du wizard : l'étape 1
  * crée le compte et ouvre la session, les étapes suivantes se déroulent donc
  * connecté sur cette même page. Un garde posé au niveau de la page éjecterait
- * la personne vers /account au milieu de son inscription.
+ * la personne vers le tableau de bord au milieu de son inscription.
  *
  * max-w-xl (et non le max-w-md de /login) : le parcours porte un bloc adresse
  * et une liste d'animaux, trop à l'étroit dans la largeur d'un formulaire de

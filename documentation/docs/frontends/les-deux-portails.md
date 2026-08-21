@@ -35,8 +35,8 @@ Identique des deux côtés :
 | TypeScript               | 6.0.3                                            |
 | Vitest + Testing Library | tests                                            |
 
-Le B2B ajoute deux dépendances que le B2C n'a pas : `next-themes` (bascule clair/sombre)
-et `sonner` (notifications éphémères).
+Les deux portails ont désormais la même liste de dépendances, `next-themes` (bascule
+clair/sombre) et `sonner` (notifications éphémères) compris.
 
 :::note TypeScript reste en 6.x
 Une contrainte du projet, inscrite dans `CLAUDE.md` et verrouillée dans
@@ -63,11 +63,18 @@ src/app/
 └── globals.css
 ```
 
-| `frontend-b2c`            | `frontend-b2b`          |
-| ------------------------- | ----------------------- |
-| `(protected)/animaux`     | `(protected)/dashboard` |
-| `(protected)/rendez-vous` | `(protected)/agenda`    |
-| `(protected)/account`     | `(protected)/reglages`  |
+| `frontend-b2c`                 | `frontend-b2b`          |
+| ------------------------------ | ----------------------- |
+| `(protected)/tableau-de-bord`  | `(protected)/dashboard` |
+| `(protected)/rendez-vous`      | `(protected)/agenda`    |
+| `(protected)/rendez-vous/[id]` | —                       |
+| `(protected)/animaux`          | —                       |
+| `(protected)/animaux/[id]`     | —                       |
+| `(protected)/mon-compte`       | `(protected)/reglages`  |
+
+Les routes du B2C sont **en français**, y compris `/tableau-de-bord` là où le B2B garde
+`/dashboard` : l'URL d'un portail grand public est vue par ses utilisateurs — barre
+d'adresse, favoris, lien partagé — celle d'un outil professionnel beaucoup moins.
 
 ### Le cas particulier de `/register` côté B2C
 
@@ -75,7 +82,7 @@ L'inscription des propriétaires est un parcours en trois étapes
 (`components/auth/register/`), et son étape 1 crée le compte **et ouvre la session**. Les
 étapes 2 et 3 se déroulent donc connecté, sur cette même page publique.
 
-Conséquence : le `GuestGuard` — dont le rôle est de renvoyer vers `/account` un
+Conséquence : le `GuestGuard` — dont le rôle est de renvoyer vers `/mon-compte` un
 propriétaire déjà connecté — ne peut pas être posé au niveau de la page, il éjecterait la
 personne au milieu de son inscription. Il est porté par le wizard lui-même, avec
 `enabled={step === 1}`. C'est la seule page du monorepo où ce garde est conditionnel.
@@ -116,8 +123,23 @@ liste des dépendances de développement.
 **Dupliqués mais différents** : `src/lib/api/generated/` — chaque portail possède sa
 propre copie du client, régénérée par sa propre commande.
 
-**Spécifiques** : tout `src/lib/<domaine>/` (`pets` et `appointments` côté B2C ; `agenda`,
-`scheduling`, `clinic`, `auth` côté B2B).
+**Spécifiques** : tout `src/lib/<domaine>/` (`pets`, `appointments` et `account` côté
+B2C ; `agenda`, `scheduling`, `clinic`, `auth` côté B2B).
+
+**La même coquille, transposée** : `AppShell` + `AppSidebar` + `SiteHeader` +
+`UserMenu`, avec `lib/navigation.ts` pour source unique des entrées de menu et du titre
+de page, et `components/shared/` pour les primitives de mise en page
+(`PageContainer`, `PageHeader`, `EmptyState`, `ErrorState`). Deux différences assumées :
+le B2C n'a **ni rôle ni permission** (un propriétaire voit tout son espace, la sidebar ne
+filtre donc rien), et son `PageContainer` est plus étroit — `max-w-4xl` contre
+`max-w-6xl` — parce que les listes d'un particulier sont courtes là où l'agenda d'une
+clinique est dense.
+
+L'état replié de la sidebar est persisté dans le cookie `sidebar_state`, relu par un
+Server Component pour éviter le flash ouvert → replié au rechargement. En développement
+local, ce cookie n'est **pas** cloisonné par port : `localhost:3000` et `localhost:3001`
+le partagent, replier la sidebar d'un portail replie donc celle de l'autre. Sans
+conséquence en production, où les domaines diffèrent.
 
 Le partage se fait par duplication assumée, pas par un paquet commun. Un paquet
 partagé imposerait un espace de travail npm, avec les inconvénients décrits dans la vue

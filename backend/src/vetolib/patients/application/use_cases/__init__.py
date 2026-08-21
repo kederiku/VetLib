@@ -7,12 +7,14 @@ stable à la couche presentation, comme dans identity.
 
 from vetolib.patients.application.use_cases.create_pet import CreatePet
 from vetolib.patients.application.use_cases.delete_pet import DeletePet
+from vetolib.patients.application.use_cases.get_my_pet import GetMyPet
 from vetolib.patients.application.use_cases.list_my_pets import ListMyPets
 from vetolib.patients.application.use_cases.update_pet import UpdatePet
 
 __all__ = [
     "CreatePet",
     "DeletePet",
+    "GetMyPet",
     "ListMyPets",
     "UpdatePet",
 ]

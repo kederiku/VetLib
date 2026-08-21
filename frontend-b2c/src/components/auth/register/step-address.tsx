@@ -3,7 +3,7 @@
  *
  * Entièrement FACULTATIVE : « Passer cette étape » n'envoie aucune requête.
  * Le compte existe déjà (créé à l'étape 1), rien n'est perdu si la personne
- * l'ignore — elle pourra compléter sa fiche depuis /account.
+ * l'ignore — elle pourra compléter sa fiche depuis /mon-compte.
  *
  * Aucun endpoint dédié à l'onboarding : on réutilise PUT /owner/profile, qui
  * est un REMPLACEMENT COMPLET de la fiche. D'où les champs relus dans le cache

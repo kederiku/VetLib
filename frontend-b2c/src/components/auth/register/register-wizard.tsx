@@ -18,7 +18,7 @@
  * 1. LE GARDE. Le compte est créé dès l'étape 1, donc la session est ouverte
  *    pendant les étapes 2 et 3. Sans le commutateur `enabled`, le GuestGuard
  *    (« un connecté n'a rien à faire sur /register ») éjecterait la personne
- *    vers /account au beau milieu de son inscription.
+ *    vers le tableau de bord au beau milieu de son inscription.
  * 2. LE RETOUR EN ARRIÈRE. Il s'arrête à l'étape 2 (minStep) : revenir à
  *    l'étape 1 n'aurait aucun sens, le compte existe déjà et le formulaire de
  *    création n'a plus rien à créer.
@@ -90,7 +90,7 @@ export function RegisterWizard() {
           <Button
             variant="outline"
             nativeButton={false}
-            render={<Link href="/account" />}
+            render={<Link href="/mon-compte" />}
           >
             Mon compte
           </Button>

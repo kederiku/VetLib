@@ -1,5 +1,5 @@
 /**
- * Page /account du portail propriétaires : la fiche du compte.
+ * Page /mon-compte du portail propriétaires : la fiche du compte.
  *
  * Server Component mince : métadonnées + délégation au Client Component
  * AccountContent. La protection (session requise) est déjà assurée par

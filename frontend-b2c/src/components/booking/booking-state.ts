@@ -57,6 +57,18 @@ export type BookingAction =
   | { type: "SELECT_TYPE"; appointmentType: PublicAppointmentTypeResponse }
   /** Etape 3 : cocher un animal (n'avance PAS : on peut encore saisir le motif). */
   | { type: "SELECT_PET"; pet: PetResponse }
+  /**
+   * Pre-selection AUTOMATIQUE de l'animal, depuis ?animal=<id> dans
+   * l'URL (arrivee depuis une fiche animal ou un rendez-vous passe).
+   *
+   * Distincte de SELECT_PET, qui traduit un CHOIX de l'utilisateur :
+   * celle-ci est idempotente et ne s'applique QUE si rien n'a encore ete
+   * choisi. Sans cette garde, un refetch d'arriere-plan de la liste des
+   * animaux re-cocherait celui de l'URL par-dessus celui que
+   * l'utilisateur vient de selectionner -- un bug classique et
+   * particulierement deroutant.
+   */
+  | { type: "PRESELECT_PET"; pet: PetResponse }
   /** Etape 3 : saisie du commentaire libre. */
   | { type: "SET_REASON"; reason: string }
   /** Etape 3 : bouton Continuer (avance en 4, exige un animal coche). */
@@ -103,6 +115,16 @@ export function bookingReducer(
       // L'animal n'influence pas les disponibilites : rien d'autre a
       // invalider, et on reste sur l'etape (le commentaire se saisit
       // apres le choix de l'animal).
+      return { ...state, pet: action.pet };
+
+    case "PRESELECT_PET":
+      // Ne remplace JAMAIS un choix deja fait, et n'avance pas d'etape :
+      // la clinique et le motif restent a choisir. Sauter des etapes
+      // casserait la chaine d'invalidation et laisserait l'utilisateur
+      // sur un ecran dont il ignore le contexte.
+      if (state.pet !== null) {
+        return state;
+      }
       return { ...state, pet: action.pet };
 
     case "SET_REASON":

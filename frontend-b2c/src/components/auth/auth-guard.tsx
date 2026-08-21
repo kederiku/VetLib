@@ -24,12 +24,24 @@ import { useCurrentUser } from "@/lib/auth/use-current-user";
  */
 function FullPageSkeleton() {
   return (
-    <div className="flex min-h-svh flex-col gap-6 p-8">
-      {/* Barre de titre simulée */}
-      <Skeleton className="h-10 w-64" />
-      {/* Bloc de contenu principal simulé */}
-      <Skeleton className="h-48 w-full max-w-2xl" />
-      <Skeleton className="h-24 w-full max-w-2xl" />
+    // Silhouette de la coquille : sidebar à gauche, header en haut,
+    // contenu en dessous. Elle ne ressemble pas par coquetterie -- une
+    // fois la session résolue, l'AppShell prend exactement cette place,
+    // donc rien ne saute à l'écran au moment de la bascule.
+    <div className="flex min-h-svh">
+      {/* Colonne de navigation, masquée sous md comme la vraie sidebar. */}
+      <Skeleton className="hidden w-64 shrink-0 rounded-none md:block" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header */}
+        <Skeleton className="h-14 w-full rounded-none" />
+        <div className="flex flex-col gap-6 p-6">
+          {/* Barre de titre simulée */}
+          <Skeleton className="h-10 w-64" />
+          {/* Bloc de contenu principal simulé */}
+          <Skeleton className="h-48 w-full max-w-2xl" />
+          <Skeleton className="h-24 w-full max-w-2xl" />
+        </div>
+      </div>
     </div>
   );
 }

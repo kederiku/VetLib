@@ -10,8 +10,9 @@ soit visible de l'autogénération Alembic (un seul Base.metadata partagé).
 """
 
 import uuid
+from datetime import date
 
-from sqlalchemy import CheckConstraint, ForeignKey, String
+from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from vetolib.shared.infrastructure.db.base import (
@@ -46,7 +47,26 @@ class PetModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     # comme users.role dans identity.
     species: Mapped[str] = mapped_column(String(20), nullable=False)
 
+    # --- Fiche enrichie. Tout est facultatif : declarer un animal en
+    # urgence ne doit demander qu'un nom et une espece.
+    birth_date: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    # NOT NULL avec defaut serveur 'unknown' : "je ne sais pas" est une
+    # VALEUR de l'enum, pas une absence. Une colonne nullable offrirait deux
+    # facons d'ecrire la meme chose (NULL et 'unknown'), donc un piege de
+    # comparaison garanti. Le server_default epargne aussi tout backfill sur
+    # les lignes existantes, et protege les INSERT hors ORM.
+    sex: Mapped[str] = mapped_column(String(10), nullable=False, server_default="unknown")
+    breed: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Tri-etat : True / False / NULL "non renseigne". Un booleen ne peut pas
+    # porter un troisieme membre, NULL s'en charge.
+    sterilized: Mapped[bool | None] = mapped_column(Boolean(), nullable=True)
+
     __table_args__ = (
-        # Doit rester synchronisé avec l'enum Species du domaine (pet.py).
+        # Doivent rester synchronisés avec les enums du domaine (pet.py).
+        # Noms COURTS : la naming_convention du MetaData ajoute elle-même le
+        # préfixe ck_<table>_ -- passer le nom déjà préfixé produirait
+        # ck_pets_ck_pets_..., exactement ce que la migration 0005 a dû
+        # réparer.
         CheckConstraint("species IN ('dog', 'cat', 'nac', 'other')", name="species_valid"),
+        CheckConstraint("sex IN ('male', 'female', 'unknown')", name="sex_valid"),
     )

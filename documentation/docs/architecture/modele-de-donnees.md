@@ -48,6 +48,10 @@ erDiagram
     uuid owner_id FK
     string name
     string species
+    date birth_date "nullable"
+    string sex "male|female|unknown, defaut unknown"
+    string breed "nullable, texte libre"
+    boolean sterilized "nullable = non renseigne"
   }
   RESOURCES {
     uuid id PK

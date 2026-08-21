@@ -1,87 +1,61 @@
 /**
- * Contenu de la page /account : la fiche du propriétaire connecté.
+ * Contenu de la page /mon-compte : la fiche du propriétaire connecté.
  *
- * Trois cartes : "Prochains rendez-vous" (aperçu, composant dédié
- * UpcomingAppointments), "Mon profil" (formulaire d'édition, composant
- * dédié ProfileForm) et "Mon compte" (email en lecture seule +
- * déconnexion). Client Component : il lit la session via useCurrentUser,
- * un hook TanStack Query.
+ * QUATRE CARTES INDEPENDANTES plutôt qu'un formulaire unique de 400
+ * lignes derrière un seul bouton. Corriger une faute de frappe dans son
+ * prénom ne doit pas faire repartir l'adresse et les préférences, et une
+ * erreur 422 sur l'adresse ne doit pas bloquer l'enregistrement du
+ * prénom.
+ *
+ * Pourquoi des cartes empilées et non des onglets : les quatre blocs
+ * totalisent une dizaine de champs. Des onglets imposeraient un choix de
+ * navigation avant de rien voir, et masqueraient derrière un onglet
+ * fermé le champ manquant que le tableau de bord vient justement de
+ * signaler.
+ *
+ * useSaveOwnerProfile est appelé UNE SEULE FOIS ici et distribué en
+ * props : c'est ce qui rend `isSaving` partagé, donc les envois
+ * sérialisés. Deux enregistrements concurrents partiraient tous deux
+ * d'une base pré-mutation, et le second écraserait le premier.
+ *
+ * Colonne étroite (width="narrow") : ce sont des formulaires, une
+ * colonne resserrée reste plus lisible que la pleine largeur.
  */
 "use client";
 
-import { LogoutButton } from "@/components/auth/logout-button";
-import { ProfileForm } from "@/components/account/profile-form";
-import { UpcomingAppointments } from "@/components/account/upcoming-appointments";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { AddressForm } from "@/components/account/address-form";
+import { LoginInfoCard } from "@/components/account/login-info-card";
+import { PersonalInfoForm } from "@/components/account/personal-info-form";
+import { RemindersForm } from "@/components/account/reminders-form";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
+import { useSaveOwnerProfile } from "@/lib/account/use-save-owner-profile";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 export function AccountContent() {
   const { data: owner } = useCurrentUser();
+  const enregistrement = useSaveOwnerProfile();
 
   // L'AuthGuard (layout parent) garantit qu'on n'arrive ici que
   // connecté ; ce garde-fou couvre l'instant de transition où la query
   // n'est pas encore résolue (et rassure TypeScript sur undefined).
+  // Monter des formulaires vides puis les remplir ferait clignoter la
+  // page et risquerait d'écraser une saisie rapide.
   if (owner === undefined) {
     return null;
   }
 
   return (
-    <main className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 p-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">
-          Bonjour {owner.first_name}
-        </h1>
-        <p className="text-muted-foreground">
-          Gérez vos informations personnelles et vos préférences.
-        </p>
-      </div>
+    <PageContainer width="narrow">
+      <PageHeader
+        title="Mon compte"
+        description="Vos coordonnées, votre adresse et vos préférences de rappels."
+      />
 
-      {/* Carte a) : l'aperçu des prochains rendez-vous (cache partagé
-          avec la page /rendez-vous, même queryKey). */}
-      <UpcomingAppointments />
-
-      {/* Carte b) : le formulaire complet de la fiche propriétaire. */}
-      <ProfileForm />
-
-      {/* Carte c) : les informations de connexion, hors formulaire. */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Mon compte</CardTitle>
-          <CardDescription>Vos informations de connexion.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <Field>
-            <FieldLabel htmlFor="account-email">Email</FieldLabel>
-            {/* readOnly (et non disabled) : le champ reste focalisable et
-                son contenu copiable, mais toute saisie est ignorée.
-                L'email est l'identifiant du compte : son changement
-                exigera un flux dédié (vérification par lien), le backend
-                l'exclut d'ailleurs du PUT profil. */}
-            <Input
-              id="account-email"
-              type="email"
-              value={owner.email}
-              readOnly
-              className="text-muted-foreground"
-            />
-            <FieldDescription>
-              Identifiant de connexion — non modifiable pour l&apos;instant.
-            </FieldDescription>
-          </Field>
-
-          <div>
-            <LogoutButton />
-          </div>
-        </CardContent>
-      </Card>
-    </main>
+      <PersonalInfoForm owner={owner} {...enregistrement} />
+      <AddressForm owner={owner} {...enregistrement} />
+      <RemindersForm owner={owner} {...enregistrement} />
+      <LoginInfoCard owner={owner} />
+    </PageContainer>
   );
 }

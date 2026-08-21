@@ -48,12 +48,22 @@ export function buildOwnerAppointment(
   };
 }
 
-/** Fiche animal (GET /owner/pets). */
+/**
+ * Fiche animal (GET /owner/pets).
+ *
+ * La fiche enrichie est renseignée par défaut : c'est le cas le plus
+ * intéressant à l'écran (âge calculé, race affichée), et un test qui
+ * s'intéresse au cas vide surcharge explicitement `birth_date: null`.
+ */
 export function buildPet(overrides: Partial<PetResponse> = {}): PetResponse {
   return {
     id: "00000000-0000-0000-0000-0000000000e1",
     name: "Rex",
     species: "dog",
+    birth_date: "2021-03-12",
+    sex: "male",
+    breed: "Berger australien",
+    sterilized: true,
     ...overrides,
   };
 }

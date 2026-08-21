@@ -301,6 +301,175 @@ export const useCreatePet = <TError = HTTPValidationError, TContext = unknown>(
 > => {
   return useMutation(getCreatePetMutationOptions(options), queryClient);
 };
+export type getMyPetResponse200 = {
+  data: PetResponse;
+  status: 200;
+};
+
+export type getMyPetResponse422 = {
+  data: HTTPValidationError;
+  status: 422;
+};
+
+export type getMyPetResponseSuccess = getMyPetResponse200 & {
+  headers: Headers;
+};
+export type getMyPetResponseError = getMyPetResponse422 & {
+  headers: Headers;
+};
+
+export type getMyPetResponse = getMyPetResponseSuccess | getMyPetResponseError;
+
+export const getGetMyPetUrl = (petId: string) => {
+  return `/api/v1/owner/pets/${petId}`;
+};
+
+/**
+ * La fiche d'un animal, pour sa page de détail dans le portail.
+ *
+ * L'animal d'un autre propriétaire est introuvable par construction
+ * (get_for_owner filtre en SQL) -> 404, indistinguable d'un id inexistant.
+ * @summary Get Pet
+ */
+export const getMyPet = async (
+  petId: string,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<getMyPetResponse> => {
+  return customFetch<getMyPetResponse>(getGetMyPetUrl(petId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyPetQueryKey = (petId: string) => {
+  return [`/api/v1/owner/pets/${petId}`] as const;
+};
+
+export const getGetMyPetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyPet>>,
+  TError = HTTPValidationError,
+>(
+  petId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyPet>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyPetQueryKey(petId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyPet>>> = ({
+    signal,
+  }) => getMyPet(petId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: petId !== null && petId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getMyPet>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetMyPetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyPet>>
+>;
+export type GetMyPetQueryError = HTTPValidationError;
+
+export function useGetMyPet<
+  TData = Awaited<ReturnType<typeof getMyPet>>,
+  TError = HTTPValidationError,
+>(
+  petId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyPet>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyPet>>,
+          TError,
+          Awaited<ReturnType<typeof getMyPet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMyPet<
+  TData = Awaited<ReturnType<typeof getMyPet>>,
+  TError = HTTPValidationError,
+>(
+  petId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyPet>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMyPet>>,
+          TError,
+          Awaited<ReturnType<typeof getMyPet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetMyPet<
+  TData = Awaited<ReturnType<typeof getMyPet>>,
+  TError = HTTPValidationError,
+>(
+  petId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyPet>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Pet
+ */
+
+export function useGetMyPet<
+  TData = Awaited<ReturnType<typeof getMyPet>>,
+  TError = HTTPValidationError,
+>(
+  petId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getMyPet>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetMyPetQueryOptions(petId, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 export type updatePetResponse200 = {
   data: PetResponse;
   status: 200;
@@ -326,7 +495,11 @@ export const getUpdatePetUrl = (petId: string) => {
 };
 
 /**
- * PATCH partiel : seuls les champs fournis changent (None = inchangé).
+ * PUT : la fiche envoyee REMPLACE l'existante.
+ *
+ * Un champ facultatif omis vaut null, donc EFFACE la valeur precedente --
+ * c'est ce qui permet de vider une race saisie par erreur. Meme
+ * convention que PUT /owner/profile.
  *
  * L'animal d'un autre propriétaire est introuvable par construction
  * (get_for_owner filtre en SQL) -> 404, indistinguable d'un id inexistant.
@@ -339,7 +512,7 @@ export const updatePet = async (
 ): Promise<updatePetResponse> => {
   return customFetch<updatePetResponse>(getUpdatePetUrl(petId), {
     ...options,
-    method: "PATCH",
+    method: "PUT",
     headers: { "Content-Type": "application/json", ...options?.headers },
     body: JSON.stringify(updatePetRequest),
   });
@@ -439,8 +612,8 @@ export const getDeletePetUrl = (petId: string) => {
  * Suppression LOGIQUE (soft delete) ; 204 sans corps.
  *
  * La ligne survit en base (audit, futur historique médical) mais disparaît
- * de listMyPets. Même barrière d'appartenance que le PATCH : 404 si
- * l'animal n'est pas à l'owner de la session.
+ * de listMyPets. Même barrière d'appartenance que le PUT : 404 si l'animal
+ * n'est pas à l'owner de la session.
  * @summary Delete Pet
  */
 export const deletePet = async (

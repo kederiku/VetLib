@@ -24,7 +24,14 @@ class CreatePet:
         # `now` injecté via le port Clock : le domaine reste déterministe et
         # testable avec une horloge figée (même convention qu'identity).
         pet = Pet.create(
-            owner_id=cmd.owner_id, name=cmd.name, species=cmd.species, now=self._clock.now()
+            owner_id=cmd.owner_id,
+            name=cmd.name,
+            species=cmd.species,
+            birth_date=cmd.birth_date,
+            sex=cmd.sex,
+            breed=cmd.breed,
+            sterilized=cmd.sterilized,
+            now=self._clock.now(),
         )
         async with self._uow_factory() as uow:
             await uow.pets.add(pet)

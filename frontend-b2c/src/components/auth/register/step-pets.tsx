@@ -51,7 +51,7 @@ import {
   useCreatePet,
 } from "@/lib/api/generated/pets/pets";
 import { applyServerErrors } from "@/lib/auth/server-errors";
-import { petSchema } from "@/lib/pets/schemas";
+import { petCoreSchema } from "@/lib/pets/schemas";
 import { SPECIES, SPECIES_ORDER } from "@/lib/pets/species";
 
 /**
@@ -59,7 +59,7 @@ import { SPECIES, SPECIES_ORDER } from "@/lib/pets/species";
  * formulaire de la page /animaux : une seule définition de ce qu'est une
  * fiche valide.
  */
-const stepPetsSchema = z.object({ pets: z.array(petSchema) });
+const stepPetsSchema = z.object({ pets: z.array(petCoreSchema) });
 type StepPetsFormValues = z.infer<typeof stepPetsSchema>;
 
 // Aucun champ "plat" à reconnaître : les erreurs 422 porteraient sur

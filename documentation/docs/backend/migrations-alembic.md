@@ -146,7 +146,7 @@ Deux enseignements :
 - laissez la convention de nommage faire son travail — passez le nom **court** ;
 - une dérive silencieuse entre modèles et schéma est plus coûteuse qu'une erreur bruyante.
 
-## Les cinq migrations actuelles
+## Les six migrations actuelles
 
 | Révision | Contenu                                                                        |
 | -------- | ------------------------------------------------------------------------------ |
@@ -155,6 +155,7 @@ Deux enseignements :
 | `0003`   | Profil des cliniques (adresse, fuseau IANA) et table `pets`                    |
 | `0004`   | Tout `scheduling` : `btree_gist`, contrainte `EXCLUDE`, RLS sur cinq tables    |
 | `0005`   | Renommage des contraintes `CHECK` vers la convention                           |
+| `0006`   | Fiche animal enrichie : naissance, sexe, race, stérilisation                   |
 
 Leurs docstrings sont, de fait, des mini-décisions d'architecture : elles expliquent
 **pourquoi** `owners` n'a pas de RLS, **pourquoi** `btree_gist` est nécessaire,

@@ -144,14 +144,29 @@ Le tag détermine aussi le sous-dossier généré par Orval (`mode: "tags-split"
 | `GET`   | `/api/v1/public/clinics/{clinic_id}/appointment-types` | `listClinicAppointmentTypes` |
 | `GET`   | `/api/v1/public/clinics/{clinic_id}/availabilities`    | `listAvailabilities`         |
 
-### `pets` — 4 endpoints
+### `pets` — 5 endpoints
 
 | Méthode  | Chemin                        | `operation_id` |
 | -------- | ----------------------------- | -------------- |
 | `GET`    | `/api/v1/owner/pets`          | `listMyPets`   |
 | `POST`   | `/api/v1/owner/pets`          | `createPet`    |
+| `GET`    | `/api/v1/owner/pets/{pet_id}` | `getMyPet`     |
+| `PUT`    | `/api/v1/owner/pets/{pet_id}` | `updatePet`    |
 | `DELETE` | `/api/v1/owner/pets/{pet_id}` | `deletePet`    |
-| `PATCH`  | `/api/v1/owner/pets/{pet_id}` | `updatePet`    |
+
+:::note L'édition d'un animal est un `PUT`, pas un `PATCH`
+
+La fiche animal porte des champs effaçables (race, date de naissance). Avec une
+sémantique `PATCH` où « `null` = inchangé », il devenait **impossible de vider**
+une race saisie par erreur. La sentinelle qui distinguerait « absent » de
+« `null` » n'aiderait pas : OpenAPI ne sait pas exprimer cette différence, le
+client généré par Orval produirait `breed?: string | null` sans moyen fiable de
+faire le tri.
+
+Le `PUT` remplace donc la fiche entière : **un champ facultatif omis vaut `null`,
+donc efface**. Même convention que `PUT /api/v1/owner/profile`.
+
+:::
 
 ### `scheduling` — 18 endpoints
 

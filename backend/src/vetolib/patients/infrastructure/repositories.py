@@ -17,7 +17,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from vetolib.patients.domain.pet import Pet, Species
+from vetolib.patients.domain.pet import Pet, Sex, Species
 from vetolib.patients.infrastructure.models import PetModel
 
 
@@ -34,11 +34,22 @@ def _pet_to_entity(model: PetModel) -> Pet:
         owner_id=model.owner_id,
         name=model.name,
         species=Species(model.species),
+        birth_date=model.birth_date,
+        sex=Sex(model.sex),
+        breed=model.breed,
+        sterilized=model.sterilized,
     )
 
 
 def _pet_to_model(entity: Pet) -> PetModel:
-    """Aplatit l'entité Pet en ligne SQL (l'enum Species -> str)."""
+    """Aplatit l'entité Pet en ligne SQL (les enums -> str).
+
+    ATTENTION : update() persiste via session.merge(_pet_to_model(pet)),
+    qui ECRIT TOUTES les colonnes du modele construit ici. Un champ oublie
+    dans cette fonction serait donc remis a NULL a chaque edition, sans la
+    moindre erreur -- une perte de donnees silencieuse. C'est pourquoi un
+    test d'integration relit la ligne en base apres un PUT.
+    """
     return PetModel(
         id=entity.id,
         created_at=entity.created_at,
@@ -46,6 +57,10 @@ def _pet_to_model(entity: Pet) -> PetModel:
         owner_id=entity.owner_id,
         name=entity.name,
         species=entity.species.value,
+        birth_date=entity.birth_date,
+        sex=entity.sex.value,
+        breed=entity.breed,
+        sterilized=entity.sterilized,
     )
 
 

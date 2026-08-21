@@ -28,7 +28,7 @@ export function useCurrentUser() {
       // mutator avant que l'erreur n'arrive ici.)
       retry: false,
       // 5 min de fraîcheur : inutile de re-demander le profil à chaque
-      // navigation ; il change rarement, et la fiche /account remet de
+      // navigation ; il change rarement, et la fiche /mon-compte remet de
       // toute façon le cache à jour après chaque enregistrement.
       staleTime: 5 * 60_000,
       // Le mutator renvoie { status, data, headers } ; les composants ne

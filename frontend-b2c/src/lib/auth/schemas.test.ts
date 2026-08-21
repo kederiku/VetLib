@@ -18,27 +18,24 @@ import { PASSWORD_MIN_LENGTH } from "@/lib/auth/password-policy";
 import {
   loginSchema,
   onboardingAddressSchema,
-  profileSchema,
+  personalInfoSchema,
+  profileAddressSchema,
   registerOwnerSchema,
 } from "@/lib/auth/schemas";
 
-/** Profil valide de référence, sans adresse (cas le plus fréquent). */
-function profilValide() {
-  return {
-    first_name: "Marie",
-    last_name: "Dupont",
-    phone: "",
-    address: { line1: "", line2: "", postal_code: "", city: "" },
-    notification_preferences: { email: true, sms: false },
-  };
+/** Identité valide de référence, sans téléphone (cas le plus fréquent). */
+function identiteValide() {
+  return { first_name: "Marie", last_name: "Dupont", phone: "" };
 }
 
-/** Raccourci : les chemins d'erreur signalés par le schéma. */
+/** Raccourci : les chemins d'erreur signalés par le schéma d'identité. */
 function chemins(valeurs: unknown): string[] {
-  const resultat = profileSchema.safeParse(valeurs);
+  const resultat = personalInfoSchema.safeParse(valeurs);
   return resultat.success
     ? []
-    : resultat.error.issues.map((issue) => issue.path.join("."));
+    : resultat.error.issues.map((issue: { path: PropertyKey[] }) =>
+        issue.path.join("."),
+      );
 }
 
 describe("loginSchema", () => {
@@ -128,7 +125,7 @@ describe("registerOwnerSchema — étape 1 du parcours d'inscription", () => {
 
   it("exige le téléphone", () => {
     // Règle du PARCOURS, pas du contrat d'API : le backend l'accepte
-    // nullable, et la fiche /account permet de l'effacer ensuite (voir
+    // nullable, et la fiche /mon-compte permet de l'effacer ensuite (voir
     // profileSchema, où il reste facultatif).
     // Object.fromEntries plutôt qu'une déstructuration : on veut le cas
     // « clé absente », pas une variable inutilisée.
@@ -176,98 +173,50 @@ describe("onboardingAddressSchema — étape 2, entièrement facultative", () =>
   });
 });
 
-describe("profileSchema — règle « tout ou rien » de l'adresse", () => {
-  it("accepte un profil sans aucune adresse", () => {
-    // Les quatre champs vides = pas d'adresse. C'est un état valide : le
-    // backend stockera null.
-    expect(profileSchema.safeParse(profilValide()).success).toBe(true);
-  });
-
-  it("accepte une adresse complète", () => {
-    const valeurs = {
-      ...profilValide(),
-      address: {
-        line1: "12 rue des Lilas",
-        line2: "",
-        postal_code: "34000",
-        city: "Montpellier",
-      },
-    };
-    expect(profileSchema.safeParse(valeurs).success).toBe(true);
-  });
-
-  it("exige les trois champs essentiels dès qu'un seul est rempli", () => {
-    // Le cas piégeux : remplir la seule ligne 2 (un étage, un bâtiment) doit
-    // réclamer les trois autres, sans quoi le backend recevrait une adresse
-    // inexploitable pour un courrier.
-    const valeurs = {
-      ...profilValide(),
-      address: { line1: "", line2: "Bâtiment C", postal_code: "", city: "" },
-    };
-
-    expect(chemins(valeurs)).toEqual([
-      "address.line1",
-      "address.postal_code",
-      "address.city",
-    ]);
-  });
-
-  it("ne réclame jamais la ligne 2", () => {
-    // Complément d'adresse : facultatif même quand le reste est rempli.
-    const valeurs = {
-      ...profilValide(),
-      address: {
-        line1: "12 rue des Lilas",
-        line2: "",
-        postal_code: "34000",
-        city: "Montpellier",
-      },
-    };
-    expect(chemins(valeurs)).not.toContain("address.line2");
-  });
-
-  it("impose un code postal français à cinq chiffres", () => {
-    const avecCodePostal = (postal_code: string) => ({
-      ...profilValide(),
-      address: {
-        line1: "12 rue des Lilas",
-        line2: "",
-        postal_code,
-        city: "Montpellier",
-      },
-    });
-
-    expect(chemins(avecCodePostal("34000"))).toEqual([]);
-    expect(chemins(avecCodePostal("3400"))).toContain("address.postal_code");
-    expect(chemins(avecCodePostal("34 000"))).toContain("address.postal_code");
-    expect(chemins(avecCodePostal("ABCDE"))).toContain("address.postal_code");
-  });
-
-  it("signale chaque erreur sous SON champ", () => {
-    // Les chemins comptent autant que les messages : c'est eux qui placent
-    // le texte rouge sous le bon champ du formulaire.
-    const valeurs = {
-      ...profilValide(),
-      address: { line1: "", line2: "", postal_code: "34000", city: "" },
-    };
-
-    expect(chemins(valeurs)).toEqual(["address.line1", "address.city"]);
+describe("profileAddressSchema", () => {
+  it("EST le schéma d'adresse de l'inscription, pas une copie", () => {
+    // Les deux écrans qui portent une adresse (étape 2 de l'inscription
+    // et carte Adresse du compte) partagent schéma ET forme de valeurs.
+    // Deux copies divergeraient tôt ou tard : l'une accepterait un code
+    // postal que l'autre refuse, pour la même donnée.
+    expect(profileAddressSchema).toBe(onboardingAddressSchema);
   });
 });
 
-describe("profileSchema — champs d'identité", () => {
+describe("personalInfoSchema — la carte « Informations personnelles »", () => {
+  it("accepte une identité sans téléphone", () => {
+    // Le numéro est facultatif ICI, contrairement à l'inscription : il
+    // peut être effacé après coup, et le backend l'accepte nullable.
+    expect(personalInfoSchema.safeParse(identiteValide()).success).toBe(true);
+  });
+
   it("exige un prénom et un nom", () => {
     expect(
-      chemins({ ...profilValide(), first_name: "", last_name: "" }),
+      chemins({ ...identiteValide(), first_name: "", last_name: "" }),
     ).toEqual(["first_name", "last_name"]);
   });
 
+  it("refuse un prénom composé d'espaces", () => {
+    // Le trim s'applique AVANT le min(1) : "   " doit être rejeté.
+    expect(chemins({ ...identiteValide(), first_name: "   " })).toEqual([
+      "first_name",
+    ]);
+  });
+
   it("plafonne les longueurs", () => {
-    expect(chemins({ ...profilValide(), first_name: "a".repeat(101) })).toEqual(
-      ["first_name"],
-    );
-    expect(chemins({ ...profilValide(), phone: "0".repeat(31) })).toEqual([
+    expect(
+      chemins({ ...identiteValide(), first_name: "a".repeat(101) }),
+    ).toEqual(["first_name"]);
+    expect(chemins({ ...identiteValide(), phone: "0".repeat(31) })).toEqual([
       "phone",
+    ]);
+  });
+
+  it("signale chaque erreur sous SON champ", () => {
+    // Les chemins comptent autant que les messages : c'est eux qui
+    // placent le texte rouge sous le bon champ du formulaire.
+    expect(chemins({ ...identiteValide(), last_name: "" })).toEqual([
+      "last_name",
     ]);
   });
 });

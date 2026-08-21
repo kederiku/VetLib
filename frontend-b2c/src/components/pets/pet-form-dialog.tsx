@@ -17,11 +17,17 @@
  * onSaved (optionnel) recoit la fiche creee/modifiee : le wizard de
  * prise de rendez-vous s'en sert pour selectionner automatiquement
  * l'animal tout juste ajoute.
+ *
+ * 3. REMPLACEMENT ET NON FUSION a l'edition : le backend expose un PUT,
+ *    la fiche envoyee ecrase l'existante. C'est ce qui permet d'effacer
+ *    une race saisie par erreur -- il suffit de vider le champ. Le
+ *    formulaire porte donc TOUS les champs, jamais un sous-ensemble.
  */
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Controller, useForm } from "react-hook-form";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -36,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -53,12 +60,26 @@ import {
 } from "@/lib/api/generated/pets/pets";
 import type { PetResponse } from "@/lib/api/generated/vetoLibAPI.schemas";
 import { applyServerErrors } from "@/lib/auth/server-errors";
-import { petSchema, type PetFormValues } from "@/lib/pets/schemas";
+import { SEX_LABELS, SEX_ORDER } from "@/lib/pets/attributes";
+import {
+  PET_FORM_DEFAULTS,
+  petSchema,
+  sterilizedFromApi,
+  sterilizedToApi,
+  type PetFormValues,
+} from "@/lib/pets/schemas";
 import { SPECIES, SPECIES_ORDER } from "@/lib/pets/species";
 
 // Champs que ce formulaire affiche : une erreur 422 sur un autre champ
 // partirait dans le bandeau global (voir applyServerErrors).
-const KNOWN_FIELDS = ["name", "species"] as const;
+const KNOWN_FIELDS = [
+  "name",
+  "species",
+  "sex",
+  "birth_date",
+  "breed",
+  "sterilized",
+] as const;
 
 interface PetFormDialogProps {
   open: boolean;
@@ -120,26 +141,41 @@ function PetFormDialogContent({
     resolver: zodResolver(petSchema),
     // defaultValues suffisent (pas de values:) : le contenu est remonte
     // a chaque ouverture, et la fiche pet ne change pas pendant que le
-    // dialogue est ouvert. species reste indefinie en creation : c'est
-    // le schema zod qui reclamera un choix a la soumission.
-    defaultValues: {
-      name: pet?.name ?? "",
-      species: pet?.species,
-    },
+    // dialogue est ouvert.
+    //
+    // Les champs facultatifs sont des CHAINES vides et non undefined :
+    // un <input> passerait sinon de non controle a controle des la
+    // premiere frappe, ce que React signale.
+    defaultValues:
+      pet === undefined
+        ? PET_FORM_DEFAULTS
+        : {
+            name: pet.name,
+            species: pet.species,
+            sex: pet.sex,
+            birth_date: pet.birth_date ?? "",
+            breed: pet.breed ?? "",
+            sterilized: sterilizedFromApi(pet.sterilized),
+          },
   });
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      // Creation (POST complet) ou edition (PATCH partiel : on envoie
-      // les deux champs, le backend n'ecrase que le non-null).
+      // Corps commun a la creation et a l'edition : le backend expose un
+      // POST complet et un PUT de REMPLACEMENT, tous deux attendent la
+      // fiche entiere. Les chaines vides du formulaire deviennent null --
+      // c'est ainsi qu'on EFFACE une race saisie par erreur.
+      const data = {
+        name: values.name,
+        species: values.species,
+        sex: values.sex,
+        birth_date: values.birth_date === "" ? null : values.birth_date,
+        breed: values.breed === "" ? null : values.breed,
+        sterilized: sterilizedToApi(values.sterilized),
+      };
       const res = isEditing
-        ? await updateMutation.mutateAsync({
-            petId: pet.id,
-            data: { name: values.name, species: values.species },
-          })
-        : await createMutation.mutateAsync({
-            data: { name: values.name, species: values.species },
-          });
+        ? await updateMutation.mutateAsync({ petId: pet.id, data })
+        : await createMutation.mutateAsync({ data });
 
       // La liste des animaux est peut-etre affichee derriere le dialogue
       // (ou dans le wizard) : invalider par sa cle la fait se rafraichir
@@ -153,6 +189,9 @@ function PetFormDialogContent({
       // est forcement en 200/201 ici.
       if (res.status === 200 || res.status === 201) {
         onSaved?.(res.data);
+        toast.success(
+          isEditing ? "Fiche enregistrée" : `${res.data.name} a été ajouté`,
+        );
       }
       close();
     } catch (error) {
@@ -168,8 +207,8 @@ function PetFormDialogContent({
         </DialogTitle>
         <DialogDescription>
           {isEditing
-            ? "Mettez à jour le nom ou l'espèce de votre compagnon."
-            : "Renseignez votre compagnon pour lui prendre rendez-vous."}
+            ? "Un champ laissé vide efface l'information correspondante."
+            : "Seuls le nom et l'espèce sont nécessaires ; le reste peut attendre."}
         </DialogDescription>
       </DialogHeader>
 
@@ -224,7 +263,10 @@ function PetFormDialogContent({
                           htmlFor={`pet-species-${species}`}
                           className="font-normal"
                         >
-                          <Icon className="size-4 text-muted-foreground" aria-hidden />
+                          <Icon
+                            className="size-4 text-muted-foreground"
+                            aria-hidden
+                          />
                           {label}
                         </FieldLabel>
                       </Field>
@@ -234,6 +276,110 @@ function PetFormDialogContent({
               )}
             />
             <FieldError errors={[errors.species]} />
+          </FieldSet>
+
+          <FieldSet data-invalid={!!errors.sex}>
+            <FieldLegend>Sexe</FieldLegend>
+            <Controller
+              control={control}
+              name="sex"
+              render={({ field }) => (
+                <RadioGroup
+                  value={field.value ?? ""}
+                  onValueChange={(value) => field.onChange(value)}
+                  className="grid-cols-3 gap-3"
+                  aria-invalid={!!errors.sex}
+                >
+                  {SEX_ORDER.map((sex) => (
+                    <Field key={sex} orientation="horizontal">
+                      <RadioGroupItem value={sex} id={`pet-sex-${sex}`} />
+                      <FieldLabel
+                        htmlFor={`pet-sex-${sex}`}
+                        className="font-normal"
+                      >
+                        {SEX_LABELS[sex]}
+                      </FieldLabel>
+                    </Field>
+                  ))}
+                </RadioGroup>
+              )}
+            />
+            <FieldError errors={[errors.sex]} />
+          </FieldSet>
+
+          <Field data-invalid={!!errors.birth_date}>
+            <FieldLabel htmlFor="pet-birth-date">
+              Date de naissance{" "}
+              <span className="text-muted-foreground">(optionnel)</span>
+            </FieldLabel>
+            {/* type="date" : le navigateur fournit son selecteur natif et
+                garantit le format "YYYY-MM-DD" attendu par le backend. */}
+            <Input
+              id="pet-birth-date"
+              type="date"
+              aria-invalid={!!errors.birth_date}
+              {...register("birth_date")}
+            />
+            <FieldDescription>
+              Même approximative, elle permet d&apos;afficher l&apos;âge de
+              votre compagnon.
+            </FieldDescription>
+            <FieldError errors={[errors.birth_date]} />
+          </Field>
+
+          <Field data-invalid={!!errors.breed}>
+            <FieldLabel htmlFor="pet-breed">
+              Race <span className="text-muted-foreground">(optionnel)</span>
+            </FieldLabel>
+            <Input
+              id="pet-breed"
+              type="text"
+              placeholder="Berger australien"
+              aria-invalid={!!errors.breed}
+              {...register("breed")}
+            />
+            <FieldError errors={[errors.breed]} />
+          </Field>
+
+          <FieldSet data-invalid={!!errors.sterilized}>
+            <FieldLegend>Stérilisé</FieldLegend>
+            <Controller
+              control={control}
+              name="sterilized"
+              render={({ field }) => (
+                <RadioGroup
+                  value={field.value ?? ""}
+                  onValueChange={(value) => field.onChange(value)}
+                  className="grid-cols-3 gap-3"
+                  aria-invalid={!!errors.sterilized}
+                >
+                  {/* Tri-etat assume : "je ne sais pas" est une reponse
+                      legitime, et la forcer a "non" serait un mensonge
+                      dans un dossier medical. */}
+                  {(
+                    [
+                      ["yes", "Oui"],
+                      ["no", "Non"],
+                      ["", "Je ne sais pas"],
+                    ] as const
+                  ).map(([valeur, libelle]) => (
+                    <Field key={libelle} orientation="horizontal">
+                      <RadioGroupItem
+                        value={valeur}
+                        id={`pet-sterilized-${valeur === "" ? "unknown" : valeur}`}
+                      />
+                      <FieldLabel
+                        htmlFor={`pet-sterilized-${valeur === "" ? "unknown" : valeur}`}
+                        className="font-normal"
+                      >
+                        {libelle}
+                      </FieldLabel>
+                    </Field>
+                  ))}
+                </RadioGroup>
+              )}
+            />
+            <FieldError errors={[errors.sterilized]} />
           </FieldSet>
 
           <DialogFooter>

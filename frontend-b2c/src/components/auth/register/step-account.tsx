@@ -19,7 +19,7 @@
  *
  * Le téléphone est REQUIS ici (la clinique doit pouvoir joindre le
  * propriétaire) alors qu'il reste nullable dans le contrat d'API : c'est une
- * règle de ce parcours, pas du backend. La fiche /account permet d'ailleurs de
+ * règle de ce parcours, pas du backend. La fiche /mon-compte permet d'ailleurs de
  * l'effacer ensuite.
  */
 "use client";

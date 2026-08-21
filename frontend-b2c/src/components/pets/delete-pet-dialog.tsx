@@ -8,13 +8,23 @@
  * dossiers medicaux seront conserves, d'ou le texte rassurant.
  *
  * Composant pilote par le parent ({ open, onOpenChange, pet }) : la
- * liste decide quel animal est vise. L'erreur eventuelle s'affiche en
- * Alert DANS le dialogue (l'utilisateur est encore dessus).
+ * liste ou la fiche decide quel animal est vise.
+ *
+ * L'erreur reste un bandeau Alert DANS le dialogue, et non un toast :
+ * le dialogue ne se ferme PAS en cas d'echec, l'utilisateur est encore
+ * dessus et doit choisir entre reessayer et renoncer. C'est la regle du
+ * portail -- inline quand il faut AGIR, toast quand on informe.
+ *
+ * onDeleted (optionnel) : la fiche de l'animal s'en sert pour revenir a
+ * la liste. Sans lui, elle resterait montee sur un animal qui n'existe
+ * plus et basculerait sur son etat "introuvable", ce qui ressemblerait a
+ * une erreur alors que la suppression a reussi.
  */
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -39,12 +49,15 @@ interface DeletePetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pet: PetResponse;
+  /** Appele apres une suppression REUSSIE (retour a la liste). */
+  onDeleted?: () => void;
 }
 
 export function DeletePetDialog({
   open,
   onOpenChange,
   pet,
+  onDeleted,
 }: DeletePetDialogProps) {
   const queryClient = useQueryClient();
   const deleteMutation = useDeletePet<ApiError>();
@@ -62,7 +75,9 @@ export function DeletePetDialog({
       await queryClient.invalidateQueries({
         queryKey: getListMyPetsQueryKey(),
       });
+      toast.success(`${pet.name} a été supprimé`);
       onOpenChange(false);
+      onDeleted?.();
     } catch (error) {
       const apiError = getApiError(error);
       // 404 pet_not_found (deja supprime dans un autre onglet ?) ou

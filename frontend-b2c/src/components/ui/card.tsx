@@ -6,7 +6,7 @@
  * (CardHeader/CardTitle/CardContent/CardFooter) qui partagent un espacement
  * commun via la variable CSS --card-spacing. Sert ici de cadre aux
  * formulaires d'authentification et aux deux cartes de la fiche
- * proprietaire (/account).
+ * proprietaire (/mon-compte).
  */
 import * as React from "react"
 
