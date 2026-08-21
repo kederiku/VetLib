@@ -9,10 +9,18 @@ l'événement outbox, et refus d'un email déjà pris. Le comportement SQL réel
 
 import pytest
 
-from tests.unit.identity.fakes import FakeHasher, FakeIdentityUnitOfWork, FixedClock
+from tests.unit.identity.fakes import (
+    FakeBreachChecker,
+    FakeHasher,
+    FakeIdentityUnitOfWork,
+    FixedClock,
+)
 from vetolib.identity.application.dto import RegisterClinicCommand
 from vetolib.identity.application.use_cases import RegisterClinic
-from vetolib.identity.domain.errors import EmailAlreadyExistsError
+from vetolib.identity.domain.errors import (
+    CompromisedPasswordError,
+    EmailAlreadyExistsError,
+)
 from vetolib.identity.domain.events import ClinicRegistered
 from vetolib.identity.domain.value_objects import Role
 
@@ -36,7 +44,7 @@ async def test_register_cree_clinic_user_gerant_et_evenement_outbox() -> None:
     # Arrange : UoW vide et use case câblé sur les fakes ("lambda: uow" joue
     # la factory du port tout en gardant l'instance inspectable par le test).
     uow = FakeIdentityUnitOfWork()
-    use_case = RegisterClinic(lambda: uow, FakeHasher(), FixedClock())
+    use_case = RegisterClinic(lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker())
 
     # Act
     result = await use_case.execute(_command())
@@ -75,7 +83,7 @@ async def test_register_refuse_un_email_deja_utilise() -> None:
     """
     # Arrange : une première inscription occupe l'email.
     uow = FakeIdentityUnitOfWork()
-    use_case = RegisterClinic(lambda: uow, FakeHasher(), FixedClock())
+    use_case = RegisterClinic(lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker())
     await use_case.execute(_command())
 
     # Act + Assert : casse différente, même email une fois normalisé par le
@@ -84,3 +92,18 @@ async def test_register_refuse_un_email_deja_utilise() -> None:
         await use_case.execute(_command(email="Manager@Clinique.FR"))
 
     assert uow.commits == 1  # pas de second commit
+
+
+async def test_un_mot_de_passe_compromis_est_refuse_aussi_cote_clinique() -> None:
+    """UNE seule politique pour les deux espaces de comptes : ce qui est
+    refuse a un proprietaire l'est aussi au personnel d'une clinique."""
+    uow = FakeIdentityUnitOfWork()
+    breaches = FakeBreachChecker({"correct-horse-battery"})
+    use_case = RegisterClinic(lambda: uow, FakeHasher(), FixedClock(), breaches)
+
+    with pytest.raises(CompromisedPasswordError):
+        await use_case.execute(_command())
+
+    assert uow.clinic_store == {}
+    assert uow.user_store == {}
+    assert uow.commits == 0

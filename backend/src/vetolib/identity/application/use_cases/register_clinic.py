@@ -9,11 +9,15 @@ User.create) ; la technique vit dans les adapters injectés.
 """
 
 from vetolib.identity.application.dto import RegisterClinicCommand, RegisterClinicResult
-from vetolib.identity.application.ports import IdentityUoWFactory, PasswordHasher
+from vetolib.identity.application.ports import (
+    CompromisedPasswordChecker,
+    IdentityUoWFactory,
+    PasswordHasher,
+)
 from vetolib.identity.domain.clinic import Clinic
-from vetolib.identity.domain.errors import EmailAlreadyExistsError
+from vetolib.identity.domain.errors import CompromisedPasswordError, EmailAlreadyExistsError
 from vetolib.identity.domain.user import User
-from vetolib.identity.domain.value_objects import Email, HashedPassword, Role
+from vetolib.identity.domain.value_objects import Email, HashedPassword, PlainPassword, Role
 from vetolib.shared.application.clock import Clock
 
 
@@ -24,7 +28,8 @@ class RegisterClinic:
     part dans l'outbox avec la même transaction (atomicité garantie).
 
     Déroulé de execute() :
-    1. valider l'email (value object) et hasher le mot de passe (hors TX) ;
+    1. valider l'email et le mot de passe (value objects), vérifier que ce
+       dernier n'est pas compromis, puis le hasher -- le tout hors TX ;
     2. vérifier que l'email est libre côté users ET côté clinics ;
     3. Clinic.register(...) crée l'entité tenant + l'événement domaine ;
     4. User.create(...) crée le premier compte avec le rôle MANAGER ;
@@ -34,18 +39,31 @@ class RegisterClinic:
     """
 
     def __init__(
-        self, uow_factory: IdentityUoWFactory, hasher: PasswordHasher, clock: Clock
+        self,
+        uow_factory: IdentityUoWFactory,
+        hasher: PasswordHasher,
+        clock: Clock,
+        breaches: CompromisedPasswordChecker,
     ) -> None:
         self._uow_factory = uow_factory
         self._hasher = hasher
         self._clock = clock
+        self._breaches = breaches
 
     async def execute(self, cmd: RegisterClinicCommand) -> RegisterClinicResult:
         email = Email(cmd.email)
+        # Même politique que pour les propriétaires (RegisterOwner) : forme
+        # d'abord (value object, gratuit), compromission ensuite (réseau).
+        # Une seule règle pour les deux espaces de comptes, un seul endroit.
+        password = PlainPassword(cmd.password)
+        if await self._breaches.is_compromised(password.value):
+            raise CompromisedPasswordError(
+                "Ce mot de passe figure dans une fuite de données connue. Choisissez-en un autre."
+            )
         now = self._clock.now()
         # Hash AVANT d'ouvrir la transaction : ~50 ms de CPU Argon2 ne doivent
         # pas retenir une connexion du pool.
-        hashed_password = HashedPassword(await self._hasher.hash(cmd.password))
+        hashed_password = HashedPassword(await self._hasher.hash(password.value))
         async with self._uow_factory() as uow:
             # L'email sert d'identifiant de connexion global : il doit être
             # libre dans les deux tables. Recherche pré-tenant (UoW système,

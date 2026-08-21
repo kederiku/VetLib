@@ -98,6 +98,16 @@ export function applyServerErrors<T extends FieldValues>(
         message: "Cette adresse email est déjà utilisée.",
       });
       return;
+    case "identity.password_compromised":
+      // Mot de passe conforme (longueur) mais présent dans une fuite connue :
+      // le backend est le seul à pouvoir le savoir (corpus Have I Been Pwned),
+      // l'erreur arrive donc forcément du serveur. Elle est attribuable à UN
+      // champ précis, on la place dessous plutôt que dans le bandeau global.
+      setError("password" as Path<T>, {
+        message:
+          "Ce mot de passe figure dans une fuite de données connue. Choisissez-en un autre.",
+      });
+      return;
     case "identity.invalid_credentials":
       // Message volontairement flou (email OU mot de passe) : ne jamais
       // révéler si un compte existe pour une adresse donnée.
@@ -111,7 +121,9 @@ export function applyServerErrors<T extends FieldValues>(
       // table partagee fournit le libelle francais. A defaut, on affiche
       // le detail brut du backend, faute de mieux.
       const businessMessage =
-        apiError.code !== undefined ? businessErrorMessage(apiError.code) : null;
+        apiError.code !== undefined
+          ? businessErrorMessage(apiError.code)
+          : null;
       setError("root.server", {
         message: businessMessage ?? apiError.detail,
       });

@@ -17,6 +17,7 @@ nommage : "<contexte>.<cas>".
 from vetolib.shared.domain.errors import (
     ConflictError,
     DomainError,
+    DomainValidationError,
     EntityNotFoundError,
     PermissionDeniedError,
 )
@@ -26,6 +27,23 @@ class EmailAlreadyExistsError(ConflictError):
     """Inscription refusée : email déjà pris (clinique ou utilisateur) -> 409."""
 
     code = "identity.email_already_exists"
+
+
+class CompromisedPasswordError(DomainValidationError):
+    """Mot de passe présent dans une fuite de données connue -> 422.
+
+    Contrepartie de l'abandon des règles de composition (voir la politique
+    dans domain/value_objects.py) : NIST SP 800-63B exige de confronter tout
+    nouveau mot de passe à une liste de secrets compromis. Un mot de passe de
+    20 caractères peut être parfaitement conforme ET déjà connu de tous les
+    attaquants ; seule cette vérification l'attrape.
+
+    Le message reste explicite : contrairement au login, il n'y a ici aucun
+    secret à protéger, et une personne qui ne comprend pas le refus va
+    simplement réessayer avec un autre mot de passe compromis.
+    """
+
+    code = "identity.password_compromised"
 
 
 class InvalidCredentialsError(DomainError):

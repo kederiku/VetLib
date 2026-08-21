@@ -15,6 +15,7 @@ worker TaskIQ pour partager la même app (cf. contrainte plus bas).
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx
 import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,6 +52,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.sessionmaker = sessionmaker
     app.state.redis = aioredis.Redis.from_url(settings.redis_url)
+    # Client HTTP sortant PARTAGÉ (vérification anti-compromission des mots de
+    # passe via Have I Been Pwned). Un client par requête rouvrirait une
+    # connexion TLS à chaque inscription : on garde ici un pool unique, fermé
+    # proprement à l'arrêt comme les autres ressources longues.
+    app.state.http_client = httpx.AsyncClient()
     # Côté API, le broker sert uniquement à ENVOYER des tâches (.kiq). Dans le
     # processus worker, TaskIQ gère lui-même startup/shutdown : pas de doublon.
     if not broker.is_worker_process:
@@ -59,6 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     if not broker.is_worker_process:
         await broker.shutdown()
+    await app.state.http_client.aclose()
     await app.state.redis.aclose()
     await engine.dispose()
 

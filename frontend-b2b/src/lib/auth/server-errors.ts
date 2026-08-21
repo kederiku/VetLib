@@ -125,6 +125,16 @@ export function applyServerErrors<T extends FieldValues>(
         message: "Cette adresse email est déjà utilisée.",
       });
       return;
+    case "identity.password_compromised":
+      // Mot de passe conforme (longueur) mais présent dans une fuite connue :
+      // le backend est le seul à pouvoir le savoir (corpus Have I Been Pwned),
+      // l'erreur arrive donc forcément du serveur. Elle aussi est attribuable
+      // à un champ précis.
+      setError("password" as Path<T>, {
+        message:
+          "Ce mot de passe figure dans une fuite de données connue. Choisissez-en un autre.",
+      });
+      return;
     default:
       // Tous les autres codes vont en bandeau global : le libellé vient
       // de la table API_ERROR_MESSAGES (via messageForApiError), avec le

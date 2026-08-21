@@ -56,6 +56,66 @@ class HashedPassword:
         return "HashedPassword(***)"
 
 
+# --- Politique de mot de passe (NIST SP 800-63B) ----------------------------
+# La SEULE contrainte de forme est la LONGUEUR. Aucune règle de composition
+# (majuscule, chiffre, caractère spécial) : la norme les déconseille
+# explicitement depuis sa révision 3, car elles ne produisent pas de mots de
+# passe plus solides mais des variantes prévisibles ("Motdepasse1!") pendant
+# qu'elles poussent les gens à noter leur mot de passe. La contrepartie exigée
+# par cette même norme est la vérification anti-compromission ; comme elle
+# demande une entrée/sortie (appel réseau ou lecture de fichier), elle ne peut
+# pas vivre ici -- le domaine est pur et synchrone. Elle est portée par le port
+# CompromisedPasswordChecker de la couche application.
+PASSWORD_MIN_LENGTH = 14
+# Le plafond n'est PAS une règle métier, c'est un garde-fou technique : Argon2
+# hache l'entrée telle quelle, donc une chaîne de plusieurs mégaoctets envoyée
+# au formulaire d'inscription serait un déni de service à bon marché. 128
+# laisse toute la place aux phrases de passe (la norme demande d'accepter au
+# moins 64 caractères).
+PASSWORD_MAX_LENGTH = 128
+
+
+@dataclass(frozen=True)
+class PlainPassword:
+    """Mot de passe EN CLAIR, validé contre la politique, avant hachage.
+
+    Value object éphémère : il ne vit que le temps d'un use case
+    d'inscription, entre la frontière HTTP et l'appel au hasher. Sa raison
+    d'être est de rendre impossible le hachage d'un mot de passe qui n'aurait
+    pas été confronté à la politique -- la règle est écrite UNE fois, ici.
+
+    Volontairement SANS normalisation : pas de strip(), pas de casefold. Les
+    espaces de début et de fin font partie du mot de passe choisi par la
+    personne ; les retirer silencieusement rendrait impossible de se
+    reconnecter avec ce qu'elle a réellement tapé.
+
+    A ne pas confondre avec HashedPassword, qui transporte l'empreinte
+    stockée en base. Celui-ci ne doit JAMAIS être persisté ni journalisé,
+    d'où le repr masqué.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        """Valide la longueur ; lève DomainValidationError (-> HTTP 422) sinon.
+
+        len() compte les points de code Unicode : un émoji ou une lettre
+        accentuée vaut un caractère, comme le prévoit la norme.
+        """
+        if len(self.value) < PASSWORD_MIN_LENGTH:
+            raise DomainValidationError(
+                f"Le mot de passe doit contenir au moins {PASSWORD_MIN_LENGTH} caractères."
+            )
+        if len(self.value) > PASSWORD_MAX_LENGTH:
+            raise DomainValidationError(
+                f"Le mot de passe ne peut pas dépasser {PASSWORD_MAX_LENGTH} caractères."
+            )
+
+    def __repr__(self) -> str:
+        # Un log d'exception ne doit jamais exposer un mot de passe en clair.
+        return "PlainPassword(***)"
+
+
 class Role(StrEnum):
     """Rôles du personnel d'une clinique, du moins au plus privilégié.
 

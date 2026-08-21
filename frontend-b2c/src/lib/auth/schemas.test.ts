@@ -14,8 +14,10 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { PASSWORD_MIN_LENGTH } from "@/lib/auth/password-policy";
 import {
   loginSchema,
+  onboardingAddressSchema,
   profileSchema,
   registerOwnerSchema,
 } from "@/lib/auth/schemas";
@@ -65,24 +67,56 @@ describe("loginSchema", () => {
   });
 });
 
-describe("registerOwnerSchema", () => {
+describe("registerOwnerSchema — étape 1 du parcours d'inscription", () => {
   const valide = {
     first_name: "Marie",
     last_name: "Dupont",
     email: "marie@example.test",
-    password: "motdepasse-tres-long",
+    phone: "0612345678",
+    password: "phrase-de-passe-a-moi",
+    password_confirmation: "phrase-de-passe-a-moi",
   };
 
-  it("accepte une inscription minimale", () => {
+  it("accepte une inscription complète", () => {
     expect(registerOwnerSchema.safeParse(valide).success).toBe(true);
   });
 
-  it("exige au moins 12 caractères pour le mot de passe", () => {
-    // À l'inscription, en revanche, on impose la règle actuelle.
+  it("applique la longueur minimale de la politique", () => {
+    // À l'inscription, on impose la règle ; au login, jamais (voir plus haut).
+    const tropCourt = "a".repeat(PASSWORD_MIN_LENGTH - 1);
     expect(
-      registerOwnerSchema.safeParse({ ...valide, password: "onzecarac." })
-        .success,
+      registerOwnerSchema.safeParse({
+        ...valide,
+        password: tropCourt,
+        password_confirmation: tropCourt,
+      }).success,
     ).toBe(false);
+  });
+
+  it("n'impose AUCUNE règle de composition", () => {
+    // Choix délibéré, conforme à NIST SP 800-63B : la longueur seule. Ce
+    // test verrouille l'absence de règle, qui est la première chose que
+    // quelqu'un « corrigerait » de bonne foi.
+    const phrase = "mon chat rex adore les croquettes";
+    expect(
+      registerOwnerSchema.safeParse({
+        ...valide,
+        password: phrase,
+        password_confirmation: phrase,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("refuse une confirmation qui ne correspond pas", () => {
+    const resultat = registerOwnerSchema.safeParse({
+      ...valide,
+      password_confirmation: "phrase-de-passe-autre",
+    });
+
+    expect(resultat.success).toBe(false);
+    // L'erreur doit se poser sous la CONFIRMATION : c'est elle qu'on demande
+    // de corriger, pas le mot de passe qui vient d'être choisi.
+    expect(resultat.error?.issues[0].path).toEqual(["password_confirmation"]);
   });
 
   it("applique le trim AVANT de vérifier la longueur minimale", () => {
@@ -92,11 +126,53 @@ describe("registerOwnerSchema", () => {
     ).toBe(false);
   });
 
-  it("rend le téléphone facultatif", () => {
-    expect(registerOwnerSchema.safeParse(valide).success).toBe(true);
+  it("exige le téléphone", () => {
+    // Règle du PARCOURS, pas du contrat d'API : le backend l'accepte
+    // nullable, et la fiche /account permet de l'effacer ensuite (voir
+    // profileSchema, où il reste facultatif).
+    // Object.fromEntries plutôt qu'une déstructuration : on veut le cas
+    // « clé absente », pas une variable inutilisée.
+    const sansTelephone = Object.fromEntries(
+      Object.entries(valide).filter(([cle]) => cle !== "phone"),
+    );
+    expect(registerOwnerSchema.safeParse(sansTelephone).success).toBe(false);
     expect(
-      registerOwnerSchema.safeParse({ ...valide, phone: "0612345678" }).success,
-    ).toBe(true);
+      registerOwnerSchema.safeParse({ ...valide, phone: "  " }).success,
+    ).toBe(false);
+  });
+});
+
+describe("onboardingAddressSchema — étape 2, entièrement facultative", () => {
+  const vide = { line1: "", line2: "", postal_code: "", city: "" };
+
+  it("accepte une adresse entièrement vide", () => {
+    // L'étape est passable : ne rien saisir est un état valide, et le
+    // formulaire n'enverra alors aucune requête.
+    expect(onboardingAddressSchema.safeParse(vide).success).toBe(true);
+  });
+
+  it("exige les trois champs essentiels dès que l'adresse est entamée", () => {
+    // Même règle tout-ou-rien que la fiche profil : le backend n'accepte
+    // qu'une adresse nulle ou complète.
+    const resultat = onboardingAddressSchema.safeParse({
+      ...vide,
+      line1: "12 rue des Lilas",
+    });
+
+    expect(resultat.success).toBe(false);
+    const chemins = resultat.error?.issues.map((issue) => issue.path[0]);
+    expect(chemins).toEqual(["postal_code", "city"]);
+  });
+
+  it("refuse un code postal qui n'est pas français", () => {
+    expect(
+      onboardingAddressSchema.safeParse({
+        line1: "12 rue des Lilas",
+        line2: "",
+        postal_code: "7501",
+        city: "Paris",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -187,9 +263,9 @@ describe("profileSchema — champs d'identité", () => {
   });
 
   it("plafonne les longueurs", () => {
-    expect(chemins({ ...profilValide(), first_name: "a".repeat(101) })).toEqual([
-      "first_name",
-    ]);
+    expect(chemins({ ...profilValide(), first_name: "a".repeat(101) })).toEqual(
+      ["first_name"],
+    );
     expect(chemins({ ...profilValide(), phone: "0".repeat(31) })).toEqual([
       "phone",
     ]);

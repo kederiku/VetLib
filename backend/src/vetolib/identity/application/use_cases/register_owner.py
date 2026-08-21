@@ -6,10 +6,14 @@ la même transaction. Flux pré-tenant par nature -> UoW système.
 """
 
 from vetolib.identity.application.dto import RegisterOwnerCommand, RegisterOwnerResult
-from vetolib.identity.application.ports import IdentityUoWFactory, PasswordHasher
-from vetolib.identity.domain.errors import EmailAlreadyExistsError
+from vetolib.identity.application.ports import (
+    CompromisedPasswordChecker,
+    IdentityUoWFactory,
+    PasswordHasher,
+)
+from vetolib.identity.domain.errors import CompromisedPasswordError, EmailAlreadyExistsError
 from vetolib.identity.domain.owner import Owner
-from vetolib.identity.domain.value_objects import Email, HashedPassword
+from vetolib.identity.domain.value_objects import Email, HashedPassword, PlainPassword
 from vetolib.shared.application.clock import Clock
 
 
@@ -17,18 +21,32 @@ class RegisterOwner:
     """Crée le compte propriétaire et émet l'événement d'inscription."""
 
     def __init__(
-        self, uow_factory: IdentityUoWFactory, hasher: PasswordHasher, clock: Clock
+        self,
+        uow_factory: IdentityUoWFactory,
+        hasher: PasswordHasher,
+        clock: Clock,
+        breaches: CompromisedPasswordChecker,
     ) -> None:
         self._uow_factory = uow_factory
         self._hasher = hasher
         self._clock = clock
+        self._breaches = breaches
 
     async def execute(self, cmd: RegisterOwnerCommand) -> RegisterOwnerResult:
         email = Email(cmd.email)
+        # Politique de mot de passe en DEUX temps, du moins cher au plus cher :
+        # 1. la forme (longueur), verdict immédiat rendu par le value object ;
+        # 2. la compromission, qui coûte un appel réseau -- inutile de le
+        #    payer pour un mot de passe déjà refusé à l'étape précédente.
+        password = PlainPassword(cmd.password)
+        if await self._breaches.is_compromised(password.value):
+            raise CompromisedPasswordError(
+                "Ce mot de passe figure dans une fuite de données connue. Choisissez-en un autre."
+            )
         now = self._clock.now()
         # Hash AVANT d'ouvrir la transaction : ~50 ms de CPU Argon2 ne doivent
         # pas retenir une connexion du pool.
-        hashed_password = HashedPassword(await self._hasher.hash(cmd.password))
+        hashed_password = HashedPassword(await self._hasher.hash(password.value))
         async with self._uow_factory() as uow:
             # Unicité restreinte à l'espace owners : un email deja utilisé par
             # un compte STAFF (users) n'est pas bloquant — les deux espaces de

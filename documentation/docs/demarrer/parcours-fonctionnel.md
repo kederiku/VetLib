@@ -56,7 +56,33 @@ heures locales.
 
 ## 3. Créer un compte propriétaire et un animal — portail B2C
 
-Sur <http://localhost:3000>, inscrivez-vous puis ajoutez un animal.
+Sur <http://localhost:3000>, suivez l'inscription. Elle se déroule en **trois étapes** :
+
+1. **Le compte** : prénom, nom, email, téléphone et mot de passe. C'est la seule étape
+   obligatoire — à sa validation, le compte existe et la session s'ouvre.
+2. **L'adresse** : facultative, passable d'un clic.
+3. **Les animaux** : nom et espèce, autant que vous voulez. Facultative également.
+
+Ce découpage a une conséquence qui mérite d'être comprise : **chaque étape écrit
+immédiatement**. Abandonner après l'étape 1 laisse un compte parfaitement utilisable, que
+l'on complète ensuite depuis « Mon compte » et « Mes animaux ».
+
+Pourquoi créer le compte dès la première étape plutôt qu'à la fin ? Pour que « cette
+adresse est déjà utilisée » remonte tout de suite. L'alternative — vérifier la
+disponibilité de l'email avant de créer quoi que ce soit — exigerait un endpoint public
+répondant « ce compte existe » à qui le demande : exactement l'oracle d'énumération que le
+reste de l'authentification s'attache à éviter.
+
+Aucun endpoint n'a été créé pour ce parcours : les trois étapes s'enchaînent sur
+`POST /owner/auth/register`, `POST /owner/auth/login`, `PUT /owner/profile` et
+`POST /owner/pets`. L'étape 3 ferait sinon écrire le contexte `patients` depuis un flux
+qui appartient à `identity`.
+
+:::tip Essayez un mot de passe connu
+Saisissez `passwordpassword` : 16 caractères, conforme en longueur, et pourtant refusé. Il
+figure dans les fuites de données publiques. Voir
+[la politique de mot de passe](../architecture/authentification.md#la-politique-de-mot-de-passe).
+:::
 
 Le compte créé est **global** : il ne dépend d'aucune clinique. C'est pourquoi ni
 `owners` ni `pets` ne portent de `clinic_id`, et pourquoi le même email peut exister à la

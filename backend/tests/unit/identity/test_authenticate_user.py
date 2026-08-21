@@ -13,6 +13,7 @@ exception du domaine attendue).
 import pytest
 
 from tests.unit.identity.fakes import (
+    FakeBreachChecker,
     FakeHasher,
     FakeIdentityUnitOfWork,
     FakeTokenProvider,
@@ -34,7 +35,7 @@ async def _uow_with_account() -> FakeIdentityUnitOfWork:
     instance, que le test garde sous la main pour inspecter son contenu.
     """
     uow = FakeIdentityUnitOfWork()
-    await RegisterClinic(lambda: uow, FakeHasher(), FixedClock()).execute(
+    await RegisterClinic(lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker()).execute(
         RegisterClinicCommand(
             clinic_name="Clinique des Lilas",
             phone=None,

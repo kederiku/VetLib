@@ -243,3 +243,93 @@ async def test_adresse_invalide_refusee_en_422_sans_persistance(
     response = await client.get("/api/v1/owner/auth/me")
     assert response.status_code == 200
     assert response.json()["address"] is None
+
+
+async def test_politique_de_mot_de_passe_a_l_inscription(client: httpx.AsyncClient) -> None:
+    """Le mot de passe trop court est refuse a la FRONTIERE HTTP, avec une
+    erreur localisee sous le champ.
+
+    Le format compte autant que le refus : les frontends lisent detail[].loc
+    pour placer le message sous le bon champ. Une DomainValidationError brute
+    sortirait en {code, detail} sans loc, et l'erreur atterrirait dans le
+    bandeau global -- d'ou le validateur Pydantic dedie. Le message doit aussi
+    etre en francais, pas le texte anglais par defaut de Pydantic.
+    """
+    response = await client.post(
+        "/api/v1/owner/auth/register",
+        json={**OWNER_PAYLOAD, "email": "court@exemple.fr", "password": "trop-court"},
+    )
+
+    assert response.status_code == 422, response.text
+    erreurs = response.json()["detail"]
+    assert erreurs[0]["loc"] == ["body", "password"]
+    assert "14 caract" in erreurs[0]["msg"]
+
+
+async def test_mot_de_passe_notoirement_previsible_est_refuse(
+    client: httpx.AsyncClient,
+) -> None:
+    """HIBP_ENABLED=false dans l'environnement de test : c'est la liste
+    embarquee qui repond, sans aucun appel sortant. Elle suffit a prouver que
+    la verification est bien branchee sur le parcours d'inscription."""
+    response = await client.post(
+        "/api/v1/owner/auth/register",
+        json={**OWNER_PAYLOAD, "email": "previsible@exemple.fr", "password": "motdepasse1234"},
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "identity.password_compromised"
+
+
+async def test_parcours_d_inscription_en_trois_etapes(client: httpx.AsyncClient) -> None:
+    """Le parcours du portail B2C, endpoint par endpoint.
+
+    Aucun endpoint n'a ete cree pour lui : l'interet du test est justement de
+    prouver que les trois etapes s'enchainent sur l'existant, et que chacune
+    laisse le compte dans un etat exploitable -- une personne qui abandonne
+    apres l'etape 1 a deja un compte utilisable.
+    """
+    # Etape 1 : identite + telephone -> le compte existe, la session s'ouvre.
+    response = await client.post(
+        "/api/v1/owner/auth/register",
+        json={**OWNER_PAYLOAD, "email": "parcours@exemple.fr"},
+    )
+    assert response.status_code == 201, response.text
+    response = await client.post(
+        "/api/v1/owner/auth/login",
+        json={"email": "parcours@exemple.fr", "password": OWNER_PAYLOAD["password"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["phone"] == "+33601020304"
+
+    # Etape 2 : l'adresse, sur la session ouverte a l'etape 1. Le PUT est un
+    # remplacement COMPLET : le front renvoie les champs deja connus.
+    response = await client.put(
+        "/api/v1/owner/profile",
+        json={
+            "first_name": "Ana",
+            "last_name": "Martin",
+            "phone": "+33601020304",
+            "address": {
+                "line1": "12 rue des Lilas",
+                "line2": None,
+                "postal_code": "75011",
+                "city": "Paris",
+                "country": "FR",
+            },
+            "notification_preferences": {"email": True, "sms": False},
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["address"]["city"] == "Paris"
+
+    # Etape 3 : les animaux, un appel par ligne du formulaire.
+    for nom, espece in (("Rex", "dog"), ("Mistigri", "cat")):
+        response = await client.post("/api/v1/owner/pets", json={"name": nom, "species": espece})
+        assert response.status_code == 201, response.text
+
+    # Etat final : la fiche est complete et les deux animaux sont rattaches.
+    response = await client.get("/api/v1/owner/auth/me")
+    assert response.json()["address"]["postal_code"] == "75011"
+    response = await client.get("/api/v1/owner/pets")
+    assert [pet["name"] for pet in response.json()] == ["Mistigri", "Rex"]

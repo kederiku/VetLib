@@ -27,7 +27,11 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from vetolib.identity.application.dto import CurrentOwner, CurrentUser
-from vetolib.identity.application.ports import IdentityUnitOfWork, IdentityUoWFactory
+from vetolib.identity.application.ports import (
+    CompromisedPasswordChecker,
+    IdentityUnitOfWork,
+    IdentityUoWFactory,
+)
 from vetolib.identity.application.use_cases import (
     AuthenticateOwner,
     AuthenticateUser,
@@ -41,6 +45,11 @@ from vetolib.identity.application.use_cases import (
     RegisterOwner,
     UpdateClinicProfile,
     UpdateOwnerProfile,
+)
+from vetolib.identity.infrastructure.password_breach import (
+    FallbackPasswordChecker,
+    HibpPasswordChecker,
+    LocalBlocklistPasswordChecker,
 )
 from vetolib.identity.infrastructure.password_hasher import PwdlibPasswordHasher
 from vetolib.identity.infrastructure.token_provider import (
@@ -80,6 +89,36 @@ def get_clock() -> SystemClock:
 
 def get_password_hasher() -> PwdlibPasswordHasher:
     return _hasher
+
+
+def get_compromised_password_checker(
+    request: Request, settings: SettingsDep
+) -> CompromisedPasswordChecker:
+    """Assemble la vérification anti-compromission des mots de passe.
+
+    Deux montages selon la configuration :
+    - HIBP activé (défaut) : le composite interroge Have I Been Pwned et se
+      rabat sur la liste embarquée si le réseau fait défaut ;
+    - HIBP désactivé (HIBP_ENABLED=false, mode des tests) : la liste embarquée
+      SEULE, donc aucun appel sortant.
+
+    Le client httpx vient de app.state : créé une fois au démarrage (lifespan),
+    il mutualise le pool de connexions au lieu d'en rouvrir un par inscription.
+    Le chargement du fichier de repli, lui, est mis en cache par
+    load_common_passwords : le construire ici à chaque requête ne coûte rien.
+    """
+    locale = LocalBlocklistPasswordChecker()
+    if not settings.hibp_enabled:
+        return locale
+    hibp = HibpPasswordChecker(
+        request.app.state.http_client,
+        api_url=settings.hibp_api_url,
+        timeout_seconds=settings.hibp_timeout_seconds,
+    )
+    return FallbackPasswordChecker(hibp, locale)
+
+
+BreachCheckerDep = Annotated[CompromisedPasswordChecker, Depends(get_compromised_password_checker)]
 
 
 def get_token_provider(settings: SettingsDep) -> PyJWTTokenProvider:
@@ -123,8 +162,9 @@ def get_register_clinic(
     uow_factory: UoWFactoryDep,
     hasher: Annotated[PwdlibPasswordHasher, Depends(get_password_hasher)],
     clock: Annotated[SystemClock, Depends(get_clock)],
+    breaches: BreachCheckerDep,
 ) -> RegisterClinic:
-    return RegisterClinic(uow_factory, hasher, clock)
+    return RegisterClinic(uow_factory, hasher, clock, breaches)
 
 
 def get_authenticate_user(
@@ -225,8 +265,9 @@ def get_register_owner(
     uow_factory: UoWFactoryDep,
     hasher: Annotated[PwdlibPasswordHasher, Depends(get_password_hasher)],
     clock: Annotated[SystemClock, Depends(get_clock)],
+    breaches: BreachCheckerDep,
 ) -> RegisterOwner:
-    return RegisterOwner(uow_factory, hasher, clock)
+    return RegisterOwner(uow_factory, hasher, clock, breaches)
 
 
 def get_authenticate_owner(

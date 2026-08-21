@@ -1,14 +1,21 @@
 /**
- * Page /register du portail propriétaires (création de compte).
+ * Page /register du portail propriétaires (parcours d'inscription).
  *
- * Server Component mince : métadonnées SEO + délégation au Client
- * Component RegisterOwnerForm, sous GuestGuard (un propriétaire déjà
- * connecté n'a pas à recréer un compte depuis cet écran).
+ * Server Component mince : métadonnées SEO + délégation au Client Component
+ * RegisterWizard.
+ *
+ * Le GuestGuard n'est PAS posé ici mais À L'INTÉRIEUR du wizard : l'étape 1
+ * crée le compte et ouvre la session, les étapes suivantes se déroulent donc
+ * connecté sur cette même page. Un garde posé au niveau de la page éjecterait
+ * la personne vers /account au milieu de son inscription.
+ *
+ * max-w-xl (et non le max-w-md de /login) : le parcours porte un bloc adresse
+ * et une liste d'animaux, trop à l'étroit dans la largeur d'un formulaire de
+ * connexion.
  */
 import type { Metadata } from "next";
 
-import { GuestGuard } from "@/components/auth/guest-guard";
-import { RegisterOwnerForm } from "@/components/auth/register-owner-form";
+import { RegisterWizard } from "@/components/auth/register/register-wizard";
 
 export const metadata: Metadata = {
   title: "Créer mon compte — VetoLib",
@@ -18,8 +25,8 @@ export const metadata: Metadata = {
 
 export default function RegisterPage() {
   return (
-    <GuestGuard>
-      <RegisterOwnerForm />
-    </GuestGuard>
+    <div className="mx-auto w-full max-w-xl">
+      <RegisterWizard />
+    </div>
   );
 }
