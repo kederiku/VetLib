@@ -5,9 +5,13 @@
  * 24 h est deja pre-verifiee par canCancel() cote affichage, mais le
  * backend reste l'AUTORITE : s'il repond 409 (delai depasse entre
  * l'affichage et le clic, ou transition invalide), le message metier
- * francais remonte au parent via onError — l'Alert s'affiche DANS la
- * carte du rendez-vous, pas ici, car le dialogue se ferme dans tous les
- * cas apres la tentative.
+ * francais part en TOAST.
+ *
+ * Pourquoi un toast et non un bandeau inline : le dialogue se ferme dans
+ * tous les cas apres la tentative, un bandeau n'aurait donc nulle part
+ * ou s'afficher. La regle du portail est la suivante -- si l'utilisateur
+ * doit AGIR (corriger un champ), c'est inline ; si on l'informe que
+ * c'est fait ou que ca a echoue, c'est un toast.
  *
  * Point cle : meme en cas d'ECHEC on invalide la liste des rendez-vous.
  * Un 409 signifie que notre copie locale etait perimee (statut ou
@@ -17,6 +21,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -43,15 +48,16 @@ interface CancelAppointmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   appointment: OwnerAppointmentResponse;
-  /** Recoit le message d'erreur francais a afficher dans la carte. */
-  onError: (message: string) => void;
+  /** Appele apres une annulation REUSSIE (la fiche de detail s'en sert
+   *  pour revenir a la liste). */
+  onCancelled?: () => void;
 }
 
 export function CancelAppointmentDialog({
   open,
   onOpenChange,
   appointment,
-  onError,
+  onCancelled,
 }: CancelAppointmentDialogProps) {
   const queryClient = useQueryClient();
   const cancelMutation = useCancelMyAppointment<ApiError>();
@@ -70,11 +76,13 @@ export function CancelAppointmentDialog({
       void queryClient.invalidateQueries({
         queryKey: getListAvailabilitiesQueryKey(appointment.clinic_id),
       });
+      toast.success("Rendez-vous annulé");
+      onCancelled?.();
     } catch (error) {
       const apiError = getApiError(error);
       // Message metier connu (cancellation_too_late...) -> libelle
       // francais partage ; sinon detail brut ou message reseau.
-      onError(
+      toast.error(
         apiError !== null
           ? (businessErrorMessage(apiError.code ?? "") ?? apiError.detail)
           : "Impossible de contacter le serveur. Vérifiez votre connexion et réessayez.",

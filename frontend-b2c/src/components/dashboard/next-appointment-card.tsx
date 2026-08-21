@@ -158,9 +158,9 @@ export function NextAppointmentCard({ now }: { now: Date }) {
           <Button
             variant="outline"
             nativeButton={false}
-            render={<Link href="/rendez-vous" />}
+            render={<Link href={`/rendez-vous/${prochain.id}`} />}
           >
-            Tous mes rendez-vous
+            Voir le détail
           </Button>
         </CardFooter>
       )}

@@ -1,203 +1,277 @@
 /**
  * Tests de la page « Mes rendez-vous ».
  *
- * La page partage la liste en deux sections, à venir et passés, sur le seul
- * critère de la DATE. Deux tris opposés s'y appliquent : les prochains du plus
- * proche au plus lointain, les passés du plus récent au plus ancien. Une
- * inversion ne lève aucune erreur — elle enterre simplement le rendez-vous le
- * plus utile en bas de page.
+ * Trois décisions y sont verrouillées, et aucune n'est évidente en
+ * relisant le composant :
+ *
+ * 1. le partage à venir / passés se fait sur l'HEURE et non sur le
+ *    statut — un rendez-vous futur annulé reste dans « À venir », car le
+ *    propriétaire doit voir que son créneau de jeudi est tombé ;
+ * 2. un onglet vide APRES FILTRE ne dit pas la même chose qu'un écran
+ *    vide de premier usage : réutiliser « prenez votre premier
+ *    rendez-vous » quand la personne en a douze mais a filtré trop fin
+ *    serait un contresens ;
+ * 3. les filtres ne s'affichent que s'ils ont quelque chose à trier.
  */
 import { screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppointmentsContent } from "@/components/appointments/appointments-content";
-import { buildOwnerAppointment } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { getListMyAppointmentsQueryKey } from "@/lib/api/generated/owner-appointments/owner-appointments";
+import { getListMyPetsQueryKey } from "@/lib/api/generated/pets/pets";
+import type {
+  OwnerAppointmentResponse,
+  PetResponse,
+} from "@/lib/api/generated/vetoLibAPI.schemas";
+import { buildOwnerAppointment, buildPet } from "@/test/fixtures";
+import { createTestQueryClient, renderWithProviders } from "@/test/render";
 
-const simulations = vi.hoisted(() => ({ useListMyAppointments: vi.fn() }));
+const navigation = vi.hoisted(() => ({
+  params: new URLSearchParams(),
+  replace: vi.fn(),
+}));
 
-vi.mock(
-  "@/lib/api/generated/owner-appointments/owner-appointments",
-  async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import("@/lib/api/generated/owner-appointments/owner-appointments")
-    >()),
-    useListMyAppointments: simulations.useListMyAppointments,
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/rendez-vous",
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: navigation.replace,
+    prefetch: vi.fn(),
   }),
-);
+  useSearchParams: () => navigation.params,
+}));
 
-function requete(surcharges: Record<string, unknown> = {}) {
-  return { data: undefined, isPending: false, isError: false, ...surcharges };
-}
+// Le vrai "maintenant" du composant est new Date() : les fixtures sont
+// datees de 2026, donc "futur" et "passe" dependent de l'horloge. On la
+// fige pour que les tests ne changent pas de sens avec le temps.
+const MAINTENANT = new Date("2026-08-20T10:00:00Z");
 
-/** La section demandée, pour y restreindre les recherches. */
-function section(nom: "À venir" | "Passés"): HTMLElement {
-  return screen.getByRole("heading", { name: nom, level: 2 }).parentElement!;
+function afficher(
+  appointments: OwnerAppointmentResponse[],
+  pets: PetResponse[] = [],
+) {
+  const queryClient = createTestQueryClient();
+  const enveloppe = (data: unknown) => ({
+    status: 200,
+    data,
+    headers: new Headers(),
+  });
+  queryClient.setQueryData(
+    getListMyAppointmentsQueryKey(),
+    enveloppe(appointments),
+  );
+  queryClient.setQueryData(getListMyPetsQueryKey(), enveloppe(pets));
+  return renderWithProviders(<AppointmentsContent />, { queryClient });
 }
 
 beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: true });
-  vi.setSystemTime(new Date("2026-08-20T09:00:00Z"));
+  navigation.params = new URLSearchParams();
+  navigation.replace.mockClear();
+  vi.setSystemTime(MAINTENANT);
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-  vi.clearAllMocks();
-});
+const FUTUR = "2026-08-25T07:00:00Z";
+// De VRAIS UUID : le parsing defensif de l'URL rejette toute autre forme,
+// un identifiant "rex" retomberait sur "tous les animaux" et le test
+// verifierait le repli au lieu du filtre.
+const REX = "00000000-0000-0000-0000-0000000000e1";
+const MISTIGRI = "00000000-0000-0000-0000-0000000000e2";
+const PASSE = "2026-08-05T07:00:00Z";
 
 describe("AppointmentsContent — états", () => {
-  it("garde le titre et l'accès à la réservation pendant le chargement", () => {
-    // Le bouton principal ne doit jamais disparaître : c'est l'action que
-    // le propriétaire vient chercher, indépendamment de sa liste.
-    simulations.useListMyAppointments.mockReturnValue(requete({ isPending: true }));
-    renderWithProviders(<AppointmentsContent />);
+  it("propose de commencer quand aucun rendez-vous n'existe", () => {
+    afficher([]);
+
+    expect(
+      screen.getByText("Aucun rendez-vous pour l'instant"),
+    ).toBeInTheDocument();
+    // Pas d'onglets : deux onglets vides seraient absurdes.
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  });
+
+  it("garde le titre et l'accès à la réservation en toutes circonstances", () => {
+    afficher([]);
 
     expect(
       screen.getByRole("heading", { name: "Mes rendez-vous", level: 1 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Prendre rendez-vous/ }),
-    ).toBeInTheDocument();
-  });
-
-  it("annonce l'échec du chargement", () => {
-    simulations.useListMyAppointments.mockReturnValue(requete({ isError: true }));
-    renderWithProviders(<AppointmentsContent />);
-
-    expect(
-      screen.getByText(/Impossible de charger vos rendez-vous/),
-    ).toBeInTheDocument();
-  });
-
-  it("propose de commencer quand aucun rendez-vous n'existe", () => {
-    // Un écran vide sans issue est une impasse : l'état vide porte lui-même
-    // l'invitation à réserver.
-    simulations.useListMyAppointments.mockReturnValue(requete({ data: [] }));
-    renderWithProviders(<AppointmentsContent />);
-
-    expect(
-      screen.getByText("Aucun rendez-vous pour l'instant"),
-    ).toBeInTheDocument();
-    // Les sections ne sont pas rendues du tout dans cet état.
-    expect(
-      screen.queryByRole("heading", { name: "À venir" }),
-    ).not.toBeInTheDocument();
+      screen.getAllByRole("button", { name: "Prendre rendez-vous" }).length,
+    ).toBeGreaterThan(0);
   });
 });
 
-describe("AppointmentsContent — partage à venir / passés", () => {
-  it("range chaque rendez-vous selon sa date", () => {
-    simulations.useListMyAppointments.mockReturnValue(
-      requete({
-        data: [
-          buildOwnerAppointment({
-            id: "futur",
-            starts_at: "2026-08-25T07:00:00Z",
-            appointment_type_name: "Contrôle à venir",
-          }),
-          buildOwnerAppointment({
-            id: "passe",
-            starts_at: "2026-08-10T07:00:00Z",
-            appointment_type_name: "Contrôle passé",
-          }),
-        ],
-      }),
-    );
-    renderWithProviders(<AppointmentsContent />);
+describe("AppointmentsContent — onglets", () => {
+  it("compte les rendez-vous de chaque onglet dans son libellé", () => {
+    afficher([
+      buildOwnerAppointment({ id: "1", starts_at: FUTUR }),
+      buildOwnerAppointment({ id: "2", starts_at: PASSE }),
+      buildOwnerAppointment({ id: "3", starts_at: PASSE }),
+    ]);
 
-    expect(
-      within(section("À venir")).getByText(/Contrôle à venir/),
-    ).toBeInTheDocument();
-    expect(
-      within(section("Passés")).getByText(/Contrôle passé/),
-    ).toBeInTheDocument();
-  });
-
-  it("classe les prochains du plus proche au plus lointain", () => {
-    simulations.useListMyAppointments.mockReturnValue(
-      requete({
-        data: [
-          buildOwnerAppointment({
-            id: "lointain",
-            starts_at: "2026-09-30T07:00:00Z",
-            appointment_type_name: "Rappel lointain",
-          }),
-          buildOwnerAppointment({
-            id: "proche",
-            starts_at: "2026-08-21T07:00:00Z",
-            appointment_type_name: "Visite proche",
-          }),
-        ],
-      }),
-    );
-    renderWithProviders(<AppointmentsContent />);
-
-    const textes = within(section("À venir"))
-      .getAllByText(/Rappel lointain|Visite proche/)
-      .map((element) => element.textContent);
-    expect(textes[0]).toContain("Visite proche");
-  });
-
-  it("classe les passés du plus récent au plus ancien", () => {
-    // Tri INVERSE de la section précédente : ce qui vient de se passer est
-    // ce dont on se souvient le moins bien, donc ce qu'on cherche d'abord.
-    simulations.useListMyAppointments.mockReturnValue(
-      requete({
-        data: [
-          buildOwnerAppointment({
-            id: "ancien",
-            starts_at: "2026-01-10T07:00:00Z",
-            appointment_type_name: "Visite ancienne",
-          }),
-          buildOwnerAppointment({
-            id: "recent",
-            starts_at: "2026-08-18T07:00:00Z",
-            appointment_type_name: "Visite récente",
-          }),
-        ],
-      }),
-    );
-    renderWithProviders(<AppointmentsContent />);
-
-    const textes = within(section("Passés"))
-      .getAllByText(/Visite ancienne|Visite récente/)
-      .map((element) => element.textContent);
-    expect(textes[0]).toContain("Visite récente");
+    expect(screen.getByRole("tab", { name: "À venir (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Passés (2)" })).toBeInTheDocument();
   });
 
   it("classe un rendez-vous futur ANNULÉ dans « À venir »", () => {
-    // Constat, pas souhait : le partage se fait sur la date seule, jamais
-    // sur le statut. Le badge « Annulé » porte l'information. Ce test fige
-    // le comportement réel pour qu'un changement soit un choix délibéré.
-    simulations.useListMyAppointments.mockReturnValue(
-      requete({
-        data: [
-          buildOwnerAppointment({
-            id: "annule",
-            starts_at: "2026-08-25T07:00:00Z",
-            appointment_type_name: "Visite annulée",
-            status: "cancelled",
-          }),
-        ],
-      }),
+    // Le partage se fait sur l'heure, pas sur le statut : le
+    // propriétaire doit voir que son créneau de jeudi est tombé.
+    afficher([
+      buildOwnerAppointment({ id: "1", starts_at: FUTUR, status: "cancelled" }),
+    ]);
+
+    expect(screen.getByRole("tab", { name: "À venir (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Passés (0)" })).toBeInTheDocument();
+  });
+
+  it("ouvre l'onglet demandé par l'URL", () => {
+    // Ce qui permet à la fiche d'un animal de pointer vers l'historique.
+    navigation.params = new URLSearchParams("vue=passes");
+    afficher([buildOwnerAppointment({ id: "2", starts_at: PASSE })]);
+
+    expect(screen.getByRole("tab", { name: "Passés (1)" })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
-    renderWithProviders(<AppointmentsContent />);
+  });
+
+  it("retombe sur « À venir » si l'URL dit n'importe quoi", () => {
+    // L'URL est une entrée utilisateur : elle ne doit pas casser l'écran.
+    navigation.params = new URLSearchParams("vue=bricolage");
+    afficher([buildOwnerAppointment({ id: "1", starts_at: FUTUR })]);
+
+    expect(screen.getByRole("tab", { name: "À venir (1)" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+});
+
+describe("AppointmentsContent — filtres", () => {
+  it("n'affiche pas de filtre animal pour un propriétaire qui n'en a qu'un", () => {
+    // Un menu qui ne propose qu'une valeur donne l'impression d'une
+    // interface plus compliquée qu'elle ne l'est.
+    afficher(
+      [buildOwnerAppointment({ id: "1", starts_at: FUTUR })],
+      [buildPet({ id: REX, name: "Rex" })],
+    );
 
     expect(
-      within(section("À venir")).getByText(/Visite annulée/),
+      screen.queryByRole("combobox", { name: "Filtrer par animal" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("propose le filtre dès qu'il y a deux animaux", () => {
+    afficher(
+      [buildOwnerAppointment({ id: "1", starts_at: FUTUR })],
+      [
+        buildPet({ id: REX, name: "Rex" }),
+        buildPet({ id: MISTIGRI, name: "Mistigri" }),
+      ],
+    );
+
+    expect(
+      screen.getByRole("combobox", { name: "Filtrer par animal" }),
     ).toBeInTheDocument();
   });
 
-  it("le dit quand une section est vide alors que l'autre ne l'est pas", () => {
-    simulations.useListMyAppointments.mockReturnValue(
-      requete({
-        data: [
-          buildOwnerAppointment({ id: "futur", starts_at: "2026-08-25T07:00:00Z" }),
-        ],
+  it("applique le filtre animal venu de l'URL", () => {
+    navigation.params = new URLSearchParams(`animal=${REX}`);
+    afficher(
+      [
+        buildOwnerAppointment({ id: "1", starts_at: FUTUR, pet_id: REX }),
+        buildOwnerAppointment({ id: "2", starts_at: FUTUR, pet_id: MISTIGRI }),
+      ],
+      [
+        buildPet({ id: REX, name: "Rex" }),
+        buildPet({ id: MISTIGRI, name: "Mistigri" }),
+      ],
+    );
+
+    // Un seul des deux rendez-vous à venir survit au filtre.
+    expect(screen.getByRole("tab", { name: "À venir (1)" })).toBeInTheDocument();
+  });
+
+  it("dit autre chose quand le vide vient d'un filtre, et propose d'en sortir", () => {
+    // Contresens à éviter : réutiliser l'état vide de premier usage pour
+    // quelqu'un qui a des rendez-vous mais a filtré trop fin.
+    navigation.params = new URLSearchParams(`animal=${MISTIGRI}`);
+    afficher(
+      [buildOwnerAppointment({ id: "1", starts_at: FUTUR, pet_id: REX })],
+      [
+        buildPet({ id: REX, name: "Rex" }),
+        buildPet({ id: MISTIGRI, name: "Mistigri" }),
+      ],
+    );
+
+    expect(
+      screen.getByText("Aucun rendez-vous à venir pour ce filtre."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Réinitialiser les filtres" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("AppointmentsContent — historique", () => {
+  /** n rendez-vous passés, espacés d'un jour. */
+  function historique(n: number): OwnerAppointmentResponse[] {
+    return Array.from({ length: n }, (_, index) =>
+      buildOwnerAppointment({
+        id: `p${index}`,
+        starts_at: `2026-07-${String(index + 1).padStart(2, "0")}T07:00:00Z`,
       }),
     );
-    renderWithProviders(<AppointmentsContent />);
+  }
 
-    expect(screen.getByText("Aucun rendez-vous passé.")).toBeInTheDocument();
+  it("n'affiche qu'un premier lot, et propose la suite", async () => {
+    // Pagination CLIENT : la liste complète est déjà en mémoire, montrer
+    // dix de plus ne coûte aucune requête.
+    navigation.params = new URLSearchParams("vue=passes");
+    afficher(historique(14));
+
+    const bouton = screen.getByRole("button", {
+      name: /Afficher 4 rendez-vous de plus/,
+    });
+    await userEvent.setup().click(bouton);
+
+    expect(
+      screen.queryByRole("button", { name: /rendez-vous de plus/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("groupe l'historique par mois, le repère de balayage d'une longue liste", () => {
+    navigation.params = new URLSearchParams("vue=passes");
+    afficher([
+      buildOwnerAppointment({ id: "1", starts_at: "2026-08-05T07:00:00Z" }),
+      buildOwnerAppointment({ id: "2", starts_at: "2026-07-30T07:00:00Z" }),
+    ]);
+
+    expect(
+      screen.getByRole("heading", { name: "août 2026", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "juillet 2026", level: 2 }),
+    ).toBeInTheDocument();
+  });
+
+  it("range les passés du plus récent au plus ancien", () => {
+    navigation.params = new URLSearchParams("vue=passes");
+    const { container } = afficher([
+      buildOwnerAppointment({
+        id: "vieux",
+        starts_at: "2026-07-01T07:00:00Z",
+        appointment_type_name: "Vieille visite",
+      }),
+      buildOwnerAppointment({
+        id: "recent",
+        starts_at: "2026-08-05T07:00:00Z",
+        appointment_type_name: "Visite récente",
+      }),
+    ]);
+
+    const liens = within(container).getAllByRole("link");
+    expect(liens[0]).toHaveAttribute("href", "/rendez-vous/recent");
   });
 });
