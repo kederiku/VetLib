@@ -28,10 +28,10 @@ import {
 } from "@/components/booking/booking-state";
 import { StepClinic } from "@/components/booking/step-clinic";
 import { StepConfirm } from "@/components/booking/step-confirm";
-import { StepIndicator } from "@/components/booking/step-indicator";
 import { StepPet } from "@/components/booking/step-pet";
 import { StepSlot } from "@/components/booking/step-slot";
 import { StepType } from "@/components/booking/step-type";
+import { StepIndicator } from "@/components/common/step-indicator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +42,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { STATUS_LABELS } from "@/lib/appointments/status";
+
+// Libelles des cinq etapes, dans l'ordre. L'index + 1 EST le numero
+// d'etape (BookingStep). Ils vivent ici et non dans le StepIndicator, qui
+// est desormais partage avec le parcours d'inscription.
+const STEP_LABELS = ["Clinique", "Motif", "Animal", "Créneau", "Confirmation"] as const;
 
 export function BookingWizard() {
   const [state, dispatch] = useReducer(bookingReducer, initialBookingState);
@@ -92,7 +97,15 @@ export function BookingWizard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <StepIndicator step={state.step} onStepClick={goToStep} />
+      <StepIndicator
+        labels={STEP_LABELS}
+        ariaLabel="Étapes de la réservation"
+        step={state.step}
+        // Le composant commun raisonne en number ; le reducteur, lui, exige
+        // un BookingStep. La conversion est sure : StepIndicator ne remonte
+        // que des numeros d'etapes existantes.
+        onStepClick={(step) => goToStep(step as BookingStep)}
+      />
 
       <div>
         {/* Retour : a l'etape 1 on quitte le wizard (retour a la liste),

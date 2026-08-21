@@ -67,6 +67,21 @@ class Settings(BaseSettings):
     # obligatoire car l'auth par cookies impose allow_credentials (cf. main.py).
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
+    # --- Vérification anti-compromission des mots de passe -----------------
+    # La LONGUEUR minimale n'est volontairement PAS ici : c'est une règle
+    # métier, elle vit dans le domaine (PASSWORD_MIN_LENGTH). La rendre
+    # configurable permettrait de l'affaiblir par variable d'environnement.
+    # Ces trois réglages-ci sont bien des préoccupations de déploiement.
+    #
+    # False coupe l'appel réseau et laisse le composite sur sa seule liste
+    # embarquée : c'est le mode des tests (aucun appel sortant en CI) et le
+    # recours si l'API devenait payante ou indisponible durablement.
+    hibp_enabled: bool = True
+    hibp_api_url: str = "https://api.pwnedpasswords.com/range"
+    # Court volontairement : l'inscription ne doit pas attendre un tiers.
+    # Au-delà, le composite bascule sur la liste locale.
+    hibp_timeout_seconds: float = 2.0
+
     # Stockage objet compatible S3 (MinIO en local via docker-compose).
     s3_endpoint_url: str = "http://localhost:9000"
     s3_bucket_documents: str = "vetolib-documents"

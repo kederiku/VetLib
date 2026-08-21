@@ -1,13 +1,26 @@
 /**
- * Formulaire d'inscription d'un propriétaire d'animaux (onboarding B2C).
+ * Étape 1 du parcours d'inscription : la création du compte.
  *
- * Particularité : la soumission enchaîne DEUX appels API.
+ * C'est la SEULE étape obligatoire. À sa validation, deux appels s'enchaînent :
  * 1. POST /api/v1/owner/auth/register crée le compte propriétaire, mais
  *    NE pose AUCUN cookie (201 sans session) ;
  * 2. POST /api/v1/owner/auth/login avec l'email et le mot de passe qui
  *    viennent d'être saisis ouvre la session dans la foulée.
- * L'utilisateur vit donc "je crée mon compte et j'arrive sur ma fiche"
- * sans repasser par l'écran de connexion.
+ * Les étapes 2 et 3 se déroulent ensuite CONNECTÉ, et écrivent chacune
+ * immédiatement : quelqu'un qui abandonne en cours de route repart malgré tout
+ * avec un compte utilisable.
+ *
+ * Pourquoi créer le compte si tôt : c'est ce qui permet d'annoncer « cette
+ * adresse est déjà utilisée » dès la première étape, plutôt qu'après avoir
+ * fait saisir une adresse postale et des animaux. L'alternative — vérifier la
+ * disponibilité de l'email avant la création — exigerait un endpoint public
+ * qui répond « ce compte existe » à qui le demande : exactement l'oracle
+ * d'énumération que le reste de l'authentification s'attache à éviter.
+ *
+ * Le téléphone est REQUIS ici (la clinique doit pouvoir joindre le
+ * propriétaire) alors qu'il reste nullable dans le contrat d'API : c'est une
+ * règle de ce parcours, pas du backend. La fiche /account permet d'ailleurs de
+ * l'effacer ensuite.
  */
 "use client";
 
@@ -15,8 +28,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
+import { PasswordInput } from "@/components/auth/password-input";
+import { PasswordStrengthHint } from "@/components/auth/password-strength-hint";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +43,6 @@ import {
 } from "@/components/ui/card";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -57,7 +71,12 @@ const KNOWN_FIELDS = [
   "password",
 ] as const;
 
-export function RegisterOwnerForm() {
+interface StepAccountProps {
+  /** Appelé une fois le compte créé ET la session ouverte. */
+  onCreated: () => void;
+}
+
+export function StepAccount({ onCreated }: StepAccountProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   // TError = ApiError sur les deux mutations : le mutator normalise
@@ -67,6 +86,7 @@ export function RegisterOwnerForm() {
 
   const {
     register,
+    control,
     handleSubmit,
     setError,
     formState: { errors, isSubmitting },
@@ -78,17 +98,29 @@ export function RegisterOwnerForm() {
       email: "",
       phone: "",
       password: "",
+      password_confirmation: "",
     },
   });
 
+  // useWatch (et non watch()) : abonnement déclaratif à la valeur du champ
+  // mot de passe, pour alimenter l'indicateur de force pendant la frappe. Le
+  // champ reste non contrôlé (register), on ne fait que l'OBSERVER.
+  const passwordValue = useWatch({ control, name: "password" }) ?? "";
+
   const onSubmit = handleSubmit(async (values) => {
-    // Étape 1 : création du compte. En cas d'échec (email déjà pris,
-    // 422...), on affiche les erreurs et on s'arrête là.
+    // Étape 1 : création du compte. En cas d'échec (email déjà pris, mot de
+    // passe compromis, 422...), on affiche les erreurs et on s'arrête là.
     try {
       await registerMutation.mutateAsync({
-        // phone est nullable côté backend : une chaîne vide (champ non
-        // rempli) devient null, jamais "" (qui échouerait la validation).
-        data: { ...values, phone: values.phone || null },
+        data: {
+          first_name: values.first_name,
+          last_name: values.last_name,
+          email: values.email,
+          phone: values.phone,
+          password: values.password,
+          // password_confirmation n'est délibérément PAS envoyé : c'est un
+          // garde-fou de saisie, le backend n'en a que faire.
+        },
       });
     } catch (error) {
       applyServerErrors(error, setError, KNOWN_FIELDS);
@@ -102,14 +134,17 @@ export function RegisterOwnerForm() {
         data: { email: values.email, password: values.password },
       });
       // Comme dans LoginForm : la réponse du login alimente directement
-      // le cache de /me, la fiche s'affiche sans requête de plus.
+      // le cache de /me. Les étapes suivantes lisent ce cache pour
+      // pré-remplir la fiche, sans requête de plus.
       queryClient.setQueryData(getGetCurrentOwnerQueryKey(), res);
-      router.push("/account");
+      onCreated();
     } catch {
       // Cas très improbable (le compte vient d'être créé avec ces
       // identifiants) : le compte EXISTE mais la session n'a pas pu
       // s'ouvrir. On envoie l'utilisateur sur /login pour qu'il se
-      // connecte manuellement, plutôt que de le laisser bloqué ici.
+      // connecte manuellement, plutôt que de le laisser bloqué ici ou de
+      // lui faire recommencer une inscription qui buterait sur un
+      // « email déjà utilisé » incompréhensible.
       router.push("/login");
     }
   });
@@ -119,8 +154,8 @@ export function RegisterOwnerForm() {
       <CardHeader>
         <CardTitle>Créer mon compte</CardTitle>
         <CardDescription>
-          Votre espace personnel pour prendre rendez-vous et suivre la santé
-          de vos animaux.
+          Votre espace personnel pour prendre rendez-vous et suivre la santé de
+          vos animaux.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -134,29 +169,31 @@ export function RegisterOwnerForm() {
               </Alert>
             )}
 
-            <Field data-invalid={!!errors.first_name}>
-              <FieldLabel htmlFor="register-first-name">Prénom</FieldLabel>
-              <Input
-                id="register-first-name"
-                type="text"
-                autoComplete="given-name"
-                aria-invalid={!!errors.first_name}
-                {...register("first_name")}
-              />
-              <FieldError errors={[errors.first_name]} />
-            </Field>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <Field data-invalid={!!errors.first_name}>
+                <FieldLabel htmlFor="register-first-name">Prénom</FieldLabel>
+                <Input
+                  id="register-first-name"
+                  type="text"
+                  autoComplete="given-name"
+                  aria-invalid={!!errors.first_name}
+                  {...register("first_name")}
+                />
+                <FieldError errors={[errors.first_name]} />
+              </Field>
 
-            <Field data-invalid={!!errors.last_name}>
-              <FieldLabel htmlFor="register-last-name">Nom</FieldLabel>
-              <Input
-                id="register-last-name"
-                type="text"
-                autoComplete="family-name"
-                aria-invalid={!!errors.last_name}
-                {...register("last_name")}
-              />
-              <FieldError errors={[errors.last_name]} />
-            </Field>
+              <Field data-invalid={!!errors.last_name}>
+                <FieldLabel htmlFor="register-last-name">Nom</FieldLabel>
+                <Input
+                  id="register-last-name"
+                  type="text"
+                  autoComplete="family-name"
+                  aria-invalid={!!errors.last_name}
+                  {...register("last_name")}
+                />
+                <FieldError errors={[errors.last_name]} />
+              </Field>
+            </div>
 
             <Field data-invalid={!!errors.email}>
               <FieldLabel htmlFor="register-email">Email</FieldLabel>
@@ -172,16 +209,12 @@ export function RegisterOwnerForm() {
             </Field>
 
             <Field data-invalid={!!errors.phone}>
-              <FieldLabel htmlFor="register-phone">
-                Téléphone{" "}
-                <span className="font-normal text-muted-foreground">
-                  (optionnel)
-                </span>
-              </FieldLabel>
+              <FieldLabel htmlFor="register-phone">Téléphone</FieldLabel>
               <Input
                 id="register-phone"
                 type="tel"
                 autoComplete="tel"
+                placeholder="06 12 34 56 78"
                 aria-invalid={!!errors.phone}
                 {...register("phone")}
               />
@@ -190,9 +223,8 @@ export function RegisterOwnerForm() {
 
             <Field data-invalid={!!errors.password}>
               <FieldLabel htmlFor="register-password">Mot de passe</FieldLabel>
-              <Input
+              <PasswordInput
                 id="register-password"
-                type="password"
                 // new-password : le navigateur propose de GÉNÉRER un mot
                 // de passe fort au lieu de remplir un mot de passe connu.
                 autoComplete="new-password"
@@ -201,13 +233,26 @@ export function RegisterOwnerForm() {
               />
               {/* La politique est annoncée AVANT l'erreur : l'utilisateur
                   sait quoi taper du premier coup. */}
-              <FieldDescription>Au moins 12 caractères.</FieldDescription>
+              <PasswordStrengthHint password={passwordValue} />
               <FieldError errors={[errors.password]} />
+            </Field>
+
+            <Field data-invalid={!!errors.password_confirmation}>
+              <FieldLabel htmlFor="register-password-confirmation">
+                Confirmer le mot de passe
+              </FieldLabel>
+              <PasswordInput
+                id="register-password-confirmation"
+                autoComplete="new-password"
+                aria-invalid={!!errors.password_confirmation}
+                {...register("password_confirmation")}
+              />
+              <FieldError errors={[errors.password_confirmation]} />
             </Field>
 
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting && <Spinner data-icon="inline-start" />}
-              Créer mon compte
+              Continuer
             </Button>
 
             {/* nativeButton={false} : le Button est rendu comme un <Link>

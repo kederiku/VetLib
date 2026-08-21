@@ -72,6 +72,11 @@ def app_env(
         "JWT_SECRET": "integration-test-secret-0123456789abcdef",
         "COOKIE_SECURE": "false",
         "LOG_JSON": "false",
+        # AUCUN appel sortant depuis la suite de tests : la verification
+        # anti-compromission des mots de passe se rabat sur sa liste embarquee,
+        # sans interroger Have I Been Pwned. Un test ne doit dependre ni du
+        # reseau de la CI ni de la disponibilite d'un service tiers.
+        "HIBP_ENABLED": "false",
     }
     os.environ.update(env)
 

@@ -10,9 +10,12 @@ invalide, le reste du code peut donc lui faire confiance sans revalider.
 import pytest
 
 from vetolib.identity.domain.value_objects import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
     ROLE_PERMISSIONS,
     Email,
     HashedPassword,
+    PlainPassword,
     Role,
 )
 from vetolib.shared.domain.errors import DomainValidationError
@@ -68,3 +71,57 @@ def test_matrice_des_roles() -> None:
     assert ROLE_PERMISSIONS[Role.VETERINARIAN] <= ROLE_PERMISSIONS[Role.MANAGER]
     assert "clinic:manage" in ROLE_PERMISSIONS[Role.MANAGER]
     assert "clinic:manage" not in ROLE_PERMISSIONS[Role.VETERINARIAN]
+
+
+# --- Politique de mot de passe ---------------------------------------------
+# Ces tests documentent un choix qui surprend : il n'y a AUCUNE regle de
+# composition. C'est volontaire et conforme a NIST SP 800-63B ; les tests
+# ci-dessous verrouillent cette absence pour qu'on ne la "corrige" pas par
+# reflexe dans six mois.
+
+
+def test_mot_de_passe_trop_court_est_rejete() -> None:
+    """Un caractere de moins que le minimum suffit a refuser."""
+    with pytest.raises(DomainValidationError):
+        PlainPassword("a" * (PASSWORD_MIN_LENGTH - 1))
+
+
+def test_mot_de_passe_a_la_longueur_minimale_est_accepte() -> None:
+    """La borne est INCLUSIVE : exactement le minimum passe."""
+    minimal = "a" * PASSWORD_MIN_LENGTH
+    assert PlainPassword(minimal).value == minimal
+
+
+def test_mot_de_passe_trop_long_est_rejete() -> None:
+    """Le plafond est un garde-fou technique : Argon2 hache l'entree telle
+    quelle, une chaine demesuree serait un deni de service a bon marche."""
+    with pytest.raises(DomainValidationError):
+        PlainPassword("a" * (PASSWORD_MAX_LENGTH + 1))
+
+
+def test_aucune_regle_de_composition_n_est_imposee() -> None:
+    """Ni majuscule, ni chiffre, ni caractere special exiges.
+
+    Ces regles produisent des variantes previsibles ("Motdepasse1!") sans
+    gagner d'entropie reelle : la norme les deconseille explicitement. La
+    contrepartie est la verification anti-compromission, qui vit hors du
+    domaine (port CompromisedPasswordChecker).
+    """
+    assert PlainPassword("abcdefghijklmnop").value == "abcdefghijklmnop"
+
+
+def test_phrase_de_passe_avec_espaces_est_acceptee() -> None:
+    """Les espaces sont des caracteres comme les autres, y compris en bordure.
+
+    Aucune normalisation : rogner les espaces silencieusement empecherait de
+    se reconnecter avec ce qui a reellement ete tape.
+    """
+    phrase = " mon chat rex adore les croquettes "
+    assert PlainPassword(phrase).value == phrase
+
+
+def test_le_repr_du_mot_de_passe_en_clair_est_masque() -> None:
+    """Meme protection que HashedPassword, et pour une raison plus forte
+    encore : ici la valeur est en CLAIR. Un traceback ne doit jamais
+    l'ecrire dans les journaux."""
+    assert "phrase-tres-secrete" not in repr(PlainPassword("phrase-tres-secrete-42"))

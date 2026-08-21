@@ -17,6 +17,7 @@ import pytest
 from pydantic import SecretStr
 
 from tests.unit.identity.fakes import (
+    FakeBreachChecker,
     FakeHasher,
     FakeIdentityUnitOfWork,
     FakeOwnerTokenProvider,
@@ -44,7 +45,9 @@ from vetolib.shared.domain.errors import DomainValidationError
 
 async def _uow_with_owner() -> tuple[FakeIdentityUnitOfWork, uuid.UUID]:
     uow = FakeIdentityUnitOfWork()
-    result = await RegisterOwner(lambda: uow, FakeHasher(), FixedClock()).execute(
+    result = await RegisterOwner(
+        lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker()
+    ).execute(
         RegisterOwnerCommand(
             email="ana@exemple.fr",
             password="croquettes-pour-rex",

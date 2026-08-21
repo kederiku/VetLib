@@ -49,6 +49,24 @@ class PasswordHasher(Protocol):
         ...
 
 
+class CompromisedPasswordChecker(Protocol):
+    """Confronte un mot de passe à un corpus de secrets déjà compromis.
+
+    Pourquoi un PORT et non une fonction du domaine : la vérification est une
+    ENTREE/SORTIE (appel à l'API Have I Been Pwned, ou lecture d'une liste
+    embarquée). Le domaine, lui, doit rester pur et synchrone -- il ne porte
+    donc que la longueur minimale (value object PlainPassword). Les deux
+    moitiés de la politique NIST SP 800-63B se répartissent ainsi : la forme
+    dans le domaine, la compromission derrière ce port.
+
+    Contrat : ne lève JAMAIS pour une raison technique. Un adapter
+    injoignable doit se rabattre sur une source dégradée et répondre quand
+    même -- une panne réseau ne peut pas empêcher quelqu'un de s'inscrire.
+    """
+
+    async def is_compromised(self, password: str) -> bool: ...
+
+
 class TokenProvider(Protocol):
     """Émission et décodage des JWT (adapter concret : PyJWT en infra).
 

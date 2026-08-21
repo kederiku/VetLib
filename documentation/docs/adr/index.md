@@ -32,6 +32,7 @@ une maladresse, et quelqu'un la « corrige ».
 | [0009](0009-client-api-genere-et-commite.md)     | Client API Orval généré puis committé                             | Accepté |
 | [0010](0010-un-seul-check-requis-gate.md)        | Un seul check requis devant la branche protégée                   | Accepté |
 | [0011](0011-licence-du-depot.md)                 | Licence MIT pour un dépôt public                                  | Accepté |
+| [0012](0012-politique-de-mot-de-passe.md)        | Politique de mot de passe alignée NIST 800-63B                    | Accepté |
 
 ## La section qui compte
 

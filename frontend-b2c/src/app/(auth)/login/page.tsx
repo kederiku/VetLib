@@ -5,6 +5,9 @@
  * (exportables uniquement depuis un Server Component) et délègue toute
  * l'interactivité au Client Component LoginForm. Le GuestGuard renvoie
  * vers /account un propriétaire déjà connecté.
+ *
+ * max-w-md : la largeur est portée par la page depuis que le parcours
+ * d'inscription, plus large, partage ce même layout.
  */
 import type { Metadata } from "next";
 
@@ -19,8 +22,10 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <GuestGuard>
-      <LoginForm />
-    </GuestGuard>
+    <div className="mx-auto w-full max-w-md">
+      <GuestGuard>
+        <LoginForm />
+      </GuestGuard>
+    </div>
   );
 }

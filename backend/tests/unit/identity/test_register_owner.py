@@ -8,11 +8,20 @@ utilise par le STAFF n'est pas bloquant cote owners).
 
 import pytest
 
-from tests.unit.identity.fakes import FakeHasher, FakeIdentityUnitOfWork, FixedClock
+from tests.unit.identity.fakes import (
+    FakeBreachChecker,
+    FakeHasher,
+    FakeIdentityUnitOfWork,
+    FixedClock,
+)
 from vetolib.identity.application.dto import RegisterClinicCommand, RegisterOwnerCommand
 from vetolib.identity.application.use_cases import RegisterClinic, RegisterOwner
-from vetolib.identity.domain.errors import EmailAlreadyExistsError
+from vetolib.identity.domain.errors import (
+    CompromisedPasswordError,
+    EmailAlreadyExistsError,
+)
 from vetolib.identity.domain.events import OwnerRegistered
+from vetolib.shared.domain.errors import DomainValidationError
 
 
 def _command(email: str = "ana@exemple.fr") -> RegisterOwnerCommand:
@@ -29,7 +38,7 @@ async def test_register_cree_owner_et_evenement_outbox() -> None:
     """Chemin heureux : un compte + un evenement OwnerRegistered, un commit."""
     # Arrange
     uow = FakeIdentityUnitOfWork()
-    use_case = RegisterOwner(lambda: uow, FakeHasher(), FixedClock())
+    use_case = RegisterOwner(lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker())
 
     # Act
     result = await use_case.execute(_command())
@@ -58,7 +67,7 @@ async def test_register_cree_owner_et_evenement_outbox() -> None:
 async def test_register_refuse_un_email_deja_utilise_par_un_owner() -> None:
     """Doublon dans l'espace owners -> EmailAlreadyExistsError (409)."""
     uow = FakeIdentityUnitOfWork()
-    use_case = RegisterOwner(lambda: uow, FakeHasher(), FixedClock())
+    use_case = RegisterOwner(lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker())
     await use_case.execute(_command())
 
     # Casse differente, meme email une fois normalise par le VO Email.
@@ -74,7 +83,7 @@ async def test_un_email_staff_n_est_pas_bloquant_pour_un_owner() -> None:
     avec le meme email. Ce test documente et verrouille la decision."""
     uow = FakeIdentityUnitOfWork()
     # Un compte STAFF existe avec cet email (inscription de clinique).
-    await RegisterClinic(lambda: uow, FakeHasher(), FixedClock()).execute(
+    await RegisterClinic(lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker()).execute(
         RegisterClinicCommand(
             clinic_name="Clinique des Lilas",
             phone=None,
@@ -86,5 +95,45 @@ async def test_un_email_staff_n_est_pas_bloquant_pour_un_owner() -> None:
     )
 
     # Le MEME email s'inscrit comme proprietaire : accepte.
-    result = await RegisterOwner(lambda: uow, FakeHasher(), FixedClock()).execute(_command())
+    result = await RegisterOwner(
+        lambda: uow, FakeHasher(), FixedClock(), FakeBreachChecker()
+    ).execute(_command())
     assert result.owner_id in uow.owner_store
+
+
+async def test_un_mot_de_passe_compromis_est_refuse() -> None:
+    """Contrepartie de l'abandon des regles de composition : un mot de passe
+    parfaitement conforme peut etre deja connu de tous les attaquants."""
+    uow = FakeIdentityUnitOfWork()
+    breaches = FakeBreachChecker({"croquettes-pour-rex"})
+    use_case = RegisterOwner(lambda: uow, FakeHasher(), FixedClock(), breaches)
+
+    with pytest.raises(CompromisedPasswordError):
+        await use_case.execute(_command())
+
+    # Rien n'a ete ecrit : ni compte, ni evenement, ni commit.
+    assert uow.owner_store == {}
+    assert uow.commits == 0
+
+
+async def test_un_mot_de_passe_trop_court_ne_coute_aucun_appel_reseau() -> None:
+    """L'ordre des controles compte : la forme d'abord (gratuite), la
+    compromission ensuite (un appel a un service tiers). Verifier un mot de
+    passe deja refuse serait payer pour rien -- et exposerait l'inscription
+    a la latence d'un tiers meme dans le cas le plus banal."""
+    uow = FakeIdentityUnitOfWork()
+    breaches = FakeBreachChecker()
+    use_case = RegisterOwner(lambda: uow, FakeHasher(), FixedClock(), breaches)
+
+    with pytest.raises(DomainValidationError):
+        await use_case.execute(
+            RegisterOwnerCommand(
+                email="ana@exemple.fr",
+                password="court",
+                first_name="Ana",
+                last_name="Martin",
+                phone=None,
+            )
+        )
+
+    assert breaches.calls == []

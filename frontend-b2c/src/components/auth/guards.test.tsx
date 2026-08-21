@@ -153,4 +153,20 @@ describe("GuestGuard", () => {
 
     expect(simulations.replace).not.toHaveBeenCalled();
   });
+
+  it("laisse passer une session ouverte quand le garde est désactivé", () => {
+    // Le besoin du parcours d'INSCRIPTION : son étape 1 crée le compte et
+    // ouvre la session, mais les étapes 2 et 3 se déroulent sur la même page
+    // /register. Sans ce commutateur, le garde éjecterait la personne vers
+    // /account au milieu de son inscription.
+    simulations.useCurrentUser.mockReturnValue(session({ data: buildOwner() }));
+    renderWithProviders(
+      <GuestGuard enabled={false}>
+        <p>Suite de l&apos;inscription</p>
+      </GuestGuard>,
+    );
+
+    expect(simulations.replace).not.toHaveBeenCalled();
+    expect(screen.getByText("Suite de l'inscription")).toBeInTheDocument();
+  });
 });

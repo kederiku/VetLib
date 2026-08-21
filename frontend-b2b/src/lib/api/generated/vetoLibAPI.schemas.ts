@@ -316,7 +316,11 @@ export interface RegisterClinicRequest {
   clinic_name: string;
   phone?: string | null;
   email: string;
-  /** @minLength 12 */
+  /**
+   * Au moins 14 caractères, 128 au plus. Aucune règle de composition : une phrase de passe est le meilleur choix. Les mots de passe présents dans une fuite de données connue sont refusés.
+   * @minLength 14
+   * @maxLength 128
+   */
   password: string;
   /**
    * @minLength 1
@@ -332,11 +336,20 @@ export interface RegisterClinicRequest {
 
 /**
  * Inscription d'un proprietaire : memes exigences de mot de passe que le
- * staff (min 12), pas de nom de clinique -- le compte est global.
+ * staff, pas de nom de clinique -- le compte est global.
+ *
+ * phone reste nullable dans le CONTRAT : le portail B2C l'exige a
+ * l'inscription, mais la fiche /account permet de l'effacer ensuite, et le
+ * staff pourra creer un compte proprietaire sans numero. Une obligation cote
+ * API rendrait ces deux cas impossibles.
  */
 export interface RegisterOwnerRequest {
   email: string;
-  /** @minLength 12 */
+  /**
+   * Au moins 14 caractères, 128 au plus. Aucune règle de composition : une phrase de passe est le meilleur choix. Les mots de passe présents dans une fuite de données connue sont refusés.
+   * @minLength 14
+   * @maxLength 128
+   */
   password: string;
   /**
    * @minLength 1

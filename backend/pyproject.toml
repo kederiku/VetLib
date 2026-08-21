@@ -23,6 +23,9 @@ dependencies = [
     "pyjwt~=2.13",
     "pwdlib[argon2]~=0.3.1",
     "orjson~=3.12",
+    # Client HTTP sortant : appel à l'API Have I Been Pwned lors des
+    # inscriptions (vérification anti-compromission des mots de passe).
+    "httpx~=0.28.1",
     "structlog~=26.1",
     "redis[hiredis]~=8.1",
     "taskiq~=0.12.4",
@@ -34,7 +37,6 @@ dependencies = [
 dev = [
     "pytest~=9.1",
     "pytest-asyncio~=1.4",
-    "httpx~=0.28.1",
     "testcontainers[postgres,redis]~=4.15",
     "pytest-cov~=7.1",
     "ruff==0.16.3",

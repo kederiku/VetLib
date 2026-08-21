@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { PASSWORD_MIN_LENGTH } from "@/lib/auth/password-policy";
 import { loginSchema, registerClinicSchema } from "@/lib/auth/schemas";
 
 describe("loginSchema", () => {
@@ -50,13 +51,27 @@ describe("registerClinicSchema", () => {
     expect(registerClinicSchema.safeParse(valide).success).toBe(true);
   });
 
-  it("exige au moins 12 caractères pour le mot de passe", () => {
-    // À la création, en revanche, on impose la règle actuelle : c'est le
-    // compte qui pilotera toute la clinique.
+  it("applique la longueur minimale de la politique de mot de passe", () => {
+    // À la création, en revanche, on impose la règle : c'est le compte qui
+    // pilotera toute la clinique. La borne vient de password-policy.ts,
+    // partagée avec le portail propriétaires.
+    const tropCourt = "a".repeat(PASSWORD_MIN_LENGTH - 1);
     expect(
-      registerClinicSchema.safeParse({ ...valide, password: "onzecarac." })
+      registerClinicSchema.safeParse({ ...valide, password: tropCourt })
         .success,
     ).toBe(false);
+  });
+
+  it("n'impose AUCUNE règle de composition", () => {
+    // Choix délibéré, conforme à NIST SP 800-63B : la longueur seule. Ce
+    // test verrouille l'absence de règle, qui est la première chose que
+    // quelqu'un « corrigerait » de bonne foi.
+    expect(
+      registerClinicSchema.safeParse({
+        ...valide,
+        password: "mon chat rex adore les croquettes",
+      }).success,
+    ).toBe(true);
   });
 
   it("exige un nom de clinique d'au moins deux caractères", () => {

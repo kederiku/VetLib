@@ -5,6 +5,12 @@
  * on le renvoie vers son compte. Cela évite le cas déroutant "je me
  * re-connecte alors que j'ai déjà une session" et les doubles sessions
  * involontaires.
+ *
+ * `enabled` existe pour UN cas précis : le parcours d'inscription. Son étape 1
+ * crée le compte ET ouvre la session ; les étapes 2 et 3 se déroulent donc
+ * connecté, sur la même page /register. Sans ce commutateur, la redirection
+ * ci-dessous éjecterait la personne vers /account au beau milieu de son
+ * inscription. Le wizard passe donc `enabled={step === 1}`.
  */
 "use client";
 
@@ -13,8 +19,17 @@ import { useEffect } from "react";
 
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
-export function GuestGuard({ children }: { children: React.ReactNode }) {
+export function GuestGuard({
+  children,
+  enabled = true,
+}: {
+  children: React.ReactNode;
+  /** false désactive la redirection (session ouverte VOULUE sur cet écran). */
+  enabled?: boolean;
+}) {
   const router = useRouter();
+  // Le hook est appelé inconditionnellement : seul l'EFFET est conditionné,
+  // les règles des hooks React sont donc respectées.
   const { data: user, isError } = useCurrentUser();
 
   // Redirection en effet (pas pendant le rendu), replace pour ne pas
@@ -25,10 +40,10 @@ export function GuestGuard({ children }: { children: React.ReactNode }) {
   // sur isError) et ce GuestGuard (qui redirigerait sur data seule) se
   // renverraient l'utilisateur en boucle /account <-> /login.
   useEffect(() => {
-    if (user !== undefined && !isError) {
+    if (enabled && user !== undefined && !isError) {
       router.replace("/account");
     }
-  }, [user, isError, router]);
+  }, [enabled, user, isError, router]);
 
   // Rendu OPTIMISTE : on affiche le formulaire tout de suite, sans
   // attendre la fin de la vérification de session. Le cas nominal sur

@@ -5,17 +5,24 @@
  * immédiat sous le champ, sans aller-retour réseau). La vraie validation
  * de sécurité reste côté backend (Pydantic) : ces schémas en sont le
  * MIROIR, avec les mêmes bornes que RegisterClinicRequest (clinic_name
- * 2-200, prénom/nom 1-100, mot de passe >= 12). Messages en français,
- * car zod produit des messages anglais par défaut.
+ * 2-200, prénom/nom 1-100). Messages en français, car zod produit des
+ * messages anglais par défaut.
+ *
+ * La règle du mot de passe vit à part, dans password-policy.ts : elle est
+ * partagée avec le portail propriétaires (une seule politique pour les deux
+ * espaces de comptes) et mérite ses propres explications.
  */
 import { z } from "zod";
 
+import { passwordSchema } from "@/lib/auth/password-policy";
+
 /**
  * Connexion : on valide le strict minimum.
- * Volontairement PAS de min(12) sur le mot de passe ici : révéler la
- * politique de mot de passe sur l'écran de login donnerait un indice à
- * un attaquant et gênerait un utilisateur dont l'ancien mot de passe
- * serait plus court. "Champ requis" suffit ; le backend tranche.
+ * Volontairement PAS la politique de mot de passe ici : la révéler sur
+ * l'écran de login donnerait un indice à un attaquant et gênerait un
+ * utilisateur dont l'ancien mot de passe serait plus court (la politique
+ * ne s'applique qu'à la CREATION, côté backend aussi).
+ * "Champ requis" suffit ; le backend tranche.
  */
 export const loginSchema = z.object({
   email: z.email("Adresse email invalide."),
@@ -44,11 +51,9 @@ export const registerClinicSchema = z.object({
     .min(1, "Le nom est requis.")
     .max(100, "Le nom ne peut pas dépasser 100 caractères."),
   email: z.email("Adresse email invalide."),
-  // Ici on AFFICHE la politique (min 12) : à l'inscription, l'utilisateur
-  // doit savoir quoi taper. C'est l'inverse du login (voir plus haut).
-  password: z
-    .string()
-    .min(12, "Le mot de passe doit contenir au moins 12 caractères."),
+  // Ici on APPLIQUE la politique : à l'inscription, l'utilisateur doit savoir
+  // quoi taper. C'est l'inverse du login (voir plus haut).
+  password: passwordSchema,
   // Optionnel côté backend (nullable, max 30). optional() accepte un
   // champ absent ; le formulaire enverra null si la chaîne est vide.
   phone: z

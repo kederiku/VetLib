@@ -1199,6 +1199,7 @@ dependencies = [
     { name = "email-validator" },
     { name = "fastapi" },
     { name = "greenlet" },
+    { name = "httpx" },
     { name = "orjson" },
     { name = "pwdlib", extra = ["argon2"] },
     { name = "pydantic" },
@@ -1215,7 +1216,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1232,6 +1232,7 @@ requires-dist = [
     { name = "email-validator", specifier = ">=2.2" },
     { name = "fastapi", specifier = "~=0.141.1" },
     { name = "greenlet", specifier = "~=3.5" },
+    { name = "httpx", specifier = "~=0.28.1" },
     { name = "orjson", specifier = "~=3.12" },
     { name = "pwdlib", extras = ["argon2"], specifier = "~=0.3.1" },
     { name = "pydantic", specifier = "~=2.13" },
@@ -1248,7 +1249,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = "~=0.28.1" },
     { name = "mypy", specifier = "~=2.3" },
     { name = "pytest", specifier = "~=9.1" },
     { name = "pytest-asyncio", specifier = "~=1.4" },

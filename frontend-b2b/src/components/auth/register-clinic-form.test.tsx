@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RegisterClinicForm } from "@/components/auth/register-clinic-form";
 import { ApiError } from "@/lib/api/errors";
+import { PASSWORD_MIN_LENGTH } from "@/lib/auth/password-policy";
 import { getSessionHint } from "@/lib/auth/session-hint";
 import { buildUser } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
@@ -78,13 +79,27 @@ afterEach(() => {
 });
 
 describe("RegisterClinicForm — validation locale", () => {
-  it("exige un mot de passe d'au moins douze caractères", async () => {
-    // Le compte créé pilotera toute la clinique : la règle est stricte.
+  it("applique la longueur minimale de la politique de mot de passe", async () => {
+    // Le compte créé pilotera toute la clinique. La règle vient de
+    // password-policy.ts, partagée avec le portail propriétaires : une seule
+    // politique pour les deux espaces de comptes.
     renderWithProviders(<RegisterClinicForm />);
     await sInscrire({ "Mot de passe": "court" });
 
-    expect(await screen.findByText(/au moins 12 caractères/)).toBeInTheDocument();
+    const attendu = new RegExp(`au moins ${PASSWORD_MIN_LENGTH} caractères`);
+    expect(await screen.findByText(attendu)).toBeInTheDocument();
     expect(simulations.inscrire).not.toHaveBeenCalled();
+  });
+
+  it("accepte une phrase de passe sans majuscule, chiffre ni caractère spécial", async () => {
+    // Verrouille l'ABSENCE de règles de composition (NIST SP 800-63B) : le
+    // formulaire ne doit rien exiger de plus que la longueur.
+    simulations.inscrire.mockResolvedValue({ status: 201 });
+    simulations.connecter.mockResolvedValue(reponse());
+    renderWithProviders(<RegisterClinicForm />);
+    await sInscrire({ "Mot de passe": "mon chat rex adore les croquettes" });
+
+    await waitFor(() => expect(simulations.inscrire).toHaveBeenCalled());
   });
 
   it("refuse un email mal formé", async () => {

@@ -197,6 +197,27 @@ class FakeHasher:
         return "h:dummy"
 
 
+class FakeBreachChecker:
+    """Double de test du port CompromisedPasswordChecker.
+
+    Par defaut, AUCUN mot de passe n'est considere comme compromis : les
+    tests d'inscription qui ne s'interessent pas a cette regle n'ont rien a
+    configurer. Ceux qui la testent passent la liste voulue au constructeur.
+
+    `calls` sert d'espion : il prouve que la verification a bien eu lieu, et
+    surtout qu'elle n'est PAS payee inutilement (voir le test qui verifie
+    qu'un mot de passe trop court est refuse sans appel reseau).
+    """
+
+    def __init__(self, compromised: set[str] | None = None) -> None:
+        self.compromised = compromised or set()
+        self.calls: list[str] = []
+
+    async def is_compromised(self, password: str) -> bool:
+        self.calls.append(password)
+        return password in self.compromised
+
+
 class FixedClock:
     """Horloge figée (port Clock) : le temps devient un paramètre du test.
 
