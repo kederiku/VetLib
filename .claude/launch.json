@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "frontend-b2b"],
       "port": 3001
+    },
+    {
+      "name": "documentation",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--prefix", "documentation"],
+      "port": 3002
     }
   ]
 }

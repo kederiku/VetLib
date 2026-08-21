@@ -1,0 +1,39 @@
+{
+  "theme.SearchBar.label": {
+    "message": "Rechercher",
+    "description": "Traductions de la barre de recherche. @easyops-cn/docusaurus-search-local ne fournit pas de locale fr (seulement ar, de, ja, vi, zh-Hans) : sans ce fichier, la recherche resterait en anglais au milieu d'un site francais. Les libelles du theme lui-meme (navigation, pagination, admonitions) sont deja traduits par @docusaurus/theme-translations."
+  },
+  "theme.SearchBar.seeAll": {
+    "message": "Voir tous les résultats"
+  },
+  "theme.SearchBar.noResultsText": {
+    "message": "Aucun résultat"
+  },
+  "theme.SearchBar.searchInContext": {
+    "message": "Voir tous les résultats dans « {context} »"
+  },
+  "theme.SearchBar.seeAllOutsideContext": {
+    "message": "Voir tous les résultats hors de « {context} »"
+  },
+  "theme.SearchPage.existingResultsTitle": {
+    "message": "Résultats de la recherche pour « {query} »"
+  },
+  "theme.SearchPage.emptyResultsTitle": {
+    "message": "Rechercher dans la documentation"
+  },
+  "theme.SearchPage.documentsFound.plurals": {
+    "message": "1 document trouvé|{count} documents trouvés"
+  },
+  "theme.SearchPage.noResultsText": {
+    "message": "Aucun document trouvé"
+  },
+  "theme.SearchPage.searchContext.everywhere": {
+    "message": "Partout"
+  },
+  "theme.SearchPage.inputLabel": {
+    "message": "Rechercher"
+  },
+  "theme.SearchPage.inputPlaceholder": {
+    "message": "Saisissez votre recherche ici"
+  }
+}

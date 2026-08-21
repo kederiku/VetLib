@@ -24,6 +24,14 @@ next-env.d.ts
 *.tsbuildinfo
 npm-debug.log*
 
+# --- Documentation (Docusaurus) ---
+# .docusaurus/ = cache de build, build/ = site genere. Les deux sont reconstruits
+# par `make docs-build` et republies par la CI a chaque merge : aucun interet a
+# les versionner. Chemins ancres sur documentation/ a dessein, un `build/` nu
+# attraperait aussi d'autres dossiers.
+documentation/.docusaurus/
+documentation/build/
+
 # --- Env & secrets ---
 .env
 .env.*
@@ -35,4 +43,5 @@ npm-debug.log*
 .vscode/
 .DS_Store
 
-# NB : uv.lock, package-lock.json et src/lib/api/generated/ sont VERSIONNÉS.
+# NB : uv.lock, les package-lock.json (2 frontends + documentation) et
+# src/lib/api/generated/ sont VERSIONNÉS.

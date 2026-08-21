@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/kederiku/VetLib/actions/workflows/ci.yml/badge.svg)](https://github.com/kederiku/VetLib/actions/workflows/ci.yml)
 
+**[Documentation du projet](https://kederiku.github.io/VetLib/)** — architecture, guides et référence de l'API.
+
 Plateforme SaaS B2B2C de prise de rendez-vous et de gestion pour cliniques vétérinaires : agenda et créneaux dynamiques côté professionnels (B2B), carnet de santé numérique et prise de RDV en ligne côté propriétaires d'animaux (B2C).
 
 ## Prérequis
@@ -33,10 +35,11 @@ Les frontends tournent **hors Docker** en dev (HMR Turbopack natif). Pour la dé
 | PostgreSQL         | 5432  |
 | Redis              | 6379  |
 | MinIO S3 / console | 9000 / 9001 |
+| Documentation      | 3002  |
 
 ## Architecture
 
-Monorepo : `/backend` (FastAPI, architecture hexagonale + DDD, 4 bounded contexts), `/frontend-b2c` et `/frontend-b2b` (Next.js App Router), `/docker` (Dockerfiles + scripts d'init), `docker-compose.yml`.
+Monorepo : `/backend` (FastAPI, architecture hexagonale + DDD, 4 bounded contexts), `/frontend-b2c` et `/frontend-b2b` (Next.js App Router), `/documentation` (site Docusaurus publié sur GitHub Pages), `/docker` (Dockerfiles + scripts d'init), `docker-compose.yml`.
 
 Voir [CLAUDE.md](CLAUDE.md) pour les conventions détaillées.
 
@@ -51,6 +54,24 @@ cd ../frontend-b2b && npm run generate:api
 ```
 
 Le dossier `src/lib/api/generated/` est **committé** (les builds CI ne dépendent pas d'un backend démarré) et ne doit **jamais être édité à la main**.
+
+## Documentation
+
+Le site de documentation vit dans [`documentation/`](documentation/) (Docusaurus,
+en français) et est publié automatiquement sur
+**<https://kederiku.github.io/VetLib/>** après chaque merge sur `main`.
+
+```bash
+make docs          # serveur de développement, rechargement à chaud, :3002
+make docs-build    # build de production (échoue sur tout lien ou ancre mort)
+make docs-serve    # sert le site construit, tel qu'il sera en ligne
+make check-docs    # format + types + build : exactement ce que fait la CI
+```
+
+La page de référence de l'API est générée au build à partir de
+`backend/openapi.json` (plugin `redocusaurus`) : elle ne s'édite **jamais** à la
+main, au même titre que le client Orval. C'est pourquoi toutes les cibles `docs*`
+commencent par régénérer ce schéma.
 
 ## Commandes courantes
 
@@ -68,7 +89,8 @@ make env            # copie les .env d'exemple
 make up             # infra + api + worker (Docker)
 make migrate        # alembic upgrade head
 make dev-b2c        # frontend B2C sur :3000 (make dev-b2b pour le B2B sur :3001)
-make check          # toute la qualité sans Docker (lint, mypy, tests unit, ESLint, tsc)
+make docs           # site de documentation sur :3002
+make check          # toute la qualité sans Docker (lint, mypy, tests unit, ESLint, tsc, doc)
 ```
 
 Le Makefile racine délègue au [Makefile du backend](backend/Makefile) (`make -C backend ...`),
@@ -104,6 +126,7 @@ parallèle sur chaque PR :
 | ESLint, build Next, `tsc`, Vitest (×2 apps) | Régression frontend |
 | Couverture frontend | Chute sous le seuil de chaque app (mesuré 65 %, seuil 63 %) |
 | Dérive du client Orval | Endpoint modifié sans `make generate-api` |
+| Prettier, `tsc`, build Docusaurus | Doc mal formatée, lien ou ancre morte, site qui ne se construit plus |
 | pip-audit, npm audit, revue de dépendances | Dépendance vulnérable |
 | actionlint + zizmor | Workflow CI cassé ou vulnérable |
 | Build des 3 images Docker | Image qui ne se construit plus |
@@ -111,6 +134,13 @@ parallèle sur chaque PR :
 Après un merge sur `main`, les images sont publiées sur GHCR :
 `ghcr.io/kederiku/vetlib-api`, `-portal` et `-clinic`, étiquetées `latest` et
 `sha-<commit>`.
+
+Le site de documentation est publié dans la foulée sur GitHub Pages
+(<https://kederiku.github.io/VetLib/>) par le job `publier la documentation`.
+Comme la publication des images, il dépend du job `gate` et ne s'exécute que sur
+un push vers `main` : **une CI rouge ne met jamais rien en ligne**. Il ne
+reconstruit rien — il déploie l'artefact déjà produit par le job `documentation`
+du même run.
 
 L'analyse de sécurité [CodeQL](.github/workflows/codeql.yml) tourne à part
 (sur PR et chaque lundi) et alimente l'onglet *Security*.
@@ -136,5 +166,6 @@ make check            # tout ce qui ne demande pas Docker (le plus utile au quot
 make coverage-front   # couverture des 2 frontends + application des seuils
 make check-all        # + tests d'intégration + contrôle des migrations
 make coverage         # couverture backend consolidée
+make check-docs       # format, types et build du site de documentation
 make audit            # vulnérabilités des dépendances
 ```

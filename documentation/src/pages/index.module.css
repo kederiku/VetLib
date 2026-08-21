@@ -1,0 +1,41 @@
+/**
+ * Mise en page de la page d'accueil UNIQUEMENT.
+ *
+ * Tout ce qui touche aux couleurs, aux polices et aux composants passe par Infima
+ * (classes hero, button, card, container/row/col) et par les variables --ifm-*
+ * définies dans src/css/custom.css. Rien ici ne redéfinit une couleur.
+ */
+
+.banniere {
+  padding: 4rem 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+@media screen and (max-width: 996px) {
+  .banniere {
+    padding: 2rem;
+  }
+}
+
+.boutons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.section {
+  padding: 3rem 0;
+}
+
+.sectionAlternee {
+  background-color: var(--ifm-color-emphasis-100);
+}
+
+/* Sans cela, des cartes de textes inégaux ne s'alignent pas en bas de rangée. */
+.carte {
+  height: 100%;
+}

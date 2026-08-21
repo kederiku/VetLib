@@ -11,10 +11,11 @@
 
 ## Vérifications
 
-- [ ] `make check` passe en local (ruff, mypy, tests unitaires, ESLint, build, tsc, Vitest)
+- [ ] `make check` passe en local (ruff, mypy, tests unitaires, ESLint, build, tsc, Vitest, build de la doc)
 - [ ] `make test-integration` passe si le backend ou le schéma a changé
 - [ ] Migration Alembic ajoutée si un modèle SQLAlchemy a changé — **et un seul head**
 - [ ] `make generate-api` relancé et **les deux** clients Orval committés, si un endpoint a changé
+- [ ] Documentation mise à jour dans `documentation/docs/` si le comportement visible ou le contrat d'API change
 - [ ] Commentaires pédagogiques en français sur tout code nouveau ou modifié (cf. `CLAUDE.md`)
 - [ ] Composants `shadcn/ui` + Tailwind côté frontend, pas de CSS maison
 
