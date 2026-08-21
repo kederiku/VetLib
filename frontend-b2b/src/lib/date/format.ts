@@ -54,9 +54,23 @@ const dayKeyFormatter = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",
 });
 
+// "lun. 24" : en-têtes de colonnes de la grille agenda (place comptée).
+const dayShortFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: CLINIC_TIME_ZONE,
+  weekday: "short",
+  day: "numeric",
+});
+
 /** "lundi 24 août" — accepte un Date ou une chaîne ISO du backend. */
 export function formatDayLong(date: Date | string): string {
   return dayLongFormatter.format(
+    typeof date === "string" ? new Date(date) : date,
+  );
+}
+
+/** "lun. 24" — en-tête compact de colonne de la grille agenda. */
+export function formatDayShort(date: Date | string): string {
+  return dayShortFormatter.format(
     typeof date === "string" ? new Date(date) : date,
   );
 }
@@ -134,6 +148,104 @@ export function toIsoDate(date: Date): string {
  */
 export function toParisDisplayDate(day: Date): Date {
   return new Date(`${toIsoDate(day)}T12:00:00Z`);
+}
+
+// Formatteur interne de getParisMinutesOfDay : heure et minute vues de
+// Paris, en cycle 0-23 (h23 évite le piège "24:xx" de certains moteurs
+// avec h24, et l'ambiguïté AM/PM de la locale).
+const parisTimePartsFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: CLINIC_TIME_ZONE,
+  hourCycle: "h23",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/**
+ * Minutes écoulées depuis minuit, HEURE DE PARIS, d'un instant ISO UTC.
+ *
+ * C'est LA fonction de positionnement vertical de la grille agenda : un
+ * bloc à 09:30 heure clinique doit s'afficher à 9,5 h de haut sur tous
+ * les postes. new Date(iso).getHours() lirait le fuseau du NAVIGATEUR
+ * et décalerait tous les blocs pour un utilisateur hors de France.
+ */
+export function getParisMinutesOfDay(iso: string): number {
+  const parts = parisTimePartsFormatter.formatToParts(new Date(iso));
+  const part = (type: Intl.DateTimeFormatPartTypes): number =>
+    Number(parts.find((p) => p.type === type)?.value ?? "0");
+  return part("hour") * 60 + part("minute");
+}
+
+/** Minutes depuis minuit de l'instant PRESENT, heure de Paris (ligne "maintenant"). */
+export function parisNowMinutes(): number {
+  return getParisMinutesOfDay(new Date().toISOString());
+}
+
+// Formatteur interne de parisOffsetMinutes : "GMT+02:00" (heure d'ete)
+// ou "GMT+01:00" (heure d'hiver) a l'instant demande.
+const parisOffsetFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: CLINIC_TIME_ZONE,
+  timeZoneName: "longOffset",
+});
+
+/** Decalage de Paris par rapport a UTC, en minutes, a un instant donne. */
+function parisOffsetMinutes(instant: Date): number {
+  const label =
+    parisOffsetFormatter
+      .formatToParts(instant)
+      .find((part) => part.type === "timeZoneName")?.value ?? "GMT+00:00";
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(label);
+  if (match === null) {
+    // "GMT" tout court = UTC+0 (jamais le cas pour Paris, filet de securite).
+    return 0;
+  }
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3]));
+}
+
+/**
+ * Instant ISO UTC a partir d'un jour civil et d'une heure MURALE de la
+ * clinique : ("2026-08-20", "09:30") -> "2026-08-20T07:30:00.000Z".
+ *
+ * C'est l'operation INVERSE de getParisMinutesOfDay, et elle est
+ * indispensable a l'ECRITURE : toutes les heures que l'interface
+ * manipule (cellules de la grille, creneaux proposes, saisie libre)
+ * sont des heures murales de la clinique. Les recombiner avec
+ * Date.setHours ecrirait des champs LOCAUX au navigateur : depuis un
+ * poste hors de France, le rendez-vous partirait a la mauvaise heure
+ * et serait stocke faux (le backend ne reprojette rien).
+ *
+ * Methode : on suppose d'abord que l'heure murale est de l'UTC, on lit
+ * le decalage de Paris a cet instant approche, puis on corrige. La
+ * seconde lecture rattrape les nuits de changement d'heure, ou le
+ * decalage de l'instant approche differe de celui de l'instant reel.
+ */
+export function parisWallTimeToIso(dayKey: string, time: string): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+
+  const asIfUtc = Date.UTC(year, month - 1, day, hours, minutes, 0, 0);
+  const firstGuess = asIfUtc - parisOffsetMinutes(new Date(asIfUtc)) * 60_000;
+  const corrected =
+    asIfUtc - parisOffsetMinutes(new Date(firstGuess)) * 60_000;
+  return new Date(corrected).toISOString();
+}
+
+/**
+ * Le jour calendaire d'AUJOURD'HUI à Paris, sous forme d'objet Date
+ * local à minuit — le pont entre "maintenant" et le monde des Date
+ * locales de la navigation (ancre d'agenda, cases de calendrier).
+ *
+ * new Date() seul ne suffit pas : ses composantes locales reflètent le
+ * fuseau du NAVIGATEUR. À 1 h du matin à Paris, un poste à Montréal
+ * serait encore "hier". On détermine donc le jour de Paris
+ * (toParisDayKey) puis on le reconstruit en Date locale, comparable aux
+ * autres Dates de navigation. (Porté du portail B2C.)
+ */
+export function parisToday(): Date {
+  const [year, month, day] = toParisDayKey(new Date().toISOString())
+    .split("-")
+    .map(Number);
+  return new Date(year, month - 1, day);
 }
 
 // Jours de la semaine, convention backend : 0 = lundi ... 6 = dimanche

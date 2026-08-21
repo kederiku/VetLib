@@ -28,7 +28,11 @@ export default function RootLayout({
   return (
     // lang="fr" : produit destiné aux cliniques françaises (accessibilité,
     // correcteurs, lecteurs d'écran s'appuient sur cet attribut).
-    <html lang="fr" className="font-sans">
+    // suppressHydrationWarning : next-themes pose la classe "dark" sur
+    // <html> AVANT l'hydratation (script inline anti-flash) ; sans cet
+    // attribut, React signalerait un faux écart serveur/client sur cette
+    // seule balise (l'avertissement ne se propage pas aux enfants).
+    <html lang="fr" className="font-sans" suppressHydrationWarning>
       <body className="antialiased">
         {/* Frontière Server -> Client : les pages (children) restent des
             Server Components, mais elles sont rendues SOUS le provider

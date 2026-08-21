@@ -12,6 +12,7 @@
  */
 "use client";
 
+import type { UserResponse } from "@/lib/api/generated/vetoLibAPI.schemas";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 // as const : fige le tableau en tuple de littéraux, ce qui permet de
@@ -38,14 +39,30 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number];
 
 /**
- * Indique si l'utilisateur connecté possède la permission demandée.
+ * Indique si CET utilisateur possède la permission demandée.
  *
- * Retourne false tant que la session n'est pas résolue : sous
- * l'AuthGuard, ce cas ne dure qu'un instant de transition, et "pas
- * encore de droits" est le défaut le plus sûr (l'UI n'affiche rien de
- * réservé par erreur).
+ * Fonction PURE (pas un hook) : elle peut être appelée dans un .filter
+ * ou un .map — par exemple pour filtrer les entrées de navigation —
+ * là où la règle des hooks interdirait d'appeler useHasPermission en
+ * boucle. `undefined` (session pas encore résolue) => false : "pas
+ * encore de droits" est le défaut le plus sûr, l'UI n'affiche rien de
+ * réservé par erreur.
+ */
+export function hasPermission(
+  user: UserResponse | undefined,
+  permission: Permission,
+): boolean {
+  return user?.permissions.includes(permission) ?? false;
+}
+
+/**
+ * Variante hook : la permission de l'utilisateur CONNECTE.
+ *
+ * Simple sucre au-dessus de hasPermission pour les composants qui ne
+ * manipulent qu'une permission ; sous l'AuthGuard, l'instant où la
+ * session n'est pas résolue ne dure qu'une transition.
  */
 export function useHasPermission(permission: Permission): boolean {
   const { data: user } = useCurrentUser();
-  return user?.permissions.includes(permission) ?? false;
+  return hasPermission(user, permission);
 }
