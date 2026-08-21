@@ -46,7 +46,11 @@ RENAMES = [
         "ck_appointment_types_ck_appointment_types_duration_valid",
         "ck_appointment_types_duration_valid",
     ),
-    ("appointments", "ck_appointments_ck_appointments_status_valid", "ck_appointments_status_valid"),
+    (
+        "appointments",
+        "ck_appointments_ck_appointments_status_valid",
+        "ck_appointments_status_valid",
+    ),
     ("appointments", "ck_appointments_ck_appointments_time_order", "ck_appointments_time_order"),
     (
         "appointments",

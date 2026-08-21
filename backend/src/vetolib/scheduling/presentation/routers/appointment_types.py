@@ -1,8 +1,13 @@
-"""Routes des types de rendez-vous (reglages, manager uniquement).
+"""Routes des types de rendez-vous : lecture staff, gestion manager.
 
-`dependencies=[Depends(require_permission("clinic:manage"))]` au niveau du
-routeur : CHAQUE route exige un staff authentifie AVEC la permission --
-premier consommateur reel de require_permission.
+Decoupage des permissions ROUTE PAR ROUTE (et non plus sur le routeur) :
+- lister les types (GET "") demande appointment:read : connaitre les types
+  et leur duree est un prerequis de la gestion d'agenda (creer un RDV au
+  comptoir), un droit que TOUT le staff possede (ASV, veterinaire, manager) ;
+- creer/modifier/supprimer un type reste reserve au manager (clinic:manage) :
+  c'est un reglage de la clinique, pas de la simple consultation.
+Sans ce decoupage, l'ecran Agenda du frontend B2B repondait 403 aux roles
+asv/veterinaire des qu'il chargeait la liste des types.
 """
 
 import uuid
@@ -34,19 +39,24 @@ from vetolib.scheduling.presentation.schemas import (
     UpdateAppointmentTypeRequest,
 )
 
-# CurrentUser injecte via require_permission : la garde du routeur suffit,
-# le clinic_id du token est deja fige dans la fabrique UoW tenant.
-router = APIRouter(
-    prefix="/scheduling/appointment-types",
-    tags=["scheduling"],
-    dependencies=[Depends(require_permission("clinic:manage"))],
+# Pas de garde globale sur le routeur : chaque route porte SA permission
+# (lecture staff vs gestion manager), voir la docstring du module. Le
+# clinic_id du token reste fige dans la fabrique UoW tenant.
+router = APIRouter(prefix="/scheduling/appointment-types", tags=["scheduling"])
+
+
+@router.get(
+    "",
+    operation_id="listAppointmentTypes",
+    dependencies=[Depends(require_permission("appointment:read"))],
 )
-
-
-@router.get("", operation_id="listAppointmentTypes")
 async def list_appointment_types(
     use_case: Annotated[ListAppointmentTypes, Depends(get_list_appointment_types)],
 ) -> list[AppointmentTypeResponse]:
+    # Liste des types de RDV : accessible a tout le staff (appointment:read),
+    # car indispensable a l'ecran Agenda (choix du type lors d'un RDV).
+    # Commentaire et non docstring : FastAPI copierait la docstring dans la
+    # description OpenAPI, ce qui changerait le client genere par Orval.
     return [AppointmentTypeResponse.from_dto(t) for t in await use_case.execute()]
 
 
@@ -54,6 +64,9 @@ async def list_appointment_types(
 async def create_appointment_type(
     body: CreateAppointmentTypeRequest,
     use_case: Annotated[CreateAppointmentType, Depends(get_create_appointment_type)],
+    # La garde clinic:manage est portee par ce parametre : elle verifie la
+    # permission ET fournit le CurrentUser (pour son clinic_id). Pas besoin
+    # de la dupliquer dans dependencies=[...] du decorateur.
     current: Annotated[CurrentUser, Depends(require_permission("clinic:manage"))],
 ) -> AppointmentTypeResponse:
     dto = await use_case.execute(
@@ -66,7 +79,11 @@ async def create_appointment_type(
     return AppointmentTypeResponse.from_dto(dto)
 
 
-@router.put("/{appointment_type_id}", operation_id="updateAppointmentType")
+@router.put(
+    "/{appointment_type_id}",
+    operation_id="updateAppointmentType",
+    dependencies=[Depends(require_permission("clinic:manage"))],
+)
 async def update_appointment_type(
     appointment_type_id: uuid.UUID,
     body: UpdateAppointmentTypeRequest,
@@ -87,6 +104,7 @@ async def update_appointment_type(
     "/{appointment_type_id}",
     operation_id="deleteAppointmentType",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission("clinic:manage"))],
 )
 async def delete_appointment_type(
     appointment_type_id: uuid.UUID,
