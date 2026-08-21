@@ -215,18 +215,6 @@ const config: Config = {
         // être servi après un déploiement, et la recherche deviendrait silencieusement
         // obsolète.
         hashed: "filename",
-        // Le raccourci clavier reste ACTIF (searchBarShortcut vaut true par
-        // defaut) ; seul son rappel visuel dans le champ est retire.
-        //
-        // Pourquoi : le greffon rend ce rappel derriere un `isBrowser &&`
-        // evalue au PREMIER rendu. Il vaut false cote serveur et true cote
-        // navigateur, ce qui produit une desynchronisation d'hydratation a
-        // chaque chargement de page -- React la rattrape, mais Docusaurus
-        // journalise une erreur #418 dans la console. Une erreur permanente
-        // en console finit par masquer les vraies.
-        // A retirer si le greffon corrige son rendu (l'indice devrait etre
-        // pose apres le montage, pas pendant le premier rendu).
-        searchBarShortcutHint: false,
         highlightSearchTermsOnTargetPage: true,
         searchResultLimits: 10,
         searchResultContextMaxLength: 80,
