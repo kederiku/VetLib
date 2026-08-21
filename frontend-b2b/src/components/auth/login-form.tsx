@@ -34,10 +34,12 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { PasswordInput } from "@/components/auth/password-input";
 import type { ApiError } from "@/lib/api/errors";
 import { getGetCurrentUserQueryKey, useLogin } from "@/lib/api/generated/auth/auth";
 import { applyServerErrors } from "@/lib/auth/server-errors";
 import { loginSchema, type LoginFormValues } from "@/lib/auth/schemas";
+import { setSessionHint } from "@/lib/auth/session-hint";
 
 export function LoginForm() {
   const router = useRouter();
@@ -66,6 +68,9 @@ export function LoginForm() {
       // dans le cache de la query /me. Ainsi le dashboard s'affiche
       // instantanément, sans refaire un GET /me au montage.
       queryClient.setQueryData(getGetCurrentUserQueryKey(), res);
+      // Indice de session localStorage : le prochain passage sur /login
+      // saura qu'une session existe probablement (voir session-hint.ts).
+      setSessionHint();
       router.push("/dashboard");
     } catch (error) {
       // Erreur API (401 identifiants, 422, panne réseau...) : on la
@@ -113,15 +118,18 @@ export function LoginForm() {
 
             <Field data-invalid={!!errors.password}>
               <FieldLabel htmlFor="login-password">Mot de passe</FieldLabel>
-              <Input
+              <PasswordInput
                 id="login-password"
-                type="password"
                 // current-password (vs new-password) : indique au
                 // navigateur qu'il s'agit d'un mot de passe EXISTANT.
                 autoComplete="current-password"
                 aria-invalid={!!errors.password}
                 {...register("password")}
               />
+              {/* Pas de lien "mot de passe oublié" : c'est VOLONTAIRE,
+                  aucun endpoint de réinitialisation n'existe côté
+                  backend. Afficher un lien mort serait pire que rien ;
+                  à ajouter le jour où le backend fournira le flux. */}
               <FieldError errors={[errors.password]} />
             </Field>
 

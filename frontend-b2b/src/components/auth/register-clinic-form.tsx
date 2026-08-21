@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -28,13 +28,14 @@ import {
 } from "@/components/ui/card";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { PasswordInput } from "@/components/auth/password-input";
+import { PasswordStrengthHint } from "@/components/auth/password-strength-hint";
 import type { ApiError } from "@/lib/api/errors";
 import { getGetCurrentUserQueryKey, useLogin } from "@/lib/api/generated/auth/auth";
 import { useRegisterClinic } from "@/lib/api/generated/clinics/clinics";
@@ -43,6 +44,7 @@ import {
   registerClinicSchema,
   type RegisterClinicFormValues,
 } from "@/lib/auth/schemas";
+import { setSessionHint } from "@/lib/auth/session-hint";
 
 // Champs que CE formulaire affiche : une erreur 422 sur un autre champ
 // partirait dans le bandeau global (voir applyServerErrors).
@@ -67,6 +69,7 @@ export function RegisterClinicForm() {
     register,
     handleSubmit,
     setError,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<RegisterClinicFormValues>({
     resolver: zodResolver(registerClinicSchema),
@@ -79,6 +82,12 @@ export function RegisterClinicForm() {
       password: "",
     },
   });
+
+  // useWatch (et non watch()) : abonnement déclaratif à la valeur du
+  // champ password, pour alimenter l'indicateur de force en direct
+  // pendant la frappe. Le champ reste non contrôlé (register), on ne
+  // fait que l'OBSERVER.
+  const passwordValue = useWatch({ control, name: "password" }) ?? "";
 
   const onSubmit = handleSubmit(async (values) => {
     // Étape 1 : création de la clinique. En cas d'échec (email déjà
@@ -103,6 +112,9 @@ export function RegisterClinicForm() {
       // Comme dans LoginForm : la réponse du login alimente directement
       // le cache de /me, le dashboard s'affiche sans requête de plus.
       queryClient.setQueryData(getGetCurrentUserQueryKey(), res);
+      // Indice de session localStorage : le prochain passage sur /login
+      // saura qu'une session existe probablement (voir session-hint.ts).
+      setSessionHint();
       router.push("/dashboard");
     } catch {
       // Cas très improbable (le compte vient d'être créé avec ces
@@ -148,29 +160,34 @@ export function RegisterClinicForm() {
               <FieldError errors={[errors.clinic_name]} />
             </Field>
 
-            <Field data-invalid={!!errors.first_name}>
-              <FieldLabel htmlFor="register-first-name">Prénom</FieldLabel>
-              <Input
-                id="register-first-name"
-                type="text"
-                autoComplete="given-name"
-                aria-invalid={!!errors.first_name}
-                {...register("first_name")}
-              />
-              <FieldError errors={[errors.first_name]} />
-            </Field>
+            {/* Prénom et nom côte à côte dès sm (empilés sur mobile) :
+                deux champs courts n'ont pas besoin de toute la largeur,
+                et le formulaire y gagne une ligne. */}
+            <div className="grid gap-6 sm:grid-cols-2">
+              <Field data-invalid={!!errors.first_name}>
+                <FieldLabel htmlFor="register-first-name">Prénom</FieldLabel>
+                <Input
+                  id="register-first-name"
+                  type="text"
+                  autoComplete="given-name"
+                  aria-invalid={!!errors.first_name}
+                  {...register("first_name")}
+                />
+                <FieldError errors={[errors.first_name]} />
+              </Field>
 
-            <Field data-invalid={!!errors.last_name}>
-              <FieldLabel htmlFor="register-last-name">Nom</FieldLabel>
-              <Input
-                id="register-last-name"
-                type="text"
-                autoComplete="family-name"
-                aria-invalid={!!errors.last_name}
-                {...register("last_name")}
-              />
-              <FieldError errors={[errors.last_name]} />
-            </Field>
+              <Field data-invalid={!!errors.last_name}>
+                <FieldLabel htmlFor="register-last-name">Nom</FieldLabel>
+                <Input
+                  id="register-last-name"
+                  type="text"
+                  autoComplete="family-name"
+                  aria-invalid={!!errors.last_name}
+                  {...register("last_name")}
+                />
+                <FieldError errors={[errors.last_name]} />
+              </Field>
+            </div>
 
             <Field data-invalid={!!errors.email}>
               <FieldLabel htmlFor="register-email">Email</FieldLabel>
@@ -204,18 +221,19 @@ export function RegisterClinicForm() {
 
             <Field data-invalid={!!errors.password}>
               <FieldLabel htmlFor="register-password">Mot de passe</FieldLabel>
-              <Input
+              <PasswordInput
                 id="register-password"
-                type="password"
                 // new-password : le navigateur propose de GÉNÉRER un mot
                 // de passe fort au lieu de remplir un mot de passe connu.
                 autoComplete="new-password"
                 aria-invalid={!!errors.password}
                 {...register("password")}
               />
-              {/* La politique est annoncée AVANT l'erreur : l'utilisateur
-                  sait quoi taper du premier coup. */}
-              <FieldDescription>Au moins 12 caractères.</FieldDescription>
+              {/* L'indicateur remplace l'ancienne FieldDescription : champ
+                  vide, il affiche la politique ("Au moins 12 caractères"),
+                  puis évalue la saisie en direct — l'utilisateur sait quoi
+                  taper AVANT de voir une erreur. */}
+              <PasswordStrengthHint password={passwordValue} />
               <FieldError errors={[errors.password]} />
             </Field>
 
