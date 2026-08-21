@@ -1,0 +1,47 @@
+name: Rapport de bug
+description: Signaler un comportement incorrect
+labels: [bug]
+body:
+  - type: dropdown
+    id: zone
+    attributes:
+      label: Zone concernée
+      options:
+        - backend (API)
+        - frontend-b2c (portail propriétaires)
+        - frontend-b2b (espace clinique)
+        - infra / Docker
+        - base de données / migrations
+    validations:
+      required: true
+
+  - type: textarea
+    id: attendu
+    attributes:
+      label: Comportement attendu
+    validations:
+      required: true
+
+  - type: textarea
+    id: constate
+    attributes:
+      label: Comportement constaté
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Étapes de reproduction
+      placeholder: |
+        1. make up
+        2. Se connecter en tant que ...
+        3. Cliquer sur ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs ou trace d'erreur
+      render: shell

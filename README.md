@@ -1,5 +1,7 @@
 # VetoLib
 
+[![CI](https://github.com/kederiku/VetLib/actions/workflows/ci.yml/badge.svg)](https://github.com/kederiku/VetLib/actions/workflows/ci.yml)
+
 Plateforme SaaS B2B2C de prise de rendez-vous et de gestion pour cliniques vétérinaires : agenda et créneaux dynamiques côté professionnels (B2B), carnet de santé numérique et prise de RDV en ligne côté propriétaires d'animaux (B2C).
 
 ## Prérequis
@@ -71,3 +73,66 @@ make check          # toute la qualité sans Docker (lint, mypy, tests unit, ESL
 
 Le Makefile racine délègue au [Makefile du backend](backend/Makefile) (`make -C backend ...`),
 qui reste utilisable directement depuis `backend/`.
+
+## CI/CD et contribution
+
+`main` est une branche **protégée** : le push direct est refusé. Toute
+modification passe par une branche et une Pull Request, qui ne peut être
+fusionnée que si la CI est verte.
+
+```bash
+git switch -c feat/ma-fonctionnalite
+make check                       # même chose qu'en CI, mais en local et sans Docker
+git push -u origin feat/ma-fonctionnalite
+gh pr create --fill
+gh pr merge --auto --squash      # part tout seul dès que la CI passe au vert
+```
+
+### Ce que vérifie la CI
+
+Le workflow [`ci.yml`](.github/workflows/ci.yml) lance ces contrôles en
+parallèle sur chaque PR :
+
+| Contrôle | Ce qu'il empêche |
+|---|---|
+| ruff + ruff format | Code Python hors conventions |
+| mypy (strict) | Erreurs de typage |
+| pytest `tests/unit` | Régression de la logique métier |
+| pytest `tests/integration` | Régression sur PostgreSQL réel (RLS, index partiels) |
+| Couverture consolidée | Chute de la couverture backend sous le seuil |
+| Migrations Alembic | Deux heads, migration irréversible, ou modèle modifié sans migration |
+| ESLint, build Next, `tsc`, Vitest (×2 apps) | Régression frontend |
+| Dérive du client Orval | Endpoint modifié sans `make generate-api` |
+| pip-audit, npm audit, revue de dépendances | Dépendance vulnérable |
+| actionlint + zizmor | Workflow CI cassé ou vulnérable |
+| Build des 3 images Docker | Image qui ne se construit plus |
+
+Après un merge sur `main`, les images sont publiées sur GHCR :
+`ghcr.io/kederiku/vetlib-api`, `-portal` et `-clinic`, étiquetées `latest` et
+`sha-<commit>`.
+
+L'analyse de sécurité [CodeQL](.github/workflows/codeql.yml) tourne à part
+(sur PR et chaque lundi) et alimente l'onglet *Security*.
+
+### Le job « gate »
+
+Tous ces contrôles convergent vers un job unique nommé **`gate`**, et c'est
+lui seul que GitHub exige pour autoriser la fusion. On peut donc ajouter ou
+retirer des jobs sans jamais toucher aux réglages du dépôt.
+
+> **`gate` ne doit jamais être renommé.** Un check requis introuvable laisse
+> les PR bloquées « en attente », sans message d'erreur. Si un renommage est
+> vraiment nécessaire : désactiver le ruleset
+> (`gh api --method PUT repos/kederiku/VetLib/rulesets/<id> --input -` avec
+> `{"enforcement":"disabled"}`), merger le renommage, relever le nouveau nom
+> avec `gh api repos/kederiku/VetLib/commits/main/check-runs --jq
+> '.check_runs[].name'`, puis réappliquer le ruleset.
+
+### Reproduire la CI en local
+
+```bash
+make check            # tout ce qui ne demande pas Docker (le plus utile au quotidien)
+make check-all        # + tests d'intégration + contrôle des migrations
+make coverage         # couverture backend consolidée
+make audit            # vulnérabilités des dépendances
+```

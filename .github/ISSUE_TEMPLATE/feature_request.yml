@@ -1,0 +1,40 @@
+name: Demande de fonctionnalité
+description: Proposer une évolution du produit
+labels: [enhancement]
+body:
+  - type: textarea
+    id: besoin
+    attributes:
+      label: Besoin métier
+      description: Quel problème concret cela résout-il, et pour qui (clinique, propriétaire) ?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contexte
+    attributes:
+      label: Contexte borné concerné
+      description: Les bounded contexts de l'architecture (cf. CLAUDE.md).
+      multiple: true
+      options:
+        - identity (cliniques, utilisateurs, authentification)
+        - patients (animaux, carnet de santé)
+        - scheduling (agenda, rendez-vous)
+        - billing (facturation)
+        - transverse / à déterminer
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution envisagée
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impacts pressentis
+      options:
+        - label: Nouvelle table ou modification du schéma (migration Alembic)
+        - label: Nouvel endpoint API (régénération du client Orval)
+        - label: Impact multi-tenant / RLS

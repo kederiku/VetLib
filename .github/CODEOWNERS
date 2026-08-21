@@ -1,0 +1,16 @@
+# Proprietaires du code : GitHub les ajoute automatiquement comme relecteurs
+# des Pull Requests touchant les fichiers correspondants.
+#
+# Note pour aujourd'hui : le projet a un seul contributeur, et GitHub ne demande
+# jamais de relecture a l'auteur d'une PR. Ce fichier ne bloque donc rien (la
+# regle "review from Code Owners" est volontairement DESACTIVEE dans le ruleset,
+# sans quoi aucune PR ne pourrait plus etre fusionnee). Il documente la
+# responsabilite et sera immediatement utile des qu'une seconde personne
+# rejoindra le projet.
+
+*                       @kederiku
+
+# Zones sensibles, a expliciter des qu'il y a plusieurs contributeurs.
+/.github/               @kederiku
+/backend/migrations/    @kederiku
+/docker/                @kederiku

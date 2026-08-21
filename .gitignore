@@ -7,12 +7,19 @@ __pycache__/
 .ruff_cache/
 htmlcov/
 .coverage
+# Mesures partielles : une par suite de tests, fusionnees par `coverage combine`.
+.coverage.*
 coverage.xml
+# Sortie de `make openapi` : contrat regenerable a la demande, jamais commite
+# (c'est le client Orval qui est versionne, pas le schema qui l'a produit).
+backend/openapi.json
 
 # --- Node / Next.js ---
 node_modules/
 .next/
 out/
+# Rapports de couverture Vitest.
+coverage/
 next-env.d.ts
 *.tsbuildinfo
 npm-debug.log*

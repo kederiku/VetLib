@@ -33,6 +33,7 @@ dev = [
     "pytest-asyncio~=1.4",
     "httpx~=0.28.1",
     "testcontainers[postgres,redis]~=4.15",
+    "pytest-cov~=7.1",
     "ruff==0.16.3",
     "mypy~=2.3",
 ]
@@ -72,3 +73,29 @@ asyncio_mode = "auto"
 # le client Redis et testcontainers doivent partager le même event loop.
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+
+[tool.coverage.run]
+# Ce qu'on mesure : le code applicatif, pas les tests eux-memes.
+source = ["src/vetolib"]
+# relative_files : les chemins sont enregistres relativement a backend/, ce qui
+# permet de fusionner les mesures produites par deux machines differentes (en
+# CI, les tests unitaires et d'integration tournent sur deux runners distincts).
+relative_files = true
+omit = ["*/migrations/*"]
+
+[tool.coverage.report]
+# Lignes qu'il est inutile de compter comme non couvertes.
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "\\.\\.\\.",
+]
+show_missing = true
+skip_covered = true
+# Seuil minimal de couverture, applique par la CI sur la FUSION des tests
+# unitaires et d'integration. Mesure de reference au moment de sa mise en place
+# (2026-08-21) : 87 %. Le seuil est place juste en dessous : il laisse une
+# marge de manoeuvre normale, mais fait echouer la CI si une regression
+# franche s'installe. A remonter quand la couverture reelle progresse.
+fail_under = 85
