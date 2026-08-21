@@ -165,7 +165,7 @@ describe("BookingWizard — confirmation", () => {
     ).toHaveAttribute("href", "/rendez-vous");
     expect(screen.getByRole("button", { name: "Mon compte" })).toHaveAttribute(
       "href",
-      "/account",
+      "/mon-compte",
     );
   });
 

@@ -1,6 +1,6 @@
 /**
  * Layout du groupe de routes (protected) : toutes les pages qui exigent
- * une session propriétaire (/account, /animaux, /rendez-vous...).
+ * une session propriétaire (/mon-compte, /animaux, /rendez-vous...).
  *
  * Le route group (parenthèses = invisible dans l'URL) permet d'appliquer
  * l'AuthGuard UNE fois ici plutôt que de le répéter dans chaque page.

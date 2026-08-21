@@ -4,7 +4,7 @@
  * Server Component volontairement mince : il porte les métadonnées SEO
  * (exportables uniquement depuis un Server Component) et délègue toute
  * l'interactivité au Client Component LoginForm. Le GuestGuard renvoie
- * vers /account un propriétaire déjà connecté.
+ * vers /mon-compte un propriétaire déjà connecté.
  *
  * max-w-md : la largeur est portée par la page depuis que le parcours
  * d'inscription, plus large, partage ce même layout.

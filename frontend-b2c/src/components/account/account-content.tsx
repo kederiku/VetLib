@@ -1,5 +1,5 @@
 /**
- * Contenu de la page /account : la fiche du propriétaire connecté.
+ * Contenu de la page /mon-compte : la fiche du propriétaire connecté.
  *
  * Trois cartes : "Prochains rendez-vous" (aperçu, composant dédié
  * UpcomingAppointments), "Mon profil" (formulaire d'édition, composant

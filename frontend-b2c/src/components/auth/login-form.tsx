@@ -69,7 +69,7 @@ export function LoginForm() {
       // dans le cache de la query /me. Ainsi la page compte s'affiche
       // instantanément, sans refaire un GET /me au montage.
       queryClient.setQueryData(getGetCurrentOwnerQueryKey(), res);
-      router.push("/account");
+      router.push("/mon-compte");
     } catch (error) {
       // Erreur API (401 identifiants, 422, panne réseau...) : on la
       // traduit en messages FR posés sur les champs ou en bandeau global.

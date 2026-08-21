@@ -128,7 +128,7 @@ describe("registerOwnerSchema — étape 1 du parcours d'inscription", () => {
 
   it("exige le téléphone", () => {
     // Règle du PARCOURS, pas du contrat d'API : le backend l'accepte
-    // nullable, et la fiche /account permet de l'effacer ensuite (voir
+    // nullable, et la fiche /mon-compte permet de l'effacer ensuite (voir
     // profileSchema, où il reste facultatif).
     // Object.fromEntries plutôt qu'une déstructuration : on veut le cas
     // « clé absente », pas une variable inutilisée.

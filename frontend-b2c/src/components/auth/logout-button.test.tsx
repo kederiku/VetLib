@@ -21,7 +21,7 @@ const simulations = vi.hoisted(() => ({ replace: vi.fn(), reponse: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: simulations.replace, push: vi.fn(), prefetch: vi.fn() }),
-  usePathname: () => "/account",
+  usePathname: () => "/mon-compte",
   useSearchParams: () => new URLSearchParams(),
 }));
 

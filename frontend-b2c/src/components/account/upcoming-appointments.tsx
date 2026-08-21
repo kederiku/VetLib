@@ -1,5 +1,5 @@
 /**
- * UpcomingAppointments : l'apercu "Prochains rendez-vous" de /account.
+ * UpcomingAppointments : l'apercu "Prochains rendez-vous" de /mon-compte.
  *
  * Reutilise la MEME query que la page /rendez-vous (meme queryKey
  * TanStack) : si la liste complete a deja ete visitee, l'apercu s'affiche

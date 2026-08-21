@@ -92,7 +92,7 @@ describe("OwnerShell", () => {
   });
 
   it("ne marque qu'une seule section à la fois", () => {
-    navigation.pathname = "/account";
+    navigation.pathname = "/mon-compte";
     render(
       <OwnerShell>
         <p>x</p>

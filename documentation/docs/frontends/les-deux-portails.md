@@ -67,7 +67,7 @@ src/app/
 | ------------------------- | ----------------------- |
 | `(protected)/animaux`     | `(protected)/dashboard` |
 | `(protected)/rendez-vous` | `(protected)/agenda`    |
-| `(protected)/account`     | `(protected)/reglages`  |
+| `(protected)/mon-compte`  | `(protected)/reglages`  |
 
 ### Le cas particulier de `/register` côté B2C
 
@@ -75,7 +75,7 @@ L'inscription des propriétaires est un parcours en trois étapes
 (`components/auth/register/`), et son étape 1 crée le compte **et ouvre la session**. Les
 étapes 2 et 3 se déroulent donc connecté, sur cette même page publique.
 
-Conséquence : le `GuestGuard` — dont le rôle est de renvoyer vers `/account` un
+Conséquence : le `GuestGuard` — dont le rôle est de renvoyer vers `/mon-compte` un
 propriétaire déjà connecté — ne peut pas être posé au niveau de la page, il éjecterait la
 personne au milieu de son inscription. Il est porté par le wizard lui-même, avec
 `enabled={step === 1}`. C'est la seule page du monorepo où ce garde est conditionnel.

@@ -10,7 +10,7 @@
  * sans bouton d'annulation.
  *
  * Client Component : useListMyAppointments (cache partage avec l'apercu
- * de /account, meme queryKey).
+ * de /mon-compte, meme queryKey).
  */
 "use client";
 

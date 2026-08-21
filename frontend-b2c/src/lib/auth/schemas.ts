@@ -56,7 +56,7 @@ export const registerOwnerSchema = z
     email: z.email("Adresse email invalide."),
     // REQUIS ici, alors que le backend l'accepte nullable : c'est un choix du
     // parcours d'inscription (la clinique doit pouvoir joindre le
-    // propriétaire), pas une contrainte du contrat d'API. La fiche /account
+    // propriétaire), pas une contrainte du contrat d'API. La fiche /mon-compte
     // permet d'ailleurs de l'effacer ensuite, d'où le champ resté facultatif
     // dans profileSchema plus bas.
     phone: z
@@ -83,7 +83,7 @@ export const registerOwnerSchema = z
 const FRENCH_POSTAL_CODE = /^\d{5}$/;
 
 /**
- * Le bloc adresse, partagé par la fiche profil (/account) et par l'étape 2
+ * Le bloc adresse, partagé par la fiche profil (/mon-compte) et par l'étape 2
  * du parcours d'inscription.
  *
  * Les champs sont des chaînes SIMPLES (jamais undefined) : un champ de
@@ -187,7 +187,7 @@ export const onboardingAddressSchema = addressFields.superRefine(
 );
 
 /**
- * Fiche profil du propriétaire (/account).
+ * Fiche profil du propriétaire (/mon-compte).
  *
  * Même bloc adresse que ci-dessus, mais imbriqué sous "address" et
  * accompagné des coordonnées et des préférences de rappel.

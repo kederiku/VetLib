@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/rendez-vous", label: "Mes rendez-vous", icon: CalendarDays },
   { href: "/animaux", label: "Mes animaux", icon: PawPrint },
-  { href: "/account", label: "Mon compte", icon: CircleUser },
+  { href: "/mon-compte", label: "Mon compte", icon: CircleUser },
 ] as const;
 
 export function OwnerShell({ children }: { children: React.ReactNode }) {

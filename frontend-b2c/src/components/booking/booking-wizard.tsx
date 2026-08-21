@@ -78,7 +78,7 @@ export function BookingWizard() {
             <Button
               variant="outline"
               nativeButton={false}
-              render={<Link href="/account" />}
+              render={<Link href="/mon-compte" />}
             >
               Mon compte
             </Button>
