@@ -7,7 +7,7 @@
 # moderne du frontend Dockerfile (nécessaire aux montages de cache RUN --mount plus bas).
 
 # ----- Stage base : Python + le gestionnaire de paquets uv -----
-FROM python:3.13.15-slim-trixie AS base
+FROM python:3.14.7-slim-trixie AS base
 # uv n'est pas installé via pip : on copie ses binaires depuis l'image officielle
 # (version épinglée = builds reproductibles).
 COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /uvx /bin/
