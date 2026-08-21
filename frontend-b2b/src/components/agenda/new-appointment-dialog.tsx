@@ -3,15 +3,20 @@
  *
  * Formulaire react-hook-form + zod (newAppointmentSchema), sur le
  * pattern canonique du projet (Controller pour les composants Base UI
- * contrôlés, mutateAsync + applyServerErrors). Deux partis pris :
- * - l'heure est saisie LIBREMENT (input time natif), pas choisie dans
- *   une liste de créneaux : le staff peut forcer un horaire hors grille
- *   (urgence, arrangement) ; la contrainte d'EXCLUSION PostgreSQL
- *   protège du chevauchement et son 409 s'affiche en bandeau ;
+ * contrôlés, mutateAsync + applyServerErrors). Trois partis pris :
+ * - l'heure se choisit d'abord parmi les CRÉNEAUX DISPONIBLES calculés
+ *   par le backend (SlotPicker : horaires d'ouverture moins absences
+ *   moins rendez-vous) — choisir un créneau remplit heure ET praticien ;
+ * - le mode "heure libre" (input time natif) reste accessible : le
+ *   staff peut forcer un horaire hors grille (urgence, arrangement) ;
+ *   la contrainte d'EXCLUSION PostgreSQL protège du chevauchement et
+ *   son 409 s'affiche en bandeau ;
  * - l'écran cible le client de PASSAGE (guest_name requis) ; le
  *   rattachement à un compte propriétaire viendra avec l'écran patients.
  * Le parent remonte le dialog via `key` à chaque ouverture : le
- * formulaire repart vierge sans logique de reset manuelle.
+ * formulaire repart vierge sans logique de reset manuelle — et c'est
+ * aussi le canal des `initialValues` (clic sur un créneau de la grille :
+ * date, heure et praticien arrivent préremplis).
  */
 "use client";
 
@@ -19,8 +24,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
 import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { fr } from "react-day-picker/locale";
+import { toast } from "sonner";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -55,6 +61,8 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { SlotPicker } from "@/components/agenda/slot-picker";
 import type { ApiError } from "@/lib/api/errors";
 import { useCreateAppointment } from "@/lib/api/generated/scheduling/scheduling";
 import type {
@@ -62,7 +70,7 @@ import type {
   ResourceResponse,
 } from "@/lib/api/generated/vetoLibAPI.schemas";
 import { applyServerErrors } from "@/lib/auth/server-errors";
-import { formatDayLong } from "@/lib/date/format";
+import { formatDayLong, parisWallTimeToIso, toIsoDate } from "@/lib/date/format";
 import {
   newAppointmentSchema,
   type NewAppointmentFormValues,
@@ -86,6 +94,16 @@ type NewAppointmentDialogProps = {
   resources: ResourceResponse[];
   /** Types de rendez-vous actifs proposés dans le Select. */
   appointmentTypes: AppointmentTypeResponse[];
+  /**
+   * Pré-remplissage à l'ouverture (clic sur un créneau de la grille) :
+   * transporté par le remontage `key` du parent, donc lu une seule fois
+   * dans defaultValues.
+   */
+  initialValues?: {
+    date?: Date;
+    time?: string;
+    resourceId?: string;
+  };
 };
 
 export function NewAppointmentDialog({
@@ -93,6 +111,7 @@ export function NewAppointmentDialog({
   onOpenChange,
   resources,
   appointmentTypes,
+  initialValues,
 }: NewAppointmentDialogProps) {
   const queryClient = useQueryClient();
   const createMutation = useCreateAppointment<ApiError>();
@@ -101,24 +120,56 @@ export function NewAppointmentDialog({
   // dès qu'une date est choisie (Base UI ne le fait pas tout seul).
   const [dateOpen, setDateOpen] = useState(false);
 
+  // Choix de l'heure : "slots" = créneaux disponibles proposés (défaut),
+  // "free" = input time libre pour forcer hors grille. Un clic sur un
+  // créneau de la GRILLE arrive avec une heure précise : on ouvre alors
+  // directement en mode libre, l'heure déjà remplie.
+  const [timeMode, setTimeMode] = useState<"slots" | "free">(
+    initialValues?.time !== undefined ? "free" : "slots",
+  );
+
   const {
     register,
     control,
     handleSubmit,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<NewAppointmentFormValues>({
     resolver: zodResolver(newAppointmentSchema),
     defaultValues: {
-      resource_id: "",
+      resource_id: initialValues?.resourceId ?? "",
       appointment_type_id: "",
-      date: undefined,
-      time: "",
+      date: initialValues?.date,
+      time: initialValues?.time ?? "",
       guest_name: "",
       guest_pet_name: "",
       reason: "",
     },
   });
+
+  // Champs observés par le SlotPicker et le libellé "Fin prévue".
+  // useWatch (et non watch()) : abonnement déclaré au niveau du
+  // composant, conforme aux règles react-hooks du projet.
+  const watchedTypeId = useWatch({ control, name: "appointment_type_id" });
+  const watchedDate = useWatch({ control, name: "date" });
+  const watchedResourceId = useWatch({ control, name: "resource_id" });
+  const watchedTime = useWatch({ control, name: "time" });
+
+  // "Fin prévue 10:15 (30 min)" : la durée vient du type choisi, le
+  // backend dérivera exactement le même ends_at.
+  const selectedType = appointmentTypes.find(
+    (type) => type.id === watchedTypeId,
+  );
+  let endTimeLabel: string | null = null;
+  if (selectedType !== undefined && /^\d{2}:\d{2}$/.test(watchedTime)) {
+    const [hours, minutes] = watchedTime.split(":").map(Number);
+    const endTotal =
+      (hours * 60 + minutes + selectedType.duration_minutes) % (24 * 60);
+    endTimeLabel = `${String(Math.floor(endTotal / 60)).padStart(2, "0")}:${String(
+      endTotal % 60,
+    ).padStart(2, "0")}`;
+  }
 
   // items : Base UI affiche ces LIBELLÉS dans les triggers des Select,
   // au lieu des valeurs brutes (UUID).
@@ -137,13 +188,14 @@ export function NewAppointmentDialog({
   startOfToday.setHours(0, 0, 0, 0);
 
   const onSubmit = handleSubmit(async (values) => {
-    // Recombinaison date + heure en Date LOCALE du poste, convertie en
-    // ISO UTC pour l'API. Poste clinique supposé en Europe/Paris (comme
-    // CLINIC_TIME_ZONE) : c'est le fuseau dans lequel le staff pense
-    // "14:30". Le backend re-projettera dans la timezone de la clinique.
-    const [hours, minutes] = values.time.split(":").map(Number);
-    const startsAt = new Date(values.date);
-    startsAt.setHours(hours, minutes, 0, 0);
+    // Recombinaison date + heure en instant ISO UTC.
+    // parisWallTimeToIso (et NON Date.setHours) : "14:30" est ici une
+    // heure MURALE de la clinique — celle qu'affichent la grille, les
+    // créneaux proposés et le champ libre. setHours écrirait des champs
+    // locaux au NAVIGATEUR : depuis un poste hors de France, le
+    // rendez-vous serait enregistré à la mauvaise heure, et le backend
+    // ne reprojette rien (il stocke l'instant reçu tel quel).
+    const startsAtIso = parisWallTimeToIso(toIsoDate(values.date), values.time);
 
     try {
       await createMutation.mutateAsync({
@@ -152,7 +204,7 @@ export function NewAppointmentDialog({
           appointment_type_id: values.appointment_type_id,
           // ends_at n'est PAS envoyé : le backend le dérive de la durée
           // du type de rendez-vous.
-          starts_at: startsAt.toISOString(),
+          starts_at: startsAtIso,
           guest_name: values.guest_name,
           // "" -> null : champs nullables côté backend.
           guest_pet_name: values.guest_pet_name || null,
@@ -163,6 +215,7 @@ export function NewAppointmentDialog({
       // refetchent, puis on ferme : le nouveau RDV apparaît à sa place.
       await invalidateAgenda(queryClient);
       onOpenChange(false);
+      toast.success("Rendez-vous créé");
     } catch (error) {
       // 409 slot_already_booked et consorts -> bandeau root du dialog.
       applyServerErrors(error, setError, KNOWN_FIELDS);
@@ -257,62 +310,114 @@ export function NewAppointmentDialog({
               </Field>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
-              <Field data-invalid={!!errors.date}>
-                <FieldLabel>Date</FieldLabel>
-                <Controller
-                  control={control}
-                  name="date"
-                  render={({ field }) => (
-                    <Popover open={dateOpen} onOpenChange={setDateOpen}>
-                      <PopoverTrigger
-                        render={
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start font-normal"
-                            aria-invalid={!!errors.date}
-                          />
-                        }
-                      >
-                        <CalendarIcon data-icon="inline-start" />
-                        <span className="first-letter:uppercase">
-                          {field.value !== undefined
-                            ? formatDayLong(field.value)
-                            : "Choisir une date"}
-                        </span>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          locale={fr}
-                          selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date);
-                            setDateOpen(false);
-                          }}
-                          disabled={{ before: startOfToday }}
+            <Field data-invalid={!!errors.date}>
+              <FieldLabel>Date</FieldLabel>
+              <Controller
+                control={control}
+                name="date"
+                render={({ field }) => (
+                  <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                    <PopoverTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start font-normal"
+                          aria-invalid={!!errors.date}
                         />
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                />
-                <FieldError errors={[errors.date]} />
-              </Field>
+                      }
+                    >
+                      <CalendarIcon data-icon="inline-start" />
+                      <span className="first-letter:uppercase">
+                        {field.value !== undefined
+                          ? formatDayLong(field.value)
+                          : "Choisir une date"}
+                      </span>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        locale={fr}
+                        selected={field.value}
+                        onSelect={(date) => {
+                          field.onChange(date);
+                          setDateOpen(false);
+                        }}
+                        disabled={{ before: startOfToday }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
+              />
+              <FieldError errors={[errors.date]} />
+            </Field>
 
-              <Field data-invalid={!!errors.time}>
+            <Field data-invalid={!!errors.time}>
+              <div className="flex items-center justify-between gap-2">
                 <FieldLabel htmlFor="appointment-time">Heure</FieldLabel>
-                {/* input time natif en register : saisie libre au
-                    clavier, cohérente avec le parti pris "le staff peut
-                    forcer un horaire". */}
+                {/* Bascule créneaux proposés / heure libre. Base UI
+                    renvoie un tableau ; presser le bouton déjà actif
+                    renvoie un tableau vide, qu'on ignore. */}
+                <ToggleGroup
+                  aria-label="Mode de choix de l'heure"
+                  variant="outline"
+                  size="sm"
+                  value={[timeMode]}
+                  onValueChange={(groupValue: unknown[]) => {
+                    const next = groupValue[0];
+                    if (next === "slots" || next === "free") {
+                      setTimeMode(next);
+                    }
+                  }}
+                >
+                  <ToggleGroupItem value="slots">
+                    Créneaux proposés
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="free">Heure libre</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+
+              {timeMode === "slots" ? (
+                <SlotPicker
+                  appointmentTypeId={watchedTypeId}
+                  date={watchedDate}
+                  resourceId={watchedResourceId}
+                  selectedTime={watchedTime}
+                  onSelect={(slot) => {
+                    // Un créneau porte l'heure ET le praticien : les
+                    // deux champs sont écrits d'un coup, et validés pour
+                    // effacer d'éventuelles erreurs "champ requis".
+                    setValue("time", slot.time, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    });
+                    setValue("resource_id", slot.resourceId, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    });
+                  }}
+                />
+              ) : (
+                // input time natif en register : saisie libre au
+                // clavier, cohérente avec le parti pris "le staff peut
+                // forcer un horaire" (urgence, arrangement).
                 <Input
                   id="appointment-time"
                   type="time"
                   aria-invalid={!!errors.time}
                   {...register("time")}
                 />
-                <FieldError errors={[errors.time]} />
-              </Field>
-            </div>
+              )}
+
+              {/* Heure de fin dérivée de la durée du type : le staff
+                  voit l'emprise réelle du rendez-vous avant de créer. */}
+              {endTimeLabel !== null && selectedType !== undefined && (
+                <p className="text-xs text-muted-foreground">
+                  {watchedTime} - {endTimeLabel} ({selectedType.duration_minutes}
+                  {" min)"}
+                </p>
+              )}
+              <FieldError errors={[errors.time]} />
+            </Field>
 
             <Field data-invalid={!!errors.guest_name}>
               <FieldLabel htmlFor="appointment-guest-name">

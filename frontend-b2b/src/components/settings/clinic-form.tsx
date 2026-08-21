@@ -18,8 +18,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -103,10 +104,6 @@ export function ClinicForm() {
   // TError = ApiError : le mutator jette toujours un ApiError normalisé.
   const updateMutation = useUpdateMyClinic<ApiError>();
 
-  // Message "Réglages enregistrés" : affiché après un succès, masqué dès
-  // la modification suivante (info éphémère d'UI, un état local suffit).
-  const [saved, setSaved] = useState(false);
-
   const formValues = useMemo(
     () => (clinic !== undefined ? toFormValues(clinic) : undefined),
     [clinic],
@@ -139,8 +136,6 @@ export function ClinicForm() {
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    setSaved(false);
-
     // Adresse tout-ou-rien : le superRefine du schéma garantit qu'ici
     // l'adresse est soit entièrement vide, soit complète — line1 suffit
     // comme sentinelle. Le backend attend address: null quand il n'y a
@@ -177,7 +172,9 @@ export function ClinicForm() {
         // reset avec les valeurs serveur : efface les drapeaux "dirty".
         reset(toFormValues(res.data));
       }
-      setSaved(true);
+      // Confirmation éphémère (toast) : disparaît seule, pas d'état
+      // local à masquer à la frappe suivante.
+      toast.success("Réglages enregistrés");
     } catch (error) {
       applyServerErrors(error, setError, KNOWN_FIELDS);
     }
@@ -209,9 +206,8 @@ export function ClinicForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* onChange sur le <form> : toute frappe masque le message de
-            succès. noValidate : validation confiée à zod. */}
-        <form onSubmit={onSubmit} onChange={() => setSaved(false)} noValidate>
+        {/* noValidate : validation confiée à zod. */}
+        <form onSubmit={onSubmit} noValidate>
           <FieldGroup>
             {errors.root?.server && (
               <Alert variant="destructive">
@@ -219,40 +215,40 @@ export function ClinicForm() {
               </Alert>
             )}
 
-            {saved && (
-              <Alert>
-                <AlertTitle>Réglages enregistrés</AlertTitle>
-              </Alert>
-            )}
+            {/* Nom + téléphone côte à côte sur écran large : même
+                pattern que le duo code postal / ville plus bas. */}
+            <div className="grid gap-6 sm:grid-cols-2">
+              <Field data-invalid={!!errors.name}>
+                <FieldLabel htmlFor="clinic-name">
+                  Nom de la clinique
+                </FieldLabel>
+                <Input
+                  id="clinic-name"
+                  type="text"
+                  autoComplete="organization"
+                  aria-invalid={!!errors.name}
+                  {...register("name")}
+                />
+                <FieldError errors={[errors.name]} />
+              </Field>
 
-            <Field data-invalid={!!errors.name}>
-              <FieldLabel htmlFor="clinic-name">Nom de la clinique</FieldLabel>
-              <Input
-                id="clinic-name"
-                type="text"
-                autoComplete="organization"
-                aria-invalid={!!errors.name}
-                {...register("name")}
-              />
-              <FieldError errors={[errors.name]} />
-            </Field>
-
-            <Field data-invalid={!!errors.phone}>
-              <FieldLabel htmlFor="clinic-phone">
-                Téléphone{" "}
-                <span className="font-normal text-muted-foreground">
-                  (optionnel)
-                </span>
-              </FieldLabel>
-              <Input
-                id="clinic-phone"
-                type="tel"
-                autoComplete="tel"
-                aria-invalid={!!errors.phone}
-                {...register("phone")}
-              />
-              <FieldError errors={[errors.phone]} />
-            </Field>
+              <Field data-invalid={!!errors.phone}>
+                <FieldLabel htmlFor="clinic-phone">
+                  Téléphone{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optionnel)
+                  </span>
+                </FieldLabel>
+                <Input
+                  id="clinic-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  aria-invalid={!!errors.phone}
+                  {...register("phone")}
+                />
+                <FieldError errors={[errors.phone]} />
+              </Field>
+            </div>
 
             <FieldSet>
               <FieldLegend>Adresse</FieldLegend>
@@ -334,9 +330,7 @@ export function ClinicForm() {
                 fuseau.
               </FieldDescription>
               {/* Select Base UI = composant contrôlé : Controller relie
-                  value/onValueChange à react-hook-form. setSaved(false)
-                  explicite : le clic dans un popup ne déclenche pas le
-                  onChange DOM du <form>. */}
+                  value/onValueChange à react-hook-form. */}
               <Controller
                 control={control}
                 name="timezone"
@@ -344,10 +338,7 @@ export function ClinicForm() {
                   <Select
                     items={timezoneItems}
                     value={field.value}
-                    onValueChange={(value) => {
-                      setSaved(false);
-                      field.onChange(value ?? "");
-                    }}
+                    onValueChange={(value) => field.onChange(value ?? "")}
                   >
                     <SelectTrigger
                       className="w-64"

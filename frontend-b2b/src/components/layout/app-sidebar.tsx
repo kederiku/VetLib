@@ -1,11 +1,15 @@
 /**
  * Sidebar de navigation du portail B2B.
  *
- * Trois zones : en-tête (nom de l'app + clinique connectée), navigation
- * (items filtrés selon les permissions de l'utilisateur), pied
- * (identité compacte + déconnexion). Client Component : elle lit la
- * session (useCurrentUser), la route active (usePathname) et les
- * permissions (useHasPermission).
+ * Deux zones : en-tête (marque + clinique connectée) et navigation
+ * (items filtrés selon les permissions). L'identité et la déconnexion
+ * vivent désormais dans le menu utilisateur du header (voir
+ * user-menu.tsx) : la sidebar est purement de la navigation.
+ *
+ * collapsible="icon" : le repli laisse un RAIL d'icônes (tooltips au
+ * survol) au lieu de faire disparaître toute la navigation comme le
+ * mode offcanvas par défaut. Client Component : elle lit la session
+ * (useCurrentUser) et la route active (usePathname).
  *
  * Rappel : masquer l'entrée "Réglages" à un ASV est une commodité d'UI,
  * PAS une protection — le backend re-vérifie clinic:manage sur chaque
@@ -14,88 +18,81 @@
  */
 "use client";
 
-import {
-  CalendarDays,
-  LayoutDashboard,
-  Settings,
-  type LucideIcon,
-} from "lucide-react";
+import { StethoscopeIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { LogoutButton } from "@/components/auth/logout-button";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
-import { useHasPermission, type Permission } from "@/lib/auth/permissions";
-import { ROLE_LABELS } from "@/lib/auth/roles";
+import { hasPermission } from "@/lib/auth/permissions";
+import { NAV_ITEMS } from "@/lib/navigation";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-
-type NavItem = {
-  title: string;
-  href: string;
-  icon: LucideIcon;
-  // Permission requise pour VOIR l'entrée ; absente = visible par tous.
-  permission?: Permission;
-};
-
-const NAV_ITEMS: NavItem[] = [
-  { title: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Agenda", href: "/agenda", icon: CalendarDays },
-  {
-    title: "Réglages",
-    href: "/reglages",
-    icon: Settings,
-    permission: "clinic:manage",
-  },
-];
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { data: user } = useCurrentUser();
-  // Seule permission qui garde une entrée de nav aujourd'hui. Les hooks
-  // devant être appelés inconditionnellement (règle des hooks : pas de
-  // useHasPermission dans le .filter), on interroge chaque permission de
-  // garde ICI ; en ajouter une = un appel de plus + un cas dans canSee.
-  const canManageClinic = useHasPermission("clinic:manage");
 
-  const canSee = (item: NavItem): boolean =>
-    item.permission !== "clinic:manage" || canManageClinic;
+  // hasPermission est une fonction PURE (pas un hook) : on peut filtrer
+  // la liste entière sans violer la règle des hooks. Ajouter un écran
+  // gardé = une entrée dans NAV_ITEMS, rien à changer ici.
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => item.permission === undefined || hasPermission(user, item.permission),
+  );
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex flex-col gap-0.5 px-2 py-1.5">
-          <span className="text-sm font-semibold">VetoLib Pro</span>
-          {/* Nom de la clinique connectée : rappel permanent du tenant
-              courant (utile pour un vétérinaire multi-cliniques). */}
-          <span className="truncate text-xs text-muted-foreground">
-            {user?.clinic_name}
-          </span>
-        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            {/* size="lg" : la variante prévue par le preset pour un
+                en-tête de marque — en mode rail, elle se réduit d'elle-même
+                à la pastille carrée. Le lien renvoie à l'écran d'accueil
+                connecté. */}
+            <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
+                <StethoscopeIcon className="size-4" />
+              </div>
+              <div className="flex flex-col gap-0.5 leading-none">
+                <span className="font-semibold">VetoLib Pro</span>
+                {/* Nom de la clinique connectée : rappel permanent du
+                    tenant courant (utile pour un vétérinaire
+                    multi-cliniques). */}
+                <span className="truncate text-xs text-muted-foreground">
+                  {user?.clinic_name}
+                </span>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel>Clinique</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV_ITEMS.filter(canSee).map((item) => (
+              {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   {/* isActive par préfixe d'URL : /agenda reste actif sur
                       une future sous-page /agenda/xxx. Base UI n'a pas
                       asChild : render={<Link/>} substitue le <a> Next.js
-                      au <button> en conservant style et accessibilité. */}
+                      au <button> en conservant style et accessibilité.
+                      tooltip : le preset ne l'affiche qu'en mode rail
+                      replié, où le libellé est masqué. */}
                   <SidebarMenuButton
                     isActive={pathname.startsWith(item.href)}
                     render={<Link href={item.href} />}
+                    tooltip={item.title}
                   >
                     <item.icon />
                     <span>{item.title}</span>
@@ -107,20 +104,9 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
-        {/* Identité compacte : qui est connecté, avec quel rôle. */}
-        {user !== undefined && (
-          <div className="flex flex-col gap-0.5 px-2 py-1.5 text-sm">
-            <span className="truncate font-medium">
-              {user.first_name} {user.last_name}
-            </span>
-            <span className="truncate text-xs text-muted-foreground">
-              {ROLE_LABELS[user.role]}
-            </span>
-          </div>
-        )}
-        <LogoutButton />
-      </SidebarFooter>
+      {/* Poignée au bord de la sidebar : cliquer la replie/déplie sans
+          viser le bouton du header. */}
+      <SidebarRail />
     </Sidebar>
   );
 }

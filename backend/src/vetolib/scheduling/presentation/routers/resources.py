@@ -1,4 +1,16 @@
-"""Routes des praticiens : CRUD + semaine type + absences (manager)."""
+"""Routes des praticiens : lecture pour tout le staff, gestion manager.
+
+Decoupage des permissions ROUTE PAR ROUTE (et non plus sur le routeur) :
+- lister les praticiens (GET "") demande appointment:read : consulter la
+  liste des praticiens est un prerequis de la gestion d'agenda (filtrer
+  l'agenda, creer un RDV), un droit que TOUT le staff possede (ASV,
+  veterinaire, manager) ;
+- tout le reste (creation, modification, semaine type, absences) reste
+  reserve au manager via clinic:manage : ce sont des actes de gestion de
+  la clinique, pas de simple consultation.
+Sans ce decoupage, l'ecran Agenda du frontend B2B repondait 403 aux roles
+asv/veterinaire des qu'il chargeait la liste des praticiens.
+"""
 
 import uuid
 from typing import Annotated
@@ -46,17 +58,23 @@ from vetolib.scheduling.presentation.schemas import (
     WeeklyScheduleResponse,
 )
 
-router = APIRouter(
-    prefix="/scheduling/resources",
-    tags=["scheduling"],
-    dependencies=[Depends(require_permission("clinic:manage"))],
+# Pas de garde globale sur le routeur : chaque route porte SA permission
+# (lecture staff vs gestion manager), voir la docstring du module.
+router = APIRouter(prefix="/scheduling/resources", tags=["scheduling"])
+
+
+@router.get(
+    "",
+    operation_id="listResources",
+    dependencies=[Depends(require_permission("appointment:read"))],
 )
-
-
-@router.get("", operation_id="listResources")
 async def list_resources(
     use_case: Annotated[ListResources, Depends(get_list_resources)],
 ) -> list[ResourceResponse]:
+    # Liste des praticiens : accessible a tout le staff (appointment:read),
+    # car indispensable a l'ecran Agenda (colonnes et filtres par praticien).
+    # Commentaire et non docstring : FastAPI copierait la docstring dans la
+    # description OpenAPI, ce qui changerait le client genere par Orval.
     return [ResourceResponse.from_dto(r) for r in await use_case.execute()]
 
 
@@ -64,6 +82,9 @@ async def list_resources(
 async def create_resource(
     body: CreateResourceRequest,
     use_case: Annotated[CreateResource, Depends(get_create_resource)],
+    # La garde clinic:manage est portee par ce parametre : elle verifie la
+    # permission ET fournit le CurrentUser (pour son clinic_id). Pas besoin
+    # de la dupliquer dans dependencies=[...] du decorateur.
     current: Annotated[CurrentUser, Depends(require_permission("clinic:manage"))],
 ) -> ResourceResponse:
     dto = await use_case.execute(
@@ -72,7 +93,11 @@ async def create_resource(
     return ResourceResponse.from_dto(dto)
 
 
-@router.put("/{resource_id}", operation_id="updateResource")
+@router.put(
+    "/{resource_id}",
+    operation_id="updateResource",
+    dependencies=[Depends(require_permission("clinic:manage"))],
+)
 async def update_resource(
     resource_id: uuid.UUID,
     body: UpdateResourceRequest,
@@ -90,7 +115,10 @@ async def update_resource(
 
 
 @router.delete(
-    "/{resource_id}", operation_id="deleteResource", status_code=status.HTTP_204_NO_CONTENT
+    "/{resource_id}",
+    operation_id="deleteResource",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission("clinic:manage"))],
 )
 async def delete_resource(
     resource_id: uuid.UUID,
@@ -99,7 +127,15 @@ async def delete_resource(
     await use_case.execute(resource_id)
 
 
-@router.get("/{resource_id}/weekly-schedule", operation_id="getResourceWeeklySchedule")
+# Semaine type et absences : meme en lecture, ces routes restent reservees
+# au manager (clinic:manage) -- ce sont des ecrans de reglages de la
+# clinique, l'agenda n'en a pas besoin (il consomme les disponibilites
+# deja calculees).
+@router.get(
+    "/{resource_id}/weekly-schedule",
+    operation_id="getResourceWeeklySchedule",
+    dependencies=[Depends(require_permission("clinic:manage"))],
+)
 async def get_resource_weekly_schedule(
     resource_id: uuid.UUID,
     use_case: Annotated[GetResourceWeeklySchedule, Depends(get_get_resource_weekly_schedule)],
@@ -107,7 +143,11 @@ async def get_resource_weekly_schedule(
     return [WeeklyScheduleResponse.from_dto(s) for s in await use_case.execute(resource_id)]
 
 
-@router.put("/{resource_id}/weekly-schedule", operation_id="setResourceWeeklySchedule")
+@router.put(
+    "/{resource_id}/weekly-schedule",
+    operation_id="setResourceWeeklySchedule",
+    dependencies=[Depends(require_permission("clinic:manage"))],
+)
 async def set_resource_weekly_schedule(
     resource_id: uuid.UUID,
     body: SetWeeklySchedulesRequest,
@@ -123,7 +163,11 @@ async def set_resource_weekly_schedule(
     return [WeeklyScheduleResponse.from_dto(s) for s in dtos]
 
 
-@router.get("/{resource_id}/exceptions", operation_id="listResourceExceptions")
+@router.get(
+    "/{resource_id}/exceptions",
+    operation_id="listResourceExceptions",
+    dependencies=[Depends(require_permission("clinic:manage"))],
+)
 async def list_resource_exceptions(
     resource_id: uuid.UUID,
     use_case: Annotated[ListResourceExceptions, Depends(get_list_resource_exceptions)],
@@ -135,6 +179,7 @@ async def list_resource_exceptions(
     "/{resource_id}/exceptions",
     operation_id="createResourceException",
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("clinic:manage"))],
 )
 async def create_resource_exception(
     resource_id: uuid.UUID,
@@ -156,6 +201,7 @@ async def create_resource_exception(
     "/{resource_id}/exceptions/{exception_id}",
     operation_id="deleteResourceException",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission("clinic:manage"))],
 )
 async def delete_resource_exception(
     resource_id: uuid.UUID,

@@ -10,19 +10,17 @@
  */
 "use client";
 
-import { Lock } from "lucide-react";
+import { LockIcon } from "lucide-react";
+import Link from "next/link";
 
 import { ClinicForm } from "@/components/settings/clinic-form";
 import { AppointmentTypesTab } from "@/components/settings/appointment-types-tab";
 import { PractitionersTab } from "@/components/settings/practitioners-tab";
 import { ScheduleTab } from "@/components/settings/schedule-tab";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { EmptyState } from "@/components/shared/empty-state";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
+import { Button } from "@/components/ui/button";
 import {
   Tabs,
   TabsContent,
@@ -36,26 +34,35 @@ export function SettingsContent() {
 
   if (!canManage) {
     return (
-      <div className="p-8">
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Lock />
-            </EmptyMedia>
-            <EmptyTitle>Accès réservé au gérant de la clinique</EmptyTitle>
-            <EmptyDescription>
-              Les réglages (fiche clinique, types de rendez-vous, praticiens,
-              horaires) ne sont modifiables que par le gérant.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
+      <PageContainer width="narrow">
+        <EmptyState
+          icon={<LockIcon />}
+          title="Accès réservé au gérant de la clinique"
+          description="Les réglages (fiche clinique, types de rendez-vous, praticiens, horaires) ne sont modifiables que par le gérant."
+          action={
+            // L'impasse doit proposer une sortie : retour à l'écran
+            // accessible à tous les rôles.
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/dashboard" />}
+            >
+              Retour au tableau de bord
+            </Button>
+          }
+        />
+      </PageContainer>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
-      <h1 className="text-2xl font-bold tracking-tight">Réglages</h1>
+    // Largeur "narrow" : les réglages sont des formulaires, une colonne
+    // étroite reste plus lisible que la pleine largeur des écrans denses.
+    <PageContainer width="narrow">
+      <PageHeader
+        title="Réglages"
+        description="Fiche clinique, types de rendez-vous, praticiens et horaires."
+      />
 
       <Tabs defaultValue="clinic">
         <TabsList>
@@ -80,6 +87,6 @@ export function SettingsContent() {
           <ScheduleTab />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }

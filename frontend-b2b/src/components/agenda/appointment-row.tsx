@@ -11,51 +11,21 @@
 
 import { AppointmentActions } from "@/components/agenda/appointment-actions";
 import { Badge } from "@/components/ui/badge";
-import type {
-  AgendaEntryResponse,
-  AppointmentStatus,
-} from "@/lib/api/generated/vetoLibAPI.schemas";
+import type { AgendaEntryResponse } from "@/lib/api/generated/vetoLibAPI.schemas";
+import {
+  STATUS_META,
+  formatClientName,
+  formatPetLabel,
+} from "@/lib/appointments/status";
 import { formatTimeRange } from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 
-// Apparence de chaque état de la machine à états d'un rendez-vous.
-// Record<AppointmentStatus, ...> : TypeScript exige une entrée par état,
-// un nouvel état backend casserait la compilation ici (voulu).
-// rowClass : les rendez-vous annulés restent visibles (historique de la
-// journée) mais estompés, pour ne pas voler l'attention.
-export const STATUS_META: Record<
-  AppointmentStatus,
-  {
-    label: string;
-    variant: React.ComponentProps<typeof Badge>["variant"];
-    rowClass?: string;
-  }
-> = {
-  pending: { label: "À confirmer", variant: "outline" },
-  confirmed: { label: "Confirmé", variant: "default" },
-  completed: { label: "Terminé", variant: "secondary" },
-  cancelled: { label: "Annulé", variant: "destructive", rowClass: "opacity-60" },
-};
-
-/**
- * Nom du client à afficher : compte propriétaire (prénom + nom) si le
- * RDV vient du portail B2C, sinon le client de passage (guest_name).
- * Exporté : la carte "À confirmer" du tableau de bord l'utilise aussi.
- */
-export function formatClientName(entry: AgendaEntryResponse): string {
-  if (entry.owner_first_name !== null || entry.owner_last_name !== null) {
-    return [entry.owner_first_name, entry.owner_last_name]
-      .filter(Boolean)
-      .join(" ");
-  }
-  return entry.guest_name ?? "Client inconnu";
-}
-
 export function AppointmentRow({ entry }: { entry: AgendaEntryResponse }) {
+  // Libellés et couleurs de statut : source unique partagée avec la
+  // grille agenda et le tableau de bord (lib/appointments/status.ts).
   const meta = STATUS_META[entry.status];
-  // Animal : pet_name (fiche patient liée) sinon guest_pet_name (saisie
-  // libre du staff pour un client de passage), sinon rien.
-  const petName = entry.pet_name ?? entry.guest_pet_name;
+  // "Rex (chien)" : nom de l'animal, espèce incluse quand elle est connue.
+  const petLabel = formatPetLabel(entry);
 
   return (
     <div
@@ -80,7 +50,7 @@ export function AppointmentRow({ entry }: { entry: AgendaEntryResponse }) {
 
         <p className="truncate text-sm text-muted-foreground">
           {formatClientName(entry)}
-          {petName != null && ` — ${petName}`}
+          {petLabel != null && ` — ${petLabel}`}
           {" · "}
           {entry.resource_name}
         </p>
@@ -96,6 +66,17 @@ export function AppointmentRow({ entry }: { entry: AgendaEntryResponse }) {
             {entry.reason}
           </p>
         )}
+
+        {/* Raison d'annulation : le dialog d'annulation promet qu'elle
+            sera "visible dans l'agenda" — c'est ici que la promesse est
+            tenue pour les lignes de liste. */}
+        {entry.status === "cancelled" &&
+          entry.cancelled_reason !== null &&
+          entry.cancelled_reason !== "" && (
+            <p className="truncate text-sm text-muted-foreground italic">
+              Annulé : {entry.cancelled_reason}
+            </p>
+          )}
       </div>
 
       <AppointmentActions entry={entry} />

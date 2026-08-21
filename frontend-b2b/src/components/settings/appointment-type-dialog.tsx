@@ -13,6 +13,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,9 @@ export function AppointmentTypeDialog({
       await queryClient.invalidateQueries({
         queryKey: getListAppointmentTypesQueryKey(),
       });
+      // Confirmation éphémère (toast) : le dialog se ferme, un bandeau
+      // inline n'aurait plus de support visible.
+      toast.success(isEdit ? "Type modifié" : "Type créé");
       onOpenChange(false);
     } catch (error) {
       applyServerErrors(error, setError, KNOWN_FIELDS);

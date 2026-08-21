@@ -38,11 +38,14 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.845 0.1 277);
-  --chart-2: oklch(0.696 0.16 277);
-  --chart-3: oklch(0.596 0.2 277);
-  --chart-4: oklch(0.51 0.23 277);
-  --chart-5: oklch(0.432 0.19 277);
+  /* Tokens chart-1..5 : couleurs des PRATICIENS dans la grille agenda
+     (un praticien = une teinte). Cinq teintes distinctes, harmonisees
+     avec la marque indigo (chart-1 = la marque elle-meme). */
+  --chart-1: oklch(0.51 0.23 277); /* indigo (marque) */
+  --chart-2: oklch(0.6 0.12 180); /* teal */
+  --chart-3: oklch(0.72 0.15 85); /* ambre */
+  --chart-4: oklch(0.62 0.17 10); /* rose */
+  --chart-5: oklch(0.55 0.18 310); /* violet */
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -116,15 +119,18 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.845 0.1 277);
-  --chart-2: oklch(0.696 0.16 277);
-  --chart-3: oklch(0.596 0.2 277);
-  --chart-4: oklch(0.51 0.23 277);
-  --chart-5: oklch(0.432 0.19 277);
+  /* Couleurs des praticiens de l'agenda (voir bloc :root) : memes
+     teintes qu'en clair, luminosite +0.08 pour rester lisibles sur
+     fond sombre. */
+  --chart-1: oklch(0.59 0.23 277); /* indigo (marque) */
+  --chart-2: oklch(0.68 0.12 180); /* teal */
+  --chart-3: oklch(0.8 0.15 85); /* ambre */
+  --chart-4: oklch(0.7 0.17 10); /* rose */
+  --chart-5: oklch(0.63 0.18 310); /* violet */
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.696 0.16 277);
-  --sidebar-primary-foreground: oklch(0.262 0.051 172.552);
+  --sidebar-primary-foreground: oklch(0.97 0.02 277);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);

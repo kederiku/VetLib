@@ -17,10 +17,17 @@ import { useGetCurrentUser } from "@/lib/api/generated/auth/auth";
  * - data : le UserResponse si connecté ;
  * - isPending : vérification en cours (au premier montage) ;
  * - isError : pas de session valide (401 même après refresh silencieux).
+ *
+ * Option enabled (défaut true) : quand false, la query ne lance AUCUNE
+ * requête et reste en isPending. Utilisé par le GuestGuard pour éviter
+ * les 401 de bruit chez les visiteurs sans indice de session (voir
+ * lib/auth/session-hint.ts). Les appelants existants, sans option, ne
+ * changent pas de comportement.
  */
-export function useCurrentUser() {
+export function useCurrentUser(options?: { enabled?: boolean }) {
   return useGetCurrentUser({
     query: {
+      enabled: options?.enabled ?? true,
       // retry: false : un 401 sur /me signifie "non connecté", pas une
       // panne passagère. Réessayer 3 fois (défaut TanStack) ferait
       // patienter l'utilisateur plusieurs secondes avant la redirection
