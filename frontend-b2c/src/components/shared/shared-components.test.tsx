@@ -19,24 +19,30 @@ import { PageHeader } from "@/components/shared/page-header";
 import { renderWithProviders } from "@/test/render";
 
 describe("PageContainer", () => {
-  it("applique la largeur des écrans de liste par défaut", () => {
+  it("applique la largeur des écrans denses par défaut", () => {
+    // On vise le conteneur par une classe SANS crochets (mx-auto) puis
+    // on assert avec toHaveClass : `container.firstChild` tomberait sur
+    // le script anti-flash de next-themes, et une valeur arbitraire
+    // entre crochets s'echappe mal dans un selecteur CSS.
     const { container } = renderWithProviders(
       <PageContainer>
         <p>contenu</p>
       </PageContainer>,
     );
 
-    expect(container.querySelector("div.max-w-4xl")).not.toBeNull();
+    expect(container.querySelector("div.mx-auto")).toHaveClass("max-w-[96rem]");
   });
 
   it("resserre la colonne en variante narrow, pour la lecture et les formulaires", () => {
+    // Limite typographique assumee : au-dela d'environ 800 px, l'oeil
+    // perd la ligne entre le libelle et la fin du champ.
     const { container } = renderWithProviders(
       <PageContainer width="narrow">
         <p>contenu</p>
       </PageContainer>,
     );
 
-    expect(container.querySelector("div.max-w-2xl")).not.toBeNull();
+    expect(container.querySelector("div.mx-auto")).toHaveClass("max-w-3xl");
   });
 });
 

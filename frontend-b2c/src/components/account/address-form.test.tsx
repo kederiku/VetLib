@@ -19,7 +19,10 @@ import { AddressForm } from "@/components/account/address-form";
 import { buildAddress, buildOwner } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 
-const simulations = vi.hoisted(() => ({ save: vi.fn(), toastSuccess: vi.fn() }));
+const simulations = vi.hoisted(() => ({
+  save: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
 
 vi.mock("sonner", () => ({
   toast: {

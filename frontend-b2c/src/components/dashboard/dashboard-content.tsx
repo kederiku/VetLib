@@ -58,15 +58,24 @@ export function DashboardContent() {
         }
       />
 
-      {/* 2/3 - 1/3 sur grand écran, empilé en dessous : le prochain
-          rendez-vous est la matière principale, la colonne de droite les
-          raccourcis. L'ordre empilé sur mobile (rendez-vous, profil,
-          animaux) est déjà le bon ordre de priorité. */}
-      <div className="grid items-start gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      {/* 3/5 - 2/5 sur grand écran, empilé en dessous : le prochain
+          rendez-vous reste la matière principale, mais la colonne de
+          droite avait besoin de plus que le tiers d'origine -- sous
+          270 px, "Prochain rendez-vous : 22 août 2026" ne tenait pas sur
+          une ligne. L'ordre empilé sur mobile (rendez-vous, profil,
+          animaux) est déjà le bon ordre de priorité.
+
+          Réserve connue : les points de rupture Tailwind se calculent
+          sur la FENETRE, pas sur la place réellement disponible. A
+          exactement 1024 px avec la sidebar dépliée (qui en consomme
+          256), la colonne retombe sous ce seuil et la sous-ligne repasse
+          sur deux lignes -- elle reste lue en entier, c'est l'absence de
+          `truncate` qui le garantit. */}
+      <div className="grid items-start gap-6 lg:grid-cols-5">
+        <div className="lg:col-span-3">
           <NextAppointmentCard now={now} />
         </div>
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 lg:col-span-2">
           <ProfileCompletionCard />
           <PetsSummaryCard now={now} />
         </div>

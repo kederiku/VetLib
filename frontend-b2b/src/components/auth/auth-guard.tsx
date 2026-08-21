@@ -52,8 +52,8 @@ function FullPageSkeleton() {
           {/* Titre de page simulé */}
           <Skeleton className="h-8 w-64" />
           {/* Deux blocs de contenu simulés */}
-          <Skeleton className="h-48 w-full max-w-3xl" />
-          <Skeleton className="h-24 w-full max-w-3xl" />
+          <Skeleton className="h-48 w-full max-w-[96rem]" />
+          <Skeleton className="h-24 w-full max-w-[96rem]" />
         </div>
       </div>
     </div>

@@ -129,11 +129,30 @@ B2C ; `agenda`, `scheduling`, `clinic`, `auth` côté B2B).
 **La même coquille, transposée** : `AppShell` + `AppSidebar` + `SiteHeader` +
 `UserMenu`, avec `lib/navigation.ts` pour source unique des entrées de menu et du titre
 de page, et `components/shared/` pour les primitives de mise en page
-(`PageContainer`, `PageHeader`, `EmptyState`, `ErrorState`). Deux différences assumées :
-le B2C n'a **ni rôle ni permission** (un propriétaire voit tout son espace, la sidebar ne
-filtre donc rien), et son `PageContainer` est plus étroit — `max-w-4xl` contre
-`max-w-6xl` — parce que les listes d'un particulier sont courtes là où l'agenda d'une
-clinique est dense.
+(`PageContainer`, `PageHeader`, `EmptyState`, `ErrorState`). Une seule différence
+assumée : le B2C n'a **ni rôle ni permission** — un propriétaire voit tout son espace, la
+sidebar ne filtre donc rien.
+
+### Les deux largeurs de page
+
+Le `PageContainer` est le **seul endroit** de chaque portail où une largeur de page se
+décide : `SidebarInset`, au-dessus, est en `w-full flex-1` sans plafond. D'où la règle du
+`CLAUDE.md` — un écran ne fixe jamais sa propre largeur.
+
+| Variante | Largeur                   | Pour quoi                                                                     |
+| -------- | ------------------------- | ----------------------------------------------------------------------------- |
+| défaut   | `max-w-[96rem]` (1536 px) | Écrans denses : tableaux de bord, listes, grille d'animaux, agenda            |
+| `narrow` | `max-w-3xl` (768 px)      | Lecture et formulaires : Mon compte, fiche d'un rendez-vous, tunnel, réglages |
+
+Les deux portails partagent la même largeur dense. Le raisonnement initial — « les listes
+d'un particulier sont plus courtes, donc le B2C doit être plus étroit » — confondait la
+longueur des listes avec la largeur de la fenêtre : sur un écran de 1920, le B2C laissait
+près de 500 px de vide de chaque côté.
+
+Le plafond, lui, reste volontaire. Sans lui, une ligne de rendez-vous s'étirerait sur
+2500 px en ultra-large et le vide se déplacerait simplement à l'intérieur du contenu. Les
+768 px de la variante étroite sont une limite **typographique** : au-delà d'environ
+800 px, l'œil perd la ligne entre le libellé à gauche et la fin du champ à droite.
 
 L'état replié de la sidebar est persisté dans le cookie `sidebar_state`, relu par un
 Server Component pour éviter le flash ouvert → replié au rechargement. En développement
