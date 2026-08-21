@@ -87,6 +87,19 @@ class HibpPasswordChecker:
     async def is_compromised(self, password: str) -> bool:
         """True si l'empreinte figure dans le corpus HIBP. Peut lever
         httpx.HTTPError : c'est le composite qui absorbe la panne."""
+        # CodeQL signale ici py/weak-sensitive-data-hashing : "SHA-1 sur un mot
+        # de passe". La règle est juste EN GÉNÉRAL et fausse ICI. On ne hache
+        # pas le mot de passe pour le stocker ni pour le vérifier -- c'est
+        # Argon2 qui s'en charge, dans PwdlibPasswordHasher. Cette empreinte
+        # sert d'INDEX de recherche dans un corpus public, et l'algorithme
+        # n'est pas un choix : le protocole HIBP l'impose. Elle ne quitte
+        # d'ailleurs jamais la machine (seuls ses cinq premiers caractères
+        # partent) et n'est jamais persistée.
+        #
+        # L'alerte se ferme donc dans l'onglet Security du dépôt ("false
+        # positive") : la configuration CodeQL par défaut n'honore PAS les
+        # commentaires de suppression en ligne, en poser un ne ferait
+        # qu'entretenir l'illusion du contraire.
         empreinte = hashlib.sha1(password.encode("utf-8"), usedforsecurity=False).hexdigest()
         empreinte = empreinte.upper()
         prefixe, suffixe = empreinte[:5], empreinte[5:]
