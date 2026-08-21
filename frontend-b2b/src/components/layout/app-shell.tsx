@@ -1,37 +1,44 @@
 /**
- * Coquille des pages connectées : sidebar de navigation + zone de
- * contenu.
+ * Coquille des pages connectées : sidebar de navigation + header + zone
+ * de contenu.
  *
  * Montée UNE fois par le layout du groupe (protected), sous l'AuthGuard :
  * naviguer entre Tableau de bord, Agenda et Réglages ne remonte donc ni
- * la sidebar ni son état (ouverte/repliée, persisté en cookie par le
- * SidebarProvider). Server Component : il ne fait qu'assembler des
- * composants clients (sidebar.tsx est "use client"), aucun état ici.
+ * la sidebar ni son état. Server Component ASYNC : il lit le cookie
+ * d'état de la sidebar pour rendre le bon état dès le premier HTML.
  */
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { cookies } from "next/headers";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { SiteHeader } from "@/components/layout/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+export async function AppShell({ children }: { children: React.ReactNode }) {
+  // Le SidebarProvider ECRIT le cookie "sidebar_state" à chaque repli/
+  // dépli, mais ne le relit pas : c'est à nous de le lui rendre via
+  // defaultOpen, sinon la sidebar se rouvre à chaque rechargement (flash
+  // ouvert -> replié). cookies() est asynchrone depuis Next 15/16, d'où
+  // le composant async. Cookie absent (première visite) => ouverte.
+  const cookieStore = await cookies();
+  const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
+
   return (
-    // SidebarProvider : contexte partagé sidebar <-> bouton d'ouverture
-    // (état ouvert/replié, bascule mobile en Sheet).
-    <SidebarProvider>
-      <AppSidebar />
-      {/* SidebarInset : le <main> qui occupe le reste de l'écran. */}
-      <SidebarInset>
-        {/* En-tête léger et sticky : le bouton pour replier/ouvrir la
-            sidebar reste accessible même après un long défilement. */}
-        <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b bg-background px-4">
-          <SidebarTrigger />
-          <Separator orientation="vertical" className="h-4" />
-        </header>
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
+    // TooltipProvider : les tooltips du rail replié doivent apparaître
+    // immédiatement (delay 0, défaut du provider du projet) — sans
+    // provider, Base UI applique son délai standard, trop lent pour
+    // identifier des icônes de navigation.
+    <TooltipProvider>
+      {/* SidebarProvider : contexte partagé sidebar <-> bouton d'ouverture
+          (état ouvert/replié, bascule mobile en Sheet). */}
+      <SidebarProvider defaultOpen={defaultOpen}>
+        <AppSidebar />
+        {/* SidebarInset : le <main> qui occupe le reste de l'écran. */}
+        <SidebarInset>
+          <SiteHeader />
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
