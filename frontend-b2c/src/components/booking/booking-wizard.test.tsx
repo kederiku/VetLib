@@ -26,6 +26,16 @@ import {
 // Chaque étape est remplacée par un bouton qui déclenche sa sélection :
 // on pilote ainsi le parcours sans dépendre du réseau ni de l'interface
 // réelle de chaque étape.
+const navigation = vi.hoisted(() => ({ params: new URLSearchParams() }));
+
+// Le tunnel lit ?animal=<id> pour pre-cocher l'animal : sans ce mock,
+// useSearchParams renvoie null hors de Next.
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/rendez-vous/nouveau",
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => navigation.params,
+}));
+
 vi.mock("@/components/booking/step-clinic", () => ({
   StepClinic: ({ onSelect }: { onSelect: (c: unknown) => void }) => (
     <button type="button" onClick={() => onSelect(buildPublicClinic())}>

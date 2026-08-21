@@ -215,3 +215,42 @@ describe("bookingReducer — immutabilité", () => {
     expect(avant).toEqual(copie);
   });
 });
+
+describe("PRESELECT_PET — pré-sélection depuis l'URL", () => {
+  it("coche l'animal quand rien n'a encore été choisi", () => {
+    const etat = bookingReducer(initialBookingState, {
+      type: "PRESELECT_PET",
+      pet: buildPet({ id: "rex", name: "Rex" }),
+    });
+
+    expect(etat.pet?.id).toBe("rex");
+  });
+
+  it("n'AVANCE PAS d'étape : la clinique reste à choisir", () => {
+    // Sauter des etapes casserait la chaine d'invalidation et
+    // laisserait l'utilisateur sur un ecran dont il ignore le contexte.
+    const etat = bookingReducer(initialBookingState, {
+      type: "PRESELECT_PET",
+      pet: buildPet(),
+    });
+
+    expect(etat.step).toBe(1);
+  });
+
+  it("ne remplace JAMAIS un animal déjà choisi", () => {
+    // C'est la garde qui empeche un refetch d'arriere-plan de re-cocher
+    // l'animal de l'URL par-dessus celui que l'utilisateur vient de
+    // selectionner.
+    const choisi = bookingReducer(initialBookingState, {
+      type: "SELECT_PET",
+      pet: buildPet({ id: "mistigri", name: "Mistigri" }),
+    });
+
+    const apres = bookingReducer(choisi, {
+      type: "PRESELECT_PET",
+      pet: buildPet({ id: "rex", name: "Rex" }),
+    });
+
+    expect(apres.pet?.id).toBe("mistigri");
+  });
+});
