@@ -1,21 +1,29 @@
 """Tests unitaires des use cases du contexte patients (CRUD des animaux).
 
-Fakes en mémoire uniquement : on valide la logique métier (création, PATCH
-partiel, soft delete) et surtout la BARRIERE D'APPARTENANCE -- l'animal d'un
-autre propriétaire est introuvable par construction (get_for_owner filtre),
-donc PetNotFoundError (404), sans révéler son existence.
+Fakes en mémoire uniquement : on valide la logique métier (création,
+remplacement de fiche, soft delete) et surtout la BARRIERE D'APPARTENANCE --
+l'animal d'un autre propriétaire est introuvable par construction
+(get_for_owner filtre), donc PetNotFoundError (404), sans révéler son
+existence.
 """
 
 import uuid
+from datetime import date
 
 import pytest
 
 from tests.unit.identity.fakes import FixedClock
 from tests.unit.patients.fakes import FakePatientsUnitOfWork
 from vetolib.patients.application.dto import CreatePetCommand, UpdatePetCommand
-from vetolib.patients.application.use_cases import CreatePet, DeletePet, ListMyPets, UpdatePet
+from vetolib.patients.application.use_cases import (
+    CreatePet,
+    DeletePet,
+    GetMyPet,
+    ListMyPets,
+    UpdatePet,
+)
 from vetolib.patients.domain.errors import PetNotFoundError
-from vetolib.patients.domain.pet import Species
+from vetolib.patients.domain.pet import Sex, Species
 
 OWNER_A = uuid.UUID("00000000-0000-0000-0000-00000000000a")
 OWNER_B = uuid.UUID("00000000-0000-0000-0000-00000000000b")
@@ -25,6 +33,35 @@ def _create_command(
     owner_id: uuid.UUID = OWNER_A, name: str = "Rex", species: Species = Species.DOG
 ) -> CreatePetCommand:
     return CreatePetCommand(owner_id=owner_id, name=name, species=species)
+
+
+def _update_command(
+    pet_id: uuid.UUID,
+    *,
+    owner_id: uuid.UUID = OWNER_A,
+    name: str = "Rex",
+    species: Species = Species.DOG,
+    birth_date: date | None = None,
+    sex: Sex = Sex.UNKNOWN,
+    breed: str | None = None,
+    sterilized: bool | None = None,
+) -> UpdatePetCommand:
+    """Fiche complete de remplacement (PUT) : aucun champ n'est optionnel.
+
+    Les defauts de ce HELPER de test rendent les cas lisibles ; la commande
+    elle-meme, volontairement, n'en a aucun -- un oubli doit etre une erreur
+    de compilation et non un effacement silencieux.
+    """
+    return UpdatePetCommand(
+        pet_id=pet_id,
+        owner_id=owner_id,
+        name=name,
+        species=species,
+        birth_date=birth_date,
+        sex=sex,
+        breed=breed,
+        sterilized=sterilized,
+    )
 
 
 async def test_create_pet_cree_l_animal_pour_l_owner_du_token() -> None:
@@ -48,18 +85,51 @@ async def test_create_pet_cree_l_animal_pour_l_owner_du_token() -> None:
     assert uow.events == []
 
 
-async def test_update_pet_patch_partiel_n_ecrase_que_le_non_none() -> None:
-    """Sémantique PATCH : species change, name (None = absent) est conservé."""
+async def test_update_pet_remplace_toute_la_fiche() -> None:
+    """Sémantique PUT : la fiche envoyée écrase l'ancienne, en entier."""
     uow = FakePatientsUnitOfWork()
-    created = await CreatePet(lambda: uow, FixedClock()).execute(_create_command())
+    clock = FixedClock()
+    created = await CreatePet(lambda: uow, clock).execute(_create_command())
 
-    updated = await UpdatePet(lambda: uow).execute(
-        UpdatePetCommand(pet_id=created.id, owner_id=OWNER_A, name=None, species=Species.CAT)
+    updated = await UpdatePet(lambda: uow, clock).execute(
+        _update_command(
+            created.id,
+            name="Rex II",
+            species=Species.CAT,
+            birth_date=date(2021, 3, 12),
+            sex=Sex.FEMALE,
+            breed="Berger australien",
+            sterilized=True,
+        )
     )
 
-    assert updated.name == "Rex"  # inchangé : non fourni dans le PATCH
+    assert updated.name == "Rex II"
     assert updated.species is Species.CAT
+    assert updated.birth_date == date(2021, 3, 12)
+    assert updated.sex is Sex.FEMALE
+    assert updated.breed == "Berger australien"
+    assert updated.sterilized is True
     assert uow.pet_store[created.id].species is Species.CAT
+
+
+async def test_update_pet_efface_un_champ_omis() -> None:
+    """C'est TOUT l'interet du PUT : pouvoir vider une race saisie par erreur.
+
+    Avec l'ancienne semantique PATCH (None = inchange), envoyer null aurait
+    voulu dire "n'y touche pas" : la race etait ineffacable une fois saisie.
+    """
+    uow = FakePatientsUnitOfWork()
+    clock = FixedClock()
+    created = await CreatePet(lambda: uow, clock).execute(_create_command())
+    await UpdatePet(lambda: uow, clock).execute(
+        _update_command(created.id, breed="Berger australien")
+    )
+
+    # Fiche renvoyee SANS race : elle est effacee, pas conservee.
+    updated = await UpdatePet(lambda: uow, clock).execute(_update_command(created.id))
+
+    assert updated.breed is None
+    assert uow.pet_store[created.id].breed is None
 
 
 async def test_update_du_pet_d_un_autre_owner_est_introuvable() -> None:
@@ -73,8 +143,8 @@ async def test_update_du_pet_d_un_autre_owner_est_introuvable() -> None:
     created = await CreatePet(lambda: uow, FixedClock()).execute(_create_command())
 
     with pytest.raises(PetNotFoundError):
-        await UpdatePet(lambda: uow).execute(
-            UpdatePetCommand(pet_id=created.id, owner_id=OWNER_B, name="Pirate", species=None)
+        await UpdatePet(lambda: uow, FixedClock()).execute(
+            _update_command(created.id, owner_id=OWNER_B, name="Pirate")
         )
 
     assert uow.pet_store[created.id].name == "Rex"  # intact
@@ -126,3 +196,27 @@ async def test_list_my_pets_est_bornee_a_l_owner_et_triee_par_nom() -> None:
 
     assert [pet.name for pet in pets_a] == ["Alba", "Rex"]
     assert [pet.name for pet in pets_b] == ["Kiwi"]
+
+
+async def test_get_my_pet_renvoie_la_fiche_complete() -> None:
+    """La page de fiche animal du portail lit par cet endpoint."""
+    uow = FakePatientsUnitOfWork()
+    clock = FixedClock()
+    created = await CreatePet(lambda: uow, clock).execute(_create_command())
+
+    fiche = await GetMyPet(lambda: uow).execute(pet_id=created.id, owner_id=OWNER_A)
+
+    assert fiche.id == created.id
+    assert fiche.name == "Rex"
+    # Defauts de la fiche enrichie : "inconnu" est une VALEUR, pas une absence.
+    assert fiche.sex is Sex.UNKNOWN
+    assert fiche.birth_date is None
+
+
+async def test_get_du_pet_d_un_autre_owner_est_introuvable() -> None:
+    """SECURITE : la lecture unitaire a la meme barriere que l'edition."""
+    uow = FakePatientsUnitOfWork()
+    created = await CreatePet(lambda: uow, FixedClock()).execute(_create_command())
+
+    with pytest.raises(PetNotFoundError):
+        await GetMyPet(lambda: uow).execute(pet_id=created.id, owner_id=OWNER_B)

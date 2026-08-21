@@ -15,4 +15,12 @@ def to_pet_dto(pet: Pet) -> PetDto:
     owner_id ne traverse volontairement pas : le client connaît déjà SON
     identité (c'est celle de sa session), la republier n'apporterait rien.
     """
-    return PetDto(id=pet.id, name=pet.name, species=pet.species)
+    return PetDto(
+        id=pet.id,
+        name=pet.name,
+        species=pet.species,
+        birth_date=pet.birth_date,
+        sex=pet.sex,
+        breed=pet.breed,
+        sterilized=pet.sterilized,
+    )

@@ -19,7 +19,13 @@ from vetolib.identity.presentation.dependencies import (
     CurrentOwnerDep as CurrentOwnerDep,
 )
 from vetolib.patients.application.ports import PatientsUnitOfWork, PatientsUoWFactory
-from vetolib.patients.application.use_cases import CreatePet, DeletePet, ListMyPets, UpdatePet
+from vetolib.patients.application.use_cases import (
+    CreatePet,
+    DeletePet,
+    GetMyPet,
+    ListMyPets,
+    UpdatePet,
+)
 from vetolib.patients.infrastructure.uow import SqlAlchemyPatientsUnitOfWork
 from vetolib.shared.infrastructure.clock import SystemClock
 from vetolib.shared.presentation.dependencies import SessionmakerDep, SettingsDep
@@ -67,8 +73,17 @@ def get_create_pet(
     return CreatePet(uow_factory, clock)
 
 
-def get_update_pet(uow_factory: PatientsUoWFactoryDep) -> UpdatePet:
-    return UpdatePet(uow_factory)
+def get_my_pet(uow_factory: PatientsUoWFactoryDep) -> GetMyPet:
+    return GetMyPet(uow_factory)
+
+
+def get_update_pet(
+    uow_factory: PatientsUoWFactoryDep, clock: Annotated[SystemClock, Depends(get_clock)]
+) -> UpdatePet:
+    # Horloge requise depuis l'enrichissement de la fiche : la validation de
+    # la date de naissance ("pas dans le futur") vit dans le domaine, qui
+    # n'a pas le droit d'appeler datetime.now().
+    return UpdatePet(uow_factory, clock)
 
 
 def get_delete_pet(
