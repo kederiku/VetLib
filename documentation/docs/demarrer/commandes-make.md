@@ -119,11 +119,11 @@ référence d'API est produite au build à partir de `backend/openapi.json`.
 
 ## Les raccourcis
 
-| Cible            | Périmètre                                                                    |
-| ---------------- | ---------------------------------------------------------------------------- |
-| `make check`     | Toute la qualité **sans Docker** : backend, frontends, documentation         |
-| `make check-all` | `check` + tests d'intégration + contrôle des migrations                      |
-| `make audit`     | Vulnérabilités connues : `pip-audit` + `npm audit` sur les trois projets npm |
+| Cible            | Périmètre                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `make check`     | Toute la qualité **sans Docker** : backend, frontends, documentation                                  |
+| `make check-all` | `check` + tests d'intégration + contrôle des migrations                                               |
+| `make audit`     | Vulnérabilités connues : `pip-audit`, `npm audit` sur les deux portails, et le script d'audit du site |
 
 `make check` est la commande à lancer avant chaque `git push`. Voir
 [Contribuer : de la branche à la fusion](../contribuer/workflow-de-contribution.md).

@@ -176,7 +176,10 @@ audit: ## Vulnérabilités connues dans les dépendances (backend + les 2 fronte
 		&& uvx pip-audit --requirement /tmp/vetolib-requirements.txt --strict
 	cd $(B2C) && npm audit --audit-level=high
 	cd $(B2B) && npm audit --audit-level=high
-	cd $(DOCS) && npm audit --audit-level=high
+	@# Le site passe par un script maison : npm audit ne sait pas ecarter
+	@# UNE faille precise, et image-size (tire par Docusaurus) porte deux
+	@# avis high sans correctif publie. Voir documentation/scripts/audit.mjs.
+	cd $(DOCS) && npm run audit
 
 # -----------------------------------------------------------------------------
 # Qualité frontends

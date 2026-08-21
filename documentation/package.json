@@ -12,6 +12,7 @@
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
     "lint": "prettier --check .",
+    "audit": "node scripts/audit.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -35,6 +36,9 @@
     "@types/react": "19.2.18",
     "prettier": "3.9.6",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.1.0"
   },
   "browserslist": {
     "production": [

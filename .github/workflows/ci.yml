@@ -742,8 +742,19 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Audit des dependances du site de documentation
+        # Pas `npm audit --audit-level=high` directement : cette commande ne sait
+        # pas ecarter UNE faille precise. Or image-size (tire par Docusaurus) porte
+        # deux avis "high" SANS version corrigee publiee. La commande nue laisserait
+        # donc le choix entre bloquer toutes les PR et abaisser le seuil, ce qui
+        # masquerait aussi les failles a venir.
+        # Le script garde le seuil a "high" et n'ecarte que les avis listes chez lui,
+        # avec motif et date -- l'equivalent npm du `pip-audit --ignore-vuln GHSA-...`
+        # evoque plus haut. Il installe d'abord l'arbre, npm audit ayant besoin du
+        # node_modules resolu.
         working-directory: documentation
-        run: npm audit --audit-level=high
+        run: |
+          npm ci
+          npm run audit
 
   # ---------------------------------------------------------------------------
   # SECURITE - la PR introduit-elle une dependance vulnerable ?
