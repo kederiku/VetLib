@@ -137,3 +137,69 @@ export function localDayKey(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${month}-${day}`;
 }
+
+// Mois et annee en toutes lettres, ex : "aout 2026". Sert d'intertitre a
+// l'historique des rendez-vous, ou le mois est le repere de balayage
+// naturel quand la liste s'allonge.
+const monthLongFormatter = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: "Europe/Paris",
+  month: "long",
+  year: "numeric",
+});
+
+/** "août 2026" — le mois de Paris d'un instant ISO UTC. */
+export function formatMonthLong(iso: string): string {
+  return monthLongFormatter.format(new Date(iso));
+}
+
+/**
+ * "09:00 – 09:30" — la plage horaire d'un rendez-vous.
+ *
+ * Tiret demi-cadratin entoure d'espaces insecables fines : la typographie
+ * francaise des intervalles. Les deux instants sont formates par le meme
+ * formatteur, donc dans le meme fuseau.
+ */
+export function formatTimeRange(startIso: string, endIso: string): string {
+  return `${formatTime(startIso)} – ${formatTime(endIso)}`;
+}
+
+/**
+ * Nombre de jours CALENDAIRES de Paris entre maintenant et un instant.
+ *
+ * 0 = aujourd'hui, 1 = demain, -1 = hier. On compare des JOURS et non des
+ * durees : un rendez-vous dans 20 heures est "demain" s'il tombe apres
+ * minuit, meme s'il reste moins de 24 h a attendre. C'est ainsi qu'un
+ * humain compte.
+ *
+ * Le calcul passe par les cles "YYYY-MM-DD" de Paris (toParisDateKey)
+ * reconstruites en Date locales a midi : midi et non minuit, pour qu'un
+ * eventuel changement d'heure d'ete ne fasse jamais basculer la
+ * soustraction d'un jour.
+ */
+export function parisDaysUntil(iso: string, now: Date): number {
+  const enDateLocale = (cle: string): number => {
+    const [annee, mois, jour] = cle.split("-").map(Number);
+    return new Date(annee, mois - 1, jour, 12).getTime();
+  };
+  const cible = enDateLocale(toParisDateKey(iso));
+  const aujourdhui = enDateLocale(toParisDateKey(now.toISOString()));
+  return Math.round((cible - aujourdhui) / 86_400_000);
+}
+
+/**
+ * Le jour d'un instant, formule comme on le dirait : "Aujourd'hui",
+ * "Demain", "Dans 3 jours", "Hier", "Il y a 5 jours", et au-dela la date
+ * complete ("jeudi 20 aout 2026").
+ *
+ * Seuil a une semaine : au-dela, "dans 23 jours" oblige a un calcul
+ * mental pour se projeter, la date est alors plus utile.
+ */
+export function formatRelativeDay(iso: string, now: Date): string {
+  const jours = parisDaysUntil(iso, now);
+  if (jours === 0) return "Aujourd'hui";
+  if (jours === 1) return "Demain";
+  if (jours === -1) return "Hier";
+  if (jours > 1 && jours <= 7) return `Dans ${jours} jours`;
+  if (jours < -1 && jours >= -7) return `Il y a ${-jours} jours`;
+  return formatDateLong(iso);
+}

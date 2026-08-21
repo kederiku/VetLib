@@ -32,6 +32,8 @@ import { StepPet } from "@/components/booking/step-pet";
 import { StepSlot } from "@/components/booking/step-slot";
 import { StepType } from "@/components/booking/step-type";
 import { StepIndicator } from "@/components/common/step-indicator";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +48,13 @@ import { STATUS_LABELS } from "@/lib/appointments/status";
 // Libelles des cinq etapes, dans l'ordre. L'index + 1 EST le numero
 // d'etape (BookingStep). Ils vivent ici et non dans le StepIndicator, qui
 // est desormais partage avec le parcours d'inscription.
-const STEP_LABELS = ["Clinique", "Motif", "Animal", "Créneau", "Confirmation"] as const;
+const STEP_LABELS = [
+  "Clinique",
+  "Motif",
+  "Animal",
+  "Créneau",
+  "Confirmation",
+] as const;
 
 export function BookingWizard() {
   const [state, dispatch] = useReducer(bookingReducer, initialBookingState);
@@ -58,33 +66,38 @@ export function BookingWizard() {
   if (state.submitted) {
     const pendingStatus = STATUS_LABELS.pending;
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Demande envoyée !</CardTitle>
-          <CardDescription>
-            La clinique va confirmer votre rendez-vous.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div>
-            <Badge variant={pendingStatus.badgeVariant}>
-              {pendingStatus.label}
-            </Badge>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button nativeButton={false} render={<Link href="/rendez-vous" />}>
-              Voir mes rendez-vous
-            </Button>
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={<Link href="/mon-compte" />}
-            >
-              Mon compte
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <PageContainer width="narrow">
+        <Card>
+          <CardHeader>
+            <CardTitle>Demande envoyée !</CardTitle>
+            <CardDescription>
+              La clinique va confirmer votre rendez-vous.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div>
+              <Badge variant={pendingStatus.badgeVariant}>
+                {pendingStatus.label}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                nativeButton={false}
+                render={<Link href="/rendez-vous" />}
+              >
+                Voir mes rendez-vous
+              </Button>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/tableau-de-bord" />}
+              >
+                Tableau de bord
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </PageContainer>
     );
   }
 
@@ -96,7 +109,8 @@ export function BookingWizard() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageContainer width="narrow">
+      <PageHeader title="Prendre rendez-vous" />
       <StepIndicator
         labels={STEP_LABELS}
         ariaLabel="Étapes de la réservation"
@@ -165,17 +179,19 @@ export function BookingWizard() {
         />
       )}
 
-      {state.step === 4 && state.clinic !== null && state.appointmentType !== null && (
-        <StepSlot
-          clinic={state.clinic}
-          appointmentType={state.appointmentType}
-          conflictMessage={infoMessage}
-          onSelect={(slot) => {
-            setInfoMessage(null);
-            dispatch({ type: "SELECT_SLOT", slot });
-          }}
-        />
-      )}
+      {state.step === 4 &&
+        state.clinic !== null &&
+        state.appointmentType !== null && (
+          <StepSlot
+            clinic={state.clinic}
+            appointmentType={state.appointmentType}
+            conflictMessage={infoMessage}
+            onSelect={(slot) => {
+              setInfoMessage(null);
+              dispatch({ type: "SELECT_SLOT", slot });
+            }}
+          />
+        )}
 
       {/* Les gardes !== null retrecissent les types : StepConfirm recoit
           des props non-nullables. A l'execution, le reducer garantit deja
@@ -202,6 +218,6 @@ export function BookingWizard() {
             onSubmitted={() => dispatch({ type: "SUBMITTED" })}
           />
         )}
-    </div>
+    </PageContainer>
   );
 }

@@ -1,14 +1,16 @@
 /**
  * Tests de la page « Mon compte ».
  *
- * Le composant assemble trois cartes et porte une seule décision propre : ne
- * rien afficher tant que le propriétaire n'est pas chargé. Sans cette garde,
- * la page monterait un formulaire de profil vide puis le remplirait — un
- * clignotement à chaque arrivée sur la page, et le risque qu'une frappe rapide
- * soit écrasée par les données qui arrivent.
+ * Le composant assemble deux blocs et porte une seule décision propre :
+ * ne rien afficher tant que le propriétaire n'est pas chargé. Sans cette
+ * garde, la page monterait un formulaire de profil vide puis le
+ * remplirait — un clignotement à chaque arrivée, et le risque qu'une
+ * frappe rapide soit écrasée par les données qui arrivent.
  *
- * Les trois cartes ont leurs propres tests : on les simule ici pour ne vérifier
- * que l'assemblage.
+ * Depuis la refonte, la page ne porte plus ni l'aperçu des rendez-vous
+ * (parti au tableau de bord) ni la déconnexion (partie au menu du compte
+ * dans le header) : ces deux absences sont testées, parce qu'un
+ * doublon serait invisible en relecture de diff.
  */
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -18,14 +20,10 @@ import { getGetCurrentOwnerQueryKey } from "@/lib/api/generated/owner-auth/owner
 import { buildOwner } from "@/test/fixtures";
 import { createTestQueryClient, renderWithProviders } from "@/test/render";
 
-vi.mock("@/components/account/upcoming-appointments", () => ({
-  UpcomingAppointments: () => <div>Aperçu des rendez-vous</div>,
-}));
+// Le formulaire de profil a ses propres tests : on le simule ici pour ne
+// vérifier que l'assemblage.
 vi.mock("@/components/account/profile-form", () => ({
   ProfileForm: () => <div>Formulaire de profil</div>,
-}));
-vi.mock("@/components/auth/logout-button", () => ({
-  LogoutButton: () => <button type="button">Se déconnecter</button>,
 }));
 
 function afficher(surcharges: Parameters<typeof buildOwner>[0] = {}) {
@@ -42,29 +40,21 @@ describe("AccountContent", () => {
   it("n'affiche rien tant que le propriétaire n'est pas chargé", () => {
     // Monter un formulaire vide puis le remplir ferait clignoter la page
     // et risquerait d'écraser une saisie rapide.
-    const { container } = renderWithProviders(<AccountContent />);
-    // On interroge la sortie du COMPOSANT (aucun element de contenu), et
-    // non la racine de rendu : celle-ci porte aussi le script anti-flash
-    // de next-themes, monte par les providers de test.
-    expect(container.querySelector("main")).toBeNull();
+    renderWithProviders(<AccountContent />);
+    // On interroge la sortie du COMPOSANT et non la racine de rendu :
+    // celle-ci porte aussi le script anti-flash de next-themes, monté
+    // par les providers de test.
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 
-  it("accueille le propriétaire par son prénom", () => {
-    afficher({ first_name: "Marie" });
-    expect(
-      screen.getByRole("heading", { name: "Bonjour Marie", level: 1 }),
-    ).toBeInTheDocument();
-  });
-
-  it("assemble les trois cartes de la page", () => {
+  it("titre la page et assemble ses deux blocs", () => {
     afficher();
 
-    expect(screen.getByText("Aperçu des rendez-vous")).toBeInTheDocument();
-    expect(screen.getByText("Formulaire de profil")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Se déconnecter" }),
+      screen.getByRole("heading", { name: "Mon compte", level: 1 }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Formulaire de profil")).toBeInTheDocument();
+    expect(screen.getByText("Connexion")).toBeInTheDocument();
   });
 
   it("affiche l'email en lecture seule", () => {
@@ -75,5 +65,21 @@ describe("AccountContent", () => {
     const champ = screen.getByLabelText("Email");
     expect(champ).toHaveValue("marie.dupont@example.test");
     expect(champ).toHaveAttribute("readonly");
+  });
+
+  it("ne porte plus la déconnexion : elle vit dans le menu du compte", () => {
+    // Deux points de déconnexion dans l'interface seraient un doublon
+    // invisible en relecture de diff.
+    afficher();
+
+    expect(
+      screen.queryByRole("button", { name: /Se déconnecter/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ne duplique pas l'aperçu des rendez-vous du tableau de bord", () => {
+    afficher();
+
+    expect(screen.queryByText(/Prochain/)).not.toBeInTheDocument();
   });
 });

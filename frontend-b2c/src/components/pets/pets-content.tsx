@@ -17,18 +17,13 @@ import { useState } from "react";
 
 import { DeletePetDialog } from "@/components/pets/delete-pet-dialog";
 import { PetFormDialog } from "@/components/pets/pet-form-dialog";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useListMyPets } from "@/lib/api/generated/pets/pets";
 import type { PetResponse } from "@/lib/api/generated/vetoLibAPI.schemas";
@@ -41,6 +36,7 @@ export function PetsContent() {
     data: pets,
     isPending,
     isError,
+    refetch,
   } = useListMyPets({ query: { select: (res) => res.data } });
 
   // Etats des dialogues. formPet : l'animal en cours d'edition (undefined
@@ -62,19 +58,17 @@ export function PetsContent() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight">Mes animaux</h1>
-          <p className="text-muted-foreground">
-            Les compagnons pour lesquels vous prenez rendez-vous.
-          </p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus data-icon="inline-start" aria-hidden />
-          Ajouter un animal
-        </Button>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Mes animaux"
+        description="Les compagnons pour lesquels vous prenez rendez-vous."
+        actions={
+          <Button onClick={openCreate}>
+            <Plus data-icon="inline-start" aria-hidden />
+            Ajouter un animal
+          </Button>
+        }
+      />
 
       {/* Squelettes pendant le chargement : meme silhouette que les
           cartes, pas de saut de mise en page a l'arrivee des donnees. */}
@@ -85,36 +79,29 @@ export function PetsContent() {
         </div>
       )}
 
+      {/* Erreur AVEC issue : l'ancien bandeau n'offrait aucun moyen de
+          relancer, il fallait recharger la page à la main. */}
       {isError && (
-        <Alert variant="destructive">
-          <AlertTitle>
-            Impossible de charger vos animaux. Vérifiez votre connexion et
-            réessayez.
-          </AlertTitle>
-        </Alert>
+        <ErrorState
+          title="Impossible de charger vos animaux."
+          onRetry={() => void refetch()}
+        />
       )}
 
       {/* Etat vide : premier contact avec la fonctionnalite, ton
           engageant + CTA identique au bouton du haut. */}
       {pets !== undefined && pets.length === 0 && (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <PawPrint aria-hidden />
-            </EmptyMedia>
-            <EmptyTitle>Ajoutez votre premier compagnon</EmptyTitle>
-            <EmptyDescription>
-              Chien, chat, NAC... Enregistrez vos animaux pour leur prendre
-              rendez-vous en quelques clics.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
+        <EmptyState
+          icon={<PawPrint aria-hidden />}
+          title="Ajoutez votre premier compagnon"
+          description="Chien, chat, NAC... Enregistrez vos animaux pour leur prendre rendez-vous en quelques clics."
+          action={
             <Button onClick={openCreate}>
               <Plus data-icon="inline-start" aria-hidden />
               Ajouter un animal
             </Button>
-          </EmptyContent>
-        </Empty>
+          }
+        />
       )}
 
       {pets !== undefined && pets.length > 0 && (
@@ -179,6 +166,6 @@ export function PetsContent() {
           pet={deletePet}
         />
       )}
-    </main>
+    </PageContainer>
   );
 }

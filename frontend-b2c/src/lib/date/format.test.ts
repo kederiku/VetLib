@@ -14,7 +14,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  formatMonthLong,
+  formatRelativeDay,
+  formatTimeRange,
   localDayKey,
+  parisDaysUntil,
   parisToday,
   toParisDateKey,
 } from "@/lib/date/format";
@@ -92,5 +96,73 @@ describe("parisToday", () => {
     expect(jour.getHours()).toBe(0);
     expect(jour.getMinutes()).toBe(0);
     expect(localDayKey(jour)).toBe("2026-08-20");
+  });
+});
+
+describe("formatMonthLong", () => {
+  it("nomme le mois et l'année du jour de Paris", () => {
+    expect(formatMonthLong("2026-08-20T07:00:00Z")).toBe("août 2026");
+  });
+
+  it("lit le mois de PARIS et non celui d'UTC", () => {
+    // 1er septembre 00h30 à Paris = 31 août 22h30 en UTC.
+    expect(formatMonthLong("2026-08-31T22:30:00Z")).toBe("septembre 2026");
+  });
+});
+
+describe("formatTimeRange", () => {
+  it("compose la plage horaire d'un rendez-vous", () => {
+    expect(
+      formatTimeRange("2026-08-20T07:00:00Z", "2026-08-20T07:30:00Z"),
+    ).toBe("09:00 – 09:30");
+  });
+});
+
+describe("parisDaysUntil", () => {
+  const maintenant = new Date("2026-08-20T10:00:00Z");
+
+  it("compte des JOURS calendaires, pas des durées", () => {
+    // 22h d'attente, mais on aura franchi minuit : c'est « demain ».
+    expect(parisDaysUntil("2026-08-21T08:00:00Z", maintenant)).toBe(1);
+  });
+
+  it("renvoie 0 pour le jour même, quelle que soit l'heure", () => {
+    expect(parisDaysUntil("2026-08-20T05:00:00Z", maintenant)).toBe(0);
+    expect(parisDaysUntil("2026-08-20T20:00:00Z", maintenant)).toBe(0);
+  });
+
+  it("compte négativement dans le passé", () => {
+    expect(parisDaysUntil("2026-08-19T08:00:00Z", maintenant)).toBe(-1);
+    expect(parisDaysUntil("2026-08-13T08:00:00Z", maintenant)).toBe(-7);
+  });
+
+  it("compte sur le jour de PARIS, y compris en bord de journée", () => {
+    // 21 août 00h30 à Paris = 20 août 22h30 en UTC : c'est bien demain.
+    expect(parisDaysUntil("2026-08-20T22:30:00Z", maintenant)).toBe(1);
+  });
+});
+
+describe("formatRelativeDay", () => {
+  const maintenant = new Date("2026-08-20T10:00:00Z");
+
+  it("dit le jour comme on le dirait", () => {
+    expect(formatRelativeDay("2026-08-20T14:00:00Z", maintenant)).toBe(
+      "Aujourd'hui",
+    );
+    expect(formatRelativeDay("2026-08-21T08:00:00Z", maintenant)).toBe("Demain");
+    expect(formatRelativeDay("2026-08-19T08:00:00Z", maintenant)).toBe("Hier");
+    expect(formatRelativeDay("2026-08-23T08:00:00Z", maintenant)).toBe(
+      "Dans 3 jours",
+    );
+    expect(formatRelativeDay("2026-08-15T08:00:00Z", maintenant)).toBe(
+      "Il y a 5 jours",
+    );
+  });
+
+  it("repasse à la date complète au-delà d'une semaine", () => {
+    // « Dans 23 jours » obligerait à un calcul mental pour se projeter.
+    expect(formatRelativeDay("2026-09-15T08:00:00Z", maintenant)).toBe(
+      "mardi 15 septembre 2026",
+    );
   });
 });

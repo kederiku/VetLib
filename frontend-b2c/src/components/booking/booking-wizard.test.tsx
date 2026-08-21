@@ -163,10 +163,9 @@ describe("BookingWizard — confirmation", () => {
     expect(
       screen.getByRole("button", { name: "Voir mes rendez-vous" }),
     ).toHaveAttribute("href", "/rendez-vous");
-    expect(screen.getByRole("button", { name: "Mon compte" })).toHaveAttribute(
-      "href",
-      "/mon-compte",
-    );
+    expect(
+      screen.getByRole("button", { name: "Tableau de bord" }),
+    ).toHaveAttribute("href", "/tableau-de-bord");
   });
 
   it("remplace tout le tunnel par l'écran de succès", async () => {

@@ -19,26 +19,22 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { AppointmentCard } from "@/components/appointments/appointment-card";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useListMyAppointments } from "@/lib/api/generated/owner-appointments/owner-appointments";
+import { useMyAppointments } from "@/lib/appointments/use-my-appointments";
 
 export function AppointmentsContent() {
   const {
     data: appointments,
     isPending,
     isError,
-  } = useListMyAppointments({ query: { select: (res) => res.data } });
+    refetch,
+  } = useMyAppointments();
 
   // "Maintenant" est fige PAR RENDU (pas par carte) : toutes les cartes
   // et le partage a-venir/passe utilisent le meme instant, pas de
@@ -67,21 +63,20 @@ export function AppointmentsContent() {
   }, [appointments, now]);
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight">
-            Mes rendez-vous
-          </h1>
-          <p className="text-muted-foreground">
-            Vos visites vétérinaires, toutes cliniques confondues.
-          </p>
-        </div>
-        <Button size="lg" nativeButton={false} render={<Link href="/rendez-vous/nouveau" />}>
-          <Plus data-icon="inline-start" aria-hidden />
-          Prendre rendez-vous
-        </Button>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Mes rendez-vous"
+        description="Vos visites vétérinaires, toutes cliniques confondues."
+        actions={
+          <Button
+            nativeButton={false}
+            render={<Link href="/rendez-vous/nouveau" />}
+          >
+            <Plus data-icon="inline-start" aria-hidden />
+            Prendre rendez-vous
+          </Button>
+        }
+      />
 
       {isPending && (
         <div className="flex flex-col gap-3">
@@ -90,29 +85,22 @@ export function AppointmentsContent() {
         </div>
       )}
 
+      {/* Erreur AVEC issue : l'ancien bandeau n'offrait aucun moyen de
+          relancer, il fallait recharger la page à la main. */}
       {isError && (
-        <Alert variant="destructive">
-          <AlertTitle>
-            Impossible de charger vos rendez-vous. Vérifiez votre connexion et
-            réessayez.
-          </AlertTitle>
-        </Alert>
+        <ErrorState
+          title="Impossible de charger vos rendez-vous."
+          onRetry={() => void refetch()}
+        />
       )}
 
       {/* Etat vide global : aucun rendez-vous, passe comme a venir. */}
       {appointments !== undefined && appointments.length === 0 && (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <CalendarDays aria-hidden />
-            </EmptyMedia>
-            <EmptyTitle>Aucun rendez-vous pour l&apos;instant</EmptyTitle>
-            <EmptyDescription>
-              Choisissez une clinique, un motif et un créneau : votre demande
-              part en quelques clics.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
+        <EmptyState
+          icon={<CalendarDays aria-hidden />}
+          title="Aucun rendez-vous pour l'instant"
+          description="Choisissez une clinique, un motif et un créneau : votre demande part en quelques clics."
+          action={
             <Button
               nativeButton={false}
               render={<Link href="/rendez-vous/nouveau" />}
@@ -120,8 +108,8 @@ export function AppointmentsContent() {
               <Plus data-icon="inline-start" aria-hidden />
               Prendre rendez-vous
             </Button>
-          </EmptyContent>
-        </Empty>
+          }
+        />
       )}
 
       {appointments !== undefined && appointments.length > 0 && (
@@ -155,6 +143,6 @@ export function AppointmentsContent() {
           </section>
         </div>
       )}
-    </main>
+    </PageContainer>
   );
 }

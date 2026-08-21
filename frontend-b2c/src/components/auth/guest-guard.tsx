@@ -9,7 +9,7 @@
  * `enabled` existe pour UN cas précis : le parcours d'inscription. Son étape 1
  * crée le compte ET ouvre la session ; les étapes 2 et 3 se déroulent donc
  * connecté, sur la même page /register. Sans ce commutateur, la redirection
- * ci-dessous éjecterait la personne vers /mon-compte au beau milieu de son
+ * ci-dessous éjecterait la personne vers le tableau de bord au beau milieu de son
  * inscription. Le wizard passe donc `enabled={step === 1}`.
  */
 "use client";
@@ -38,10 +38,10 @@ export function GuestGuard({
   // TanStack Query passe en erreur SANS effacer les donnees (data definie ET
   // isError true en meme temps). Sans ce garde-fou, l'AuthGuard (qui redirige
   // sur isError) et ce GuestGuard (qui redirigerait sur data seule) se
-  // renverraient l'utilisateur en boucle /mon-compte <-> /login.
+  // renverraient l'utilisateur en boucle /tableau-de-bord <-> /login.
   useEffect(() => {
     if (enabled && user !== undefined && !isError) {
-      router.replace("/mon-compte");
+      router.replace("/tableau-de-bord");
     }
   }, [enabled, user, isError, router]);
 

@@ -1,10 +1,12 @@
 /**
- * Page /rendez-vous/nouveau : le wizard de prise de rendez-vous en
+ * Page /rendez-vous/nouveau : le tunnel de prise de rendez-vous en
  * 5 étapes (clinique, motif, animal, créneau, confirmation).
  *
- * Server Component mince : métadonnées + délégation au Client Component
- * BookingWizard (tout l'état du parcours est local au wizard, rien dans
- * l'URL). La protection est assurée par l'AuthGuard du layout parent.
+ * Server Component mince : métadonnées + délégation au BookingWizard
+ * (tout l'état du parcours est local au wizard, rien dans l'URL). La
+ * protection est assurée par l'AuthGuard du layout parent, et la mise en
+ * page par le PageContainer du wizard — cette page ne rend plus ni
+ * <main> (le SidebarInset de la coquille en est déjà un) ni <h1>.
  */
 import type { Metadata } from "next";
 
@@ -16,10 +18,5 @@ export const metadata: Metadata = {
 };
 
 export default function NewAppointmentPage() {
-  return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-8">
-      <h1 className="text-2xl font-bold tracking-tight">Prendre rendez-vous</h1>
-      <BookingWizard />
-    </main>
-  );
+  return <BookingWizard />;
 }

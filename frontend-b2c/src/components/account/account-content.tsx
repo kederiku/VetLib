@@ -1,17 +1,19 @@
 /**
  * Contenu de la page /mon-compte : la fiche du propriétaire connecté.
  *
- * Trois cartes : "Prochains rendez-vous" (aperçu, composant dédié
- * UpcomingAppointments), "Mon profil" (formulaire d'édition, composant
- * dédié ProfileForm) et "Mon compte" (email en lecture seule +
- * déconnexion). Client Component : il lit la session via useCurrentUser,
- * un hook TanStack Query.
+ * Deux blocs seulement depuis la refonte : le formulaire de profil et
+ * les informations de connexion. L'aperçu des rendez-vous est parti au
+ * tableau de bord (sa place), et la déconnexion au menu du compte dans
+ * le header — elle n'a plus à occuper un pied de page permanent.
+ *
+ * Colonne étroite (width="narrow") : ce sont des formulaires, une
+ * colonne resserrée reste plus lisible que la pleine largeur.
  */
 "use client";
 
-import { LogoutButton } from "@/components/auth/logout-button";
 import { ProfileForm } from "@/components/account/profile-form";
-import { UpcomingAppointments } from "@/components/account/upcoming-appointments";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
 import {
   Card,
   CardContent,
@@ -34,30 +36,22 @@ export function AccountContent() {
   }
 
   return (
-    <main className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 p-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">
-          Bonjour {owner.first_name}
-        </h1>
-        <p className="text-muted-foreground">
-          Gérez vos informations personnelles et vos préférences.
-        </p>
-      </div>
+    <PageContainer width="narrow">
+      <PageHeader
+        title="Mon compte"
+        description="Vos coordonnées, votre adresse et vos préférences de rappels."
+      />
 
-      {/* Carte a) : l'aperçu des prochains rendez-vous (cache partagé
-          avec la page /rendez-vous, même queryKey). */}
-      <UpcomingAppointments />
-
-      {/* Carte b) : le formulaire complet de la fiche propriétaire. */}
+      {/* Le formulaire complet de la fiche propriétaire. */}
       <ProfileForm />
 
-      {/* Carte c) : les informations de connexion, hors formulaire. */}
+      {/* Les informations de connexion, hors formulaire. */}
       <Card>
         <CardHeader>
-          <CardTitle>Mon compte</CardTitle>
+          <CardTitle>Connexion</CardTitle>
           <CardDescription>Vos informations de connexion.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-6">
+        <CardContent>
           <Field>
             <FieldLabel htmlFor="account-email">Email</FieldLabel>
             {/* readOnly (et non disabled) : le champ reste focalisable et
@@ -73,15 +67,12 @@ export function AccountContent() {
               className="text-muted-foreground"
             />
             <FieldDescription>
-              Identifiant de connexion — non modifiable pour l&apos;instant.
+              Identifiant de connexion. La modification de l&apos;email et du
+              mot de passe arrivera prochainement.
             </FieldDescription>
           </Field>
-
-          <div>
-            <LogoutButton />
-          </div>
         </CardContent>
       </Card>
-    </main>
+    </PageContainer>
   );
 }

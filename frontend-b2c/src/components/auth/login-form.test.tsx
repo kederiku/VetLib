@@ -100,7 +100,7 @@ describe("LoginForm — connexion réussie", () => {
     const { queryClient } = renderWithProviders(<LoginForm />);
     await seConnecter();
 
-    await waitFor(() => expect(simulations.push).toHaveBeenCalledWith("/mon-compte"));
+    await waitFor(() => expect(simulations.push).toHaveBeenCalledWith("/tableau-de-bord"));
     expect(queryClient.getQueryData(getGetCurrentOwnerQueryKey())).toEqual(
       reponse,
     );
@@ -171,6 +171,6 @@ describe("LoginForm — erreurs du serveur", () => {
       .setup()
       .click(screen.getByRole("button", { name: /Se connecter|Connexion/ }));
 
-    await waitFor(() => expect(simulations.push).toHaveBeenCalledWith("/mon-compte"));
+    await waitFor(() => expect(simulations.push).toHaveBeenCalledWith("/tableau-de-bord"));
   });
 });

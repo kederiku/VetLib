@@ -124,7 +124,7 @@ describe("GuestGuard", () => {
       </GuestGuard>,
     );
 
-    expect(simulations.replace).toHaveBeenCalledWith("/mon-compte");
+    expect(simulations.replace).toHaveBeenCalledWith("/tableau-de-bord");
   });
 
   it("ne redirige pas quand la vérification a échoué", () => {
@@ -158,7 +158,7 @@ describe("GuestGuard", () => {
     // Le besoin du parcours d'INSCRIPTION : son étape 1 crée le compte et
     // ouvre la session, mais les étapes 2 et 3 se déroulent sur la même page
     // /register. Sans ce commutateur, le garde éjecterait la personne vers
-    // /mon-compte au milieu de son inscription.
+    // le tableau de bord au milieu de son inscription.
     simulations.useCurrentUser.mockReturnValue(session({ data: buildOwner() }));
     renderWithProviders(
       <GuestGuard enabled={false}>
