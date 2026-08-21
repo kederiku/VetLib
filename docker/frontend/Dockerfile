@@ -10,7 +10,7 @@
 # doit le REdéclarer (règle Dockerfile : un ARG global n'entre pas seul dans les stages).
 ARG APP_DIR
 
-FROM node:24.19-alpine3.24 AS base
+FROM node:26.7-alpine3.24 AS base
 WORKDIR /app
 
 # ----- Dépendances -----
