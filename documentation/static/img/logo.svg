@@ -1,0 +1,15 @@
+<!--
+  Marque VetoLib : une patte d'animal stylisee, quatre coussinets et une empreinte.
+  Sans texte : la barre de navigation affiche deja le nom du site a cote.
+  Les couleurs sont figees (le SVG est servi comme une image, il n'herite pas des
+  variables CSS de la page) et choisies pour rester lisibles sur fond clair comme sombre.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="VetoLib">
+  <circle cx="13.5" cy="15" r="5.2" fill="#0f766e" />
+  <circle cx="24" cy="10.5" r="5.6" fill="#14b8a6" />
+  <circle cx="34.5" cy="15" r="5.2" fill="#0f766e" />
+  <circle cx="40" cy="25.5" r="4.4" fill="#14b8a6" />
+  <path
+    d="M24 21.5c6.2 0 11.5 4.6 11.5 10.3 0 4.4-3.3 7.2-7.6 7.2-1.9 0-2.9-.7-3.9-.7s-2 .7-3.9.7c-4.3 0-7.6-2.8-7.6-7.2C12.5 26.1 17.8 21.5 24 21.5Z"
+    fill="#0f766e" />
+</svg>

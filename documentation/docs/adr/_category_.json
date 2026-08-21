@@ -1,0 +1,9 @@
+{
+  "label": "Décisions (ADR)",
+  "position": 9,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "adr/index"
+  }
+}

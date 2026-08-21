@@ -1,0 +1,41 @@
+/**
+ * Palette et variables du site VetoLib.
+ *
+ * Ce fichier ne contient QUE des variables Infima (--ifm-*). Aucune règle de mise en
+ * forme : le thème de Docusaurus s'en charge, et le drapeau `future.v4` place son CSS
+ * dans des couches en cascade (@layer). Conséquence : tout CSS écrit ici, non
+ * « layerisé », gagne SYSTÉMATIQUEMENT contre le thème, quelle que soit sa spécificité.
+ * Une règle un peu large écraserait donc le thème bien plus fort qu'avant. D'où la
+ * discipline : des variables, rien d'autre.
+ *
+ * Teinte retenue : un teal profond. Registre médical, mais sans le bleu clinique
+ * générique, et lisible dans les deux modes. Les six déclinaisons sont dérivées de la
+ * couleur source selon la règle Docusaurus (plus ou moins 10, 15 et 30 % de luminosité).
+ */
+
+:root {
+  /* Contraste sur fond blanc : 5,47:1 (WCAG AA pour le texte normal). */
+  --ifm-color-primary: #0f766e;
+  --ifm-color-primary-dark: #0d6a63;
+  --ifm-color-primary-darker: #0d645e;
+  --ifm-color-primary-darkest: #0a534d;
+  --ifm-color-primary-light: #108279;
+  --ifm-color-primary-lighter: #11887e;
+  --ifm-color-primary-lightest: #13998f;
+
+  --ifm-code-font-size: 92%;
+  --docusaurus-highlighted-code-line-bg: rgb(15 118 110 / 12%);
+}
+
+[data-theme="dark"] {
+  /* Contraste sur le fond sombre #1b1b1d de Docusaurus : 9,24:1. */
+  --ifm-color-primary: #2dd4bf;
+  --ifm-color-primary-dark: #27c0ad;
+  --ifm-color-primary-darker: #25b5a3;
+  --ifm-color-primary-darkest: #1f9586;
+  --ifm-color-primary-light: #42d8c6;
+  --ifm-color-primary-lighter: #4ddbc9;
+  --ifm-color-primary-lightest: #6de1d3;
+
+  --docusaurus-highlighted-code-line-bg: rgb(45 212 191 / 18%);
+}

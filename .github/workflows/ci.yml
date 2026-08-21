@@ -598,6 +598,107 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
+  # DOCUMENTATION - le site Docusaurus se construit-il, et sans lien mort ?
+  # ---------------------------------------------------------------------------
+  documentation:
+    name: documentation - build du site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # Historique COMPLET : le site affiche la date de derniere mise a jour
+          # de chaque page (showLastUpdateTime), qu'il lit dans git. Avec le
+          # clone superficiel par defaut, toutes les pages porteraient la meme
+          # date, celle du dernier commit.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # Troisieme projet npm du depot, avec son propre .nvmrc et son propre
+          # package-lock.json : la documentation n'est pas un sous-paquet des
+          # frontends (le depot n'utilise pas de workspace npm).
+          node-version-file: documentation/.nvmrc
+          cache: npm
+          cache-dependency-path: documentation/package-lock.json
+
+      - name: Installer les dependances du site
+        working-directory: documentation
+        run: npm ci
+
+      # ORDRE DES CONTROLES : du moins cher au plus cher. Prettier et tsc ne
+      # demandent que node_modules et repondent en quelques secondes, alors que
+      # le build peut prendre plusieurs minutes. Une faute de mise en forme
+      # remonte ainsi en moins d'une minute au lieu de cinq.
+      - name: Prettier (Markdown, MDX et TypeScript du site)
+        working-directory: documentation
+        run: npm run lint
+
+      - name: TypeScript
+        # NE PAS recopier ici l'ordre "build puis typecheck" du job frontend :
+        # cette contrainte-la vient de next-env.d.ts, qui importe des types
+        # generes par "next build". Rien de tel ici, le tsconfig du site se
+        # contentant d'etendre @docusaurus/tsconfig, que Docusaurus n'utilise
+        # meme pas pour compiler. tsc n'a besoin que de node_modules.
+        working-directory: documentation
+        run: npm run typecheck
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          # Python n'arrive qu'ici, et non en tete du job comme ailleurs : il ne
+          # sert qu'a produire le schema OpenAPI consomme par le build. L'installer
+          # plus tot retarderait le verdict des deux controles ci-dessus.
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          # A garder aligne sur backend/.python-version. L'action n'accepte pas
+          # de chemin de fichier pour Python (contrairement a setup-node).
+          python-version: "3.13"
+
+      - name: Installer le backend
+        # Meme commande que dans les autres jobs : le cache uv est partage entre
+        # tous (meme cache-dependency-glob), il est donc deja chaud.
+        working-directory: backend
+        run: uv sync --locked
+
+      - name: Exporter le schema OpenAPI du backend
+        # Le preset redocusaurus lit backend/openapi.json AU MOMENT DU BUILD pour
+        # produire la page de reference de l'API. Ce fichier est gitignore (c'est
+        # un contrat regenerable, cf. .gitignore) : sans cette etape, le site se
+        # construirait SANS sa reference d'API. La configuration du site refuse
+        # d'ailleurs ce cas quand CI vaut true, plutot que de perdre la page en
+        # silence. Effet de bord utile : si l'application n'est plus importable,
+        # on le sait ici.
+        run: make -C backend openapi
+
+      - name: Build du site
+        # Le controle le plus utile du job : "docusaurus build" refuse de produire
+        # un site contenant un lien interne mort, une ancre morte ou une image
+        # introuvable. Les quatre garde-fous sont regles sur 'throw' dans
+        # documentation/docusaurus.config.ts -- trois d'entre eux se contentent
+        # d'un avertissement par defaut.
+        working-directory: documentation
+        run: npm run build
+
+      - name: Preparer l'artefact GitHub Pages
+        # Empaquete le site dans une archive publiee sous le nom reserve
+        # "github-pages" : c'est ce qu'attend actions/deploy-pages dans le job de
+        # publication, tout en bas de ce fichier.
+        # On le produit AUSSI sur les Pull Requests, volontairement : la
+        # publication apres merge n'a alors plus rien a reconstruire, et un
+        # relecteur peut telecharger le site tel qu'il sera mis en ligne.
+        # (Cette action est composite -- tar + upload-artifact -- elle n'appelle
+        # aucune API Pages et n'exige aucune permission particuliere.)
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          # ATTENTION : working-directory ne s'applique qu'aux etapes "run",
+          # jamais aux actions. Le chemin part donc de la racine du depot.
+          path: documentation/build
+          # Le defaut de l'action est 1 jour : assez pour le deploiement, trop
+          # court pour une relecture etalee sur plusieurs jours.
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
   # SECURITE - vulnerabilites connues dans les dependances
   # ---------------------------------------------------------------------------
   security-audit:
@@ -640,6 +741,21 @@ jobs:
         working-directory: frontend-b2b
         run: npm audit --audit-level=high
 
+      - name: Audit des dependances du site de documentation
+        # Pas `npm audit --audit-level=high` directement : cette commande ne sait
+        # pas ecarter UNE faille precise. Or image-size (tire par Docusaurus) porte
+        # deux avis "high" SANS version corrigee publiee. La commande nue laisserait
+        # donc le choix entre bloquer toutes les PR et abaisser le seuil, ce qui
+        # masquerait aussi les failles a venir.
+        # Le script garde le seuil a "high" et n'ecarte que les avis listes chez lui,
+        # avec motif et date -- l'equivalent npm du `pip-audit --ignore-vuln GHSA-...`
+        # evoque plus haut. Il installe d'abord l'arbre, npm audit ayant besoin du
+        # node_modules resolu.
+        working-directory: documentation
+        run: |
+          npm ci
+          npm run audit
+
   # ---------------------------------------------------------------------------
   # SECURITE - la PR introduit-elle une dependance vulnerable ?
   # ---------------------------------------------------------------------------
@@ -658,6 +774,15 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
+          # MEMES deux avis que documentation/scripts/audit.mjs, ecartes pour la
+          # meme raison : image-size <=2.0.2 n'a AUCUNE version corrigee publiee
+          # (2.0.2 est la derniere). Il est tire par @docusaurus/mdx-loader et ne
+          # sert qu'au BUILD du site, pour mesurer les images de static/ ; les deux
+          # failles sont des denis de service declenches par une image
+          # malveillante, or ces images sont celles du depot.
+          # A RETIRER des qu'image-size publie un correctif -- en meme temps que
+          # les entrees de audit.mjs, les deux listes doivent rester jumelles.
+          allow-ghsas: GHSA-w3rx-r6r6-pgpr,GHSA-5p2g-fcmc-qvqq
           # never : sans cela l'action exigerait le droit d'ecrire dans la PR.
           comment-summary-in-pr: never
 
@@ -777,6 +902,7 @@ jobs:
       - backend-migrations
       - frontend
       - api-client-drift
+      - documentation
       - security-audit
       - dependency-review
       - workflow-lint
@@ -895,3 +1021,61 @@ jobs:
           # construites lors de la CI de la PR, la publication est rapide.
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=${{ matrix.cache-mode }},scope=${{ matrix.name }}
+
+  # ---------------------------------------------------------------------------
+  # DOCUMENTATION - publication sur GitHub Pages, uniquement apres un merge
+  # ---------------------------------------------------------------------------
+  deploy-documentation:
+    name: publier la documentation
+    runs-on: ubuntu-24.04
+    # actions/deploy-pages attend par defaut jusqu'a 10 minutes que GitHub
+    # declare le deploiement en ligne. 15 laisse l'action rendre SON message
+    # d'erreur, bien plus parlant qu'un job coupe par le delai d'attente.
+    timeout-minutes: 15
+    # Meme montage que publish-images : on depend de la PORTE, jamais des jobs
+    # un a un. Consequence voulue : ce job est IGNORE sur les Pull Requests. Il
+    # ne doit donc surtout PAS figurer dans le "needs:" du gate, dont un job
+    # "skipped" ferait echouer toutes les PR.
+    needs: [gate]
+    # always() est indispensable ici, et pas seulement decoratif : sans fonction
+    # de statut explicite, GitHub ajoute un success() implicite qui evalue TOUTE
+    # la chaine de dependances -- y compris "revue des dependances",
+    # volontairement ignore hors des Pull Requests. On ne regarde donc QUE le
+    # resultat de la porte : une CI rouge ne met jamais rien en ligne.
+    if: >-
+      always()
+      && needs.gate.result == 'success'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      # pages: write    -> creer un deploiement GitHub Pages.
+      # id-token: write -> signer un jeton OIDC qui prouve a Pages que l'artefact
+      #                    provient bien de CE run, de CE depot.
+      # Ces deux droits sont portes par ce SEUL job : le workflow entier reste en
+      # lecture seule (voir "permissions:" tout en haut du fichier).
+      pages: write
+      id-token: write
+    # L'environnement "github-pages" est cree par GitHub des que la source des
+    # pages est reglee sur "GitHub Actions". Il porte une regle limitant les
+    # deploiements a la branche par defaut, et affiche l'URL du site dans
+    # l'onglet Deployments du depot.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # GitHub n'accepte qu'UN deploiement Pages a la fois. Le "concurrency" du
+    # workflow serialise deja les runs sur main (meme groupe, sans annulation) :
+    # ce groupe dedie ne change donc rien aujourd'hui, il est la pour que la
+    # contrainte reste vraie si le groupe global venait a changer.
+    # cancel-in-progress: false -> on n'interrompt jamais une mise en ligne.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      # Ni checkout, ni installation, ni build : le site a ete construit par le
+      # job "documentation" du MEME run, qui a depose l'artefact "github-pages".
+      # C'est tout l'interet de garder ce job ici plutot que dans un workflow
+      # separe, qui devrait tout reconstruire une seconde fois.
+      - name: Deployer sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

@@ -1,0 +1,11 @@
+{
+  "label": "Métier",
+  "position": 5,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Métier",
+    "description": "Le vocabulaire, les règles et les états du domaine vétérinaire.",
+    "slug": "/metier"
+  }
+}

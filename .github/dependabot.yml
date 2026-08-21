@@ -3,8 +3,9 @@
 # dependances, et surtout des correctifs de securite.
 #
 # Un "ecosysteme" = un couple (gestionnaire de paquets, repertoire). Ce monorepo
-# en compte quatre : les actions GitHub, le backend Python (uv), les DEUX
-# frontends npm (projets independants, sans workspace) et les images Docker.
+# en compte cinq : les actions GitHub, le backend Python (uv), les DEUX
+# frontends npm et le site de documentation npm (trois projets independants,
+# sans workspace) et les images Docker.
 #
 # Les mises a jour sont GROUPEES : sans cela, une semaine ordinaire produirait
 # une dizaine de PR distinctes, chacune declenchant une CI complete. Groupees,
@@ -129,7 +130,44 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
 
-  # --- 5. Images de base des Dockerfiles ------------------------------------
+  # --- 5. Site de documentation (npm) ---------------------------------------
+  # Troisieme projet npm du depot, avec son propre package-lock.json. Docusaurus
+  # tire beaucoup de dependances transitives : sans groupes, une semaine
+  # ordinaire produirait a elle seule une demi-douzaine de PR.
+  - package-ecosystem: npm
+    directory: /documentation
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    open-pull-requests-limit: 5
+    groups:
+      # @docusaurus/core, preset-classic, module-type-aliases, tsconfig et types
+      # sont publies ENSEMBLE et doivent rester sur la meme version, sous peine
+      # d'erreurs de types incomprehensibles. React suit, sa version etant
+      # contrainte par le coeur ; redocusaurus et @mdx-js/react par le theme.
+      docusaurus:
+        patterns:
+          - "@docusaurus/*"
+          - redocusaurus
+          - "@mdx-js/react"
+          - react
+          - react-dom
+          - "@types/react"
+      docs-dev:
+        dependency-type: development
+        patterns: ["*"]
+    ignore:
+      # Meme contrainte que les frontends (CLAUDE.md) : TypeScript 7 casse
+      # typescript-eslint. Une seule regle a retenir dans tout le depot.
+      - dependency-name: typescript
+        versions: [">=7"]
+
+  # --- 6. Images de base des Dockerfiles ------------------------------------
   # Mensuel : les images de base bougent moins vite, et chaque mise a jour
   # demande une verification manuelle un peu plus attentive.
   # Les montees de version MAJEURE sont ignorees : elles sont contraintes

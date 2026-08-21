@@ -1,0 +1,11 @@
+{
+  "label": "Démarrer",
+  "position": 1,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Démarrer",
+    "description": "Installer VetoLib, le lancer, comprendre sa configuration et ses commandes.",
+    "slug": "/demarrer"
+  }
+}

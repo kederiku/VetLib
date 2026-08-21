@@ -15,3 +15,9 @@ paths-ignore:
   - frontend-b2b/src/components/ui
   # Migrations Alembic : SQL genere/ecrit une fois, jamais rejoue tel quel.
   - backend/migrations/versions
+  # Sorties de Docusaurus : le site genere et son cache de build. Elles ne sont
+  # pas versionnees, donc absentes du clone de la CI -- l'exclusion protege une
+  # analyse lancee depuis un poste ou le site a deja ete construit, et documente
+  # que ce code n'est pas ecrit a la main.
+  - documentation/build
+  - documentation/.docusaurus

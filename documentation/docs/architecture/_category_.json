@@ -1,0 +1,11 @@
+{
+  "label": "Architecture",
+  "position": 2,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Architecture",
+    "description": "Comment VetoLib est construit : hexagonal et DDD, isolation multi-tenant, authentification, événements asynchrones.",
+    "slug": "/architecture"
+  }
+}

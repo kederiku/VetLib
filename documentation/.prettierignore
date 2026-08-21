@@ -1,0 +1,15 @@
+# Prettier résout .gitignore et .prettierignore RELATIVEMENT à son répertoire de
+# travail. Lancé depuis documentation/, il ne voit donc PAS le .gitignore de la
+# racine du dépôt : sans ce fichier, `npm run lint` parcourrait le site construit
+# et échouerait sur des milliers de fichiers générés.
+
+# Sorties de Docusaurus.
+build
+.docusaurus
+
+# Binaires : Prettier n'a rien à y faire.
+static/img
+
+# Régénéré par npm dans SON format : le laisser à Prettier provoquerait une
+# boucle « npm réécrit / prettier --check refuse ».
+package-lock.json

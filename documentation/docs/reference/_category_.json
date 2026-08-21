@@ -1,0 +1,11 @@
+{
+  "label": "Référence",
+  "position": 8,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Référence",
+    "description": "Les contrats stables : API HTTP, conventions et points d'entrée.",
+    "slug": "/reference"
+  }
+}

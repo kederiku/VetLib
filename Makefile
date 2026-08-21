@@ -17,12 +17,14 @@
 #   make install   (dépendances backend + frontends)
 #   make dev-b2c   (frontend propriétaires d'animaux, http://localhost:3000)
 #   make dev-b2b   (frontend cliniques,               http://localhost:3001)
+#   make docs      (site de documentation,            http://localhost:3002)
 # =============================================================================
 
 # Dossiers des sous-projets, pour éviter de répéter les chemins partout.
 BACKEND := backend
 B2C     := frontend-b2c
 B2B     := frontend-b2b
+DOCS    := documentation
 
 # Sans argument, `make` affiche l'aide au lieu d'exécuter la première cible.
 .DEFAULT_GOAL := help
@@ -35,6 +37,7 @@ B2B     := frontend-b2b
         lint format typecheck test test-unit test-integration coverage \
         check-migrations audit \
         lint-front build-front typecheck-front test-front coverage-front check-front \
+        docs docs-build docs-serve docs-format check-docs \
         check check-all
 
 # -----------------------------------------------------------------------------
@@ -58,15 +61,17 @@ env: ## Copie les .env d'exemple s'ils n'existent pas déjà (cp -n = ne jamais 
 	cp -n $(BACKEND)/.env.example $(BACKEND)/.env || true
 	@echo "Fichiers .env prêts (racine = Docker, backend/.env = hors Docker)."
 
-install: ## Installe toutes les dépendances (backend uv + npm des 2 frontends)
+install: ## Installe toutes les dépendances (backend uv + npm des 2 frontends + doc)
 	$(MAKE) -C $(BACKEND) install
 	cd $(B2C) && npm install
 	cd $(B2B) && npm install
+	cd $(DOCS) && npm install
 
 install-ci: ## Installe STRICTEMENT les versions verrouillées (ce que fait la CI)
 	$(MAKE) -C $(BACKEND) install-ci
 	cd $(B2C) && npm ci
 	cd $(B2B) && npm ci
+	cd $(DOCS) && npm ci
 
 # -----------------------------------------------------------------------------
 # Infrastructure Docker (postgres, redis, minio, api :8000, worker)
@@ -171,6 +176,10 @@ audit: ## Vulnérabilités connues dans les dépendances (backend + les 2 fronte
 		&& uvx pip-audit --requirement /tmp/vetolib-requirements.txt --strict
 	cd $(B2C) && npm audit --audit-level=high
 	cd $(B2B) && npm audit --audit-level=high
+	@# Le site passe par un script maison : npm audit ne sait pas ecarter
+	@# UNE faille precise, et image-size (tire par Docusaurus) porte deux
+	@# avis high sans correctif publie. Voir documentation/scripts/audit.mjs.
+	cd $(DOCS) && npm run audit
 
 # -----------------------------------------------------------------------------
 # Qualité frontends
@@ -208,10 +217,43 @@ check-front: lint-front build-front typecheck-front coverage-front ## Qualité f
 	@echo "Frontends OK."
 
 # -----------------------------------------------------------------------------
+# Documentation (site Docusaurus, http://localhost:3002)
+#
+# Le site affiche la référence de l'API à partir de backend/openapi.json (plugin
+# redocusaurus), un fichier gitignoré car regénérable à la demande. TOUTES les
+# cibles qui démarrent ou construisent le site dépendent donc de `openapi` :
+# sans lui, la référence d'API serait absente du site.
+# `make openapi` écrit dans backend/, mais le fichier produit est gitignoré : il
+# ne polluera jamais un `git status`.
+# -----------------------------------------------------------------------------
+
+docs: openapi ## Site de documentation en local, rechargement auto (http://localhost:3002)
+	cd $(DOCS) && npm start
+
+docs-build: openapi ## Build de production du site (échoue sur tout lien ou ancre mort)
+	cd $(DOCS) && npm run build
+
+docs-serve: docs-build ## Sert le site construit sur :3002, exactement comme il sera en ligne
+	cd $(DOCS) && npm run serve
+
+docs-format: ## Reformate le Markdown, le MDX et le TypeScript du site (Prettier)
+	cd $(DOCS) && npm run format
+
+check-docs: ## Qualité de la doc : format, types, liens morts (ce que fait la CI)
+	@# Exactement les etapes du job "documentation" de .github/workflows/ci.yml,
+	@# dans le meme ordre : du controle le moins cher au plus cher. Ecrit en
+	@# recettes plutot qu'en prerequis (contrairement a check-front) parce
+	@# qu'aucune de ces trois etapes n'a d'interet a etre lancee seule.
+	cd $(DOCS) && npm run lint
+	cd $(DOCS) && npm run typecheck
+	$(MAKE) docs-build
+	@echo "Documentation OK."
+
+# -----------------------------------------------------------------------------
 # Raccourci qualité globale
 # -----------------------------------------------------------------------------
 
-check: lint typecheck test-unit check-front ## Toute la qualité sans Docker (backend + frontends)
+check: lint typecheck test-unit check-front check-docs ## Toute la qualité sans Docker (backend, frontends, doc)
 	@echo "Toutes les vérifications sont passées."
 
 check-all: check test-integration check-migrations ## Tout, y compris ce qui nécessite Docker et une base

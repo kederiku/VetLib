@@ -1,0 +1,13 @@
+<!--
+  Favicon : la meme patte, en blanc sur un carre teal arrondi. Le fond plein est
+  indispensable a cette taille : une marque ajouree devient illisible a 16 pixels.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="VetoLib">
+  <rect width="48" height="48" rx="11" fill="#0f766e" />
+  <circle cx="15" cy="18" r="4.3" fill="#fff" />
+  <circle cx="24" cy="14.2" r="4.6" fill="#fff" />
+  <circle cx="33" cy="18" r="4.3" fill="#fff" />
+  <path
+    d="M24 23.6c5.1 0 9.4 3.8 9.4 8.5 0 3.6-2.7 5.9-6.2 5.9-1.6 0-2.4-.6-3.2-.6s-1.6.6-3.2.6c-3.5 0-6.2-2.3-6.2-5.9 0-4.7 4.3-8.5 9.4-8.5Z"
+    fill="#fff" />
+</svg>

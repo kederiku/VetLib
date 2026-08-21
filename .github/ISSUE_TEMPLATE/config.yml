@@ -1,3 +1,10 @@
 # Desactive l'issue vide : on veut toujours passer par un des deux formulaires,
 # qui garantissent les informations minimales pour agir.
 blank_issues_enabled: false
+
+# Liens affiches sous les formulaires, dans "New issue". La documentation repond
+# a une bonne partie des questions d'usage avant qu'elles ne deviennent des issues.
+contact_links:
+  - name: Documentation du projet
+    url: https://kederiku.github.io/VetLib/
+    about: Architecture, guides et reference de l'API.

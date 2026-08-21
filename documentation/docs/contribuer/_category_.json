@@ -1,0 +1,11 @@
+{
+  "label": "Contribuer",
+  "position": 7,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Contribuer",
+    "description": "Le chemin exact d'une contribution acceptée, des vérifications locales à la fusion.",
+    "slug": "/contribuer"
+  }
+}

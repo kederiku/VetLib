@@ -3,6 +3,9 @@ name = "vetolib"
 version = "0.1.0"
 description = "VetoLib — API de gestion de cliniques vétérinaires (architecture hexagonale + DDD)"
 requires-python = ">=3.13,<3.14"
+# Expression SPDX (PEP 639). Le fichier LICENSE vit a la racine du monorepo,
+# hors du repertoire de build : on ne declare donc que l'identifiant.
+license = "MIT"
 dependencies = [
     "fastapi~=0.141.1",
     "uvicorn[standard]~=0.52.4",

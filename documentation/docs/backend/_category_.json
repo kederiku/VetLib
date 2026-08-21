@@ -1,0 +1,11 @@
+{
+  "label": "Backend",
+  "position": 3,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Backend",
+    "description": "Travailler dans le backend FastAPI : organisation du code, endpoints, migrations, tests.",
+    "slug": "/backend"
+  }
+}

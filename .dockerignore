@@ -13,3 +13,9 @@ backend/.ruff_cache/
 .env.*
 !.env.example
 backend/.env
+
+# Le site de documentation n'entre dans aucune image : il est publie sur GitHub
+# Pages par la CI. L'exclure du contexte evite d'envoyer au demon Docker des
+# milliers de fichiers a chaque build des images frontend, dont le contexte est
+# la racine du depot.
+documentation/
