@@ -774,6 +774,15 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
+          # MEMES deux avis que documentation/scripts/audit.mjs, ecartes pour la
+          # meme raison : image-size <=2.0.2 n'a AUCUNE version corrigee publiee
+          # (2.0.2 est la derniere). Il est tire par @docusaurus/mdx-loader et ne
+          # sert qu'au BUILD du site, pour mesurer les images de static/ ; les deux
+          # failles sont des denis de service declenches par une image
+          # malveillante, or ces images sont celles du depot.
+          # A RETIRER des qu'image-size publie un correctif -- en meme temps que
+          # les entrees de audit.mjs, les deux listes doivent rester jumelles.
+          allow-ghsas: GHSA-w3rx-r6r6-pgpr,GHSA-5p2g-fcmc-qvqq
           # never : sans cela l'action exigerait le droit d'ecrire dans la PR.
           comment-summary-in-pr: never
 
