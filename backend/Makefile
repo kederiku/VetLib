@@ -48,8 +48,10 @@ openapi:
 
 coverage: ## Couverture consolidee des tests unitaires ET d'integration (Docker requis)
 	@rm -f .coverage .coverage.unit .coverage.integration
-	COVERAGE_FILE=.coverage.unit uv run pytest tests/unit --cov
-	COVERAGE_FILE=.coverage.integration uv run pytest tests/integration --cov
+	@# --cov-fail-under=0 : le seuil de pyproject.toml ne s'applique qu'au
+	@# rapport consolide, pas a chaque suite prise isolement.
+	COVERAGE_FILE=.coverage.unit uv run pytest tests/unit --cov --cov-fail-under=0
+	COVERAGE_FILE=.coverage.integration uv run pytest tests/integration --cov --cov-fail-under=0
 	uv run coverage combine
 	uv run coverage report
 
