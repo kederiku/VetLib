@@ -169,3 +169,12 @@ make coverage         # couverture backend consolidée
 make check-docs       # format, types et build du site de documentation
 make audit            # vulnérabilités des dépendances
 ```
+
+## Licence
+
+[MIT](LICENSE) — © 2026 Cédric Delagrée.
+
+Le dépôt est public : la licence MIT autorise explicitement la lecture, la
+réutilisation et la modification du code, y compris à des fins commerciales, à la
+seule condition de conserver l'avis de copyright. Voir
+[ADR-0011](documentation/docs/adr/0011-licence-du-depot.md) pour le raisonnement.

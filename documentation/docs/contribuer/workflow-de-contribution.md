@@ -148,10 +148,17 @@ explicitées : `/.github/`, `/backend/migrations/` et `/docker/`. Le fichier ne 
 aujourd'hui — il documente la responsabilité et deviendra utile dès qu'une seconde
 personne rejoindra le projet.
 
-:::danger Le dépôt est public mais **n'a pas de licence**
-En droit d'auteur, l'absence de fichier `LICENSE` signifie **« tous droits réservés »** :
-personne ne peut légalement copier, modifier ni réutiliser ce code, alors même qu'il est
-lisible par tous. Cette ambiguïté doit être levée explicitement, dans un sens ou dans
-l'autre. La question et ses options sont documentées dans
+Le projet est publié sous **licence [MIT](https://github.com/kederiku/VetLib/blob/main/LICENSE)**,
+© 2026 Cédric Delagrée. Chacun peut donc lire, réutiliser, modifier et redistribuer ce
+code, y compris à des fins commerciales, à la seule condition de conserver l'avis de
+copyright.
+
+Le choix et les alternatives écartées sont consignés dans
 [ADR-0011](../adr/0011-licence-du-depot.md).
+
+:::note Contribuer, c'est accepter la licence
+En proposant une modification, vous acceptez qu'elle soit distribuée sous cette même
+licence. C'est la convention implicite de tout dépôt licencié ; un accord de licence
+contributeur formel deviendrait utile le jour où plusieurs personnes contribueraient
+régulièrement.
 :::

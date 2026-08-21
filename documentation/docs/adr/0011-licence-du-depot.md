@@ -1,92 +1,99 @@
 ---
 sidebar_position: 11
-title: "ADR-0011 — Choix d'une licence pour un dépôt public"
-sidebar_label: "0011 — Licence du dépôt"
-description: "Décision 0011 : question ouverte sur la licence d'un dépôt public sans LICENSE."
+title: "ADR-0011 — Licence MIT pour un dépôt public"
+sidebar_label: "0011 — Licence MIT"
+description: "Décision 0011 : le projet est publié sous licence MIT."
 ---
 
-# ADR-0011 — Choix d'une licence pour un dépôt public
+# ADR-0011 — Licence MIT pour un dépôt public
 
-|               |                          |
-| ------------- | ------------------------ |
-| **Statut**    | **Proposé — à trancher** |
-| **Date**      | 2026-08-21               |
-| **Décideurs** | @kederiku                |
-
-:::warning Cet ADR consigne une question ouverte
-Un ADR n'a pas à attendre d'être tranché pour exister. Écrire la question évite qu'elle
-reste implicite — et qu'on découvre le problème le jour où quelqu'un demande à réutiliser
-le code.
-:::
+|               |            |
+| ------------- | ---------- |
+| **Statut**    | Accepté    |
+| **Date**      | 2026-08-21 |
+| **Décideurs** | @kederiku  |
 
 ## Contexte
 
 Le dépôt `kederiku/VetLib` est **public**. N'importe qui peut le lire, le cloner, le
 forker depuis l'interface GitHub.
 
-Il **ne contient aucun fichier `LICENSE`**. Les deux `package.json` sont `"private": true`
-et n'ont pas de champ `license` ; `backend/pyproject.toml` n'en déclare pas non plus.
+Il ne contenait **aucun fichier `LICENSE`**. Les deux `package.json` étaient
+`"private": true` sans champ `license` ; `backend/pyproject.toml` n'en déclarait pas non
+plus.
 
 En droit d'auteur, l'absence de licence ne signifie pas « domaine public ». Elle signifie
 **« tous droits réservés »** : le code est protégé par défaut, et personne ne peut
 légalement le copier, le modifier ni le réutiliser — alors même qu'il est visible par
 tous.
 
-C'est une situation ambiguë, dans les deux sens :
+L'ambiguïté coupait dans les deux sens :
 
-- un lecteur de bonne foi qui reprendrait un extrait serait en infraction sans le savoir ;
-- si l'intention est au contraire de partager, l'absence de licence l'empêche
+- un lecteur de bonne foi qui aurait repris un extrait aurait été en infraction sans le
+  savoir ;
+- l'intention étant au contraire de partager, l'absence de licence l'empêchait
   effectivement.
 
 ## Décision
 
-**À trancher.** Quatre voies, chacune cohérente, à choisir selon l'intention.
+Le projet est publié sous **licence MIT**, © 2026 Cédric Delagrée.
 
-| Option                              | Ce qu'elle permet                                                                                  | Pour qui                                                                |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| **MIT**                             | Réutilisation quasi libre, y compris commerciale, avec conservation de l'avis de copyright         | Projet vitrine, adoption maximale                                       |
-| **Apache-2.0**                      | Idem MIT, plus une **clause de brevets** explicite et une obligation de signaler les modifications | Idem, avec une meilleure protection juridique                           |
-| **AGPL-3.0**                        | Copyleft **réseau** : quiconque exploite une version modifiée en SaaS doit en publier les sources  | Cohérent avec un produit SaaS que l'on ne veut pas voir repris tel quel |
-| **Rester « tous droits réservés »** | Rien, mais **écrit explicitement** dans le README                                                  | Projet personnel non destiné à la réutilisation                         |
+Concrètement :
 
-Une cinquième voie existe — une licence _source-available_ de type BUSL-1.1, qui autorise
-la lecture et l'usage non concurrent avec bascule vers une licence libre après quelques
-années — mais elle ajoute une complexité de gouvernance sans rapport avec la taille
-actuelle du projet.
-
-:::tip La quatrième option est une vraie décision
-« Tous droits réservés » **écrit** vaut infiniment mieux que « tous droits réservés »
-subi. Une phrase dans le README lève l'ambiguïté au même titre qu'un fichier `LICENSE`.
-:::
+- `LICENSE` à la racine du dépôt, texte MIT intégral ;
+- `license = "MIT"` dans `backend/pyproject.toml` — une expression SPDX au sens de la
+  PEP 639, que hatchling reporte en `License-Expression: MIT` dans les métadonnées de la
+  distribution ;
+- `"license": "MIT"` dans les trois `package.json`. Ils restent `"private": true`, ce qui
+  les empêche seulement d'être publiés sur npm par mégarde ;
+- une section **Licence** dans le README, et la mention correspondante dans
+  [Contribuer](../contribuer/workflow-de-contribution.md).
 
 ## Conséquences
 
-**Si une licence permissive est retenue** — MIT ou Apache-2.0 : ajouter `LICENSE` à la
-racine, une section dans le README, et le champ `license` dans `pyproject.toml`. Les
-`package.json` peuvent rester `"private": true`, ce qui les empêche seulement d'être
-publiés sur npm.
+**Positives**
 
-**Si l'AGPL est retenue** : mesurer la conséquence réelle — l'obligation porte sur
-quiconque exploite une version **modifiée** en service réseau, ce qui inclut vous-même si
-le produit devient commercial et fermé. Un accord de licence contributeur devient
-souhaitable dès qu'un second contributeur arrive.
+- L'ambiguïté est levée : chacun sait ce qu'il a le droit de faire.
+- MIT est la licence permissive la plus lue et la plus courte — elle ne demande aucune
+  expertise juridique pour être comprise.
+- Aucune friction pour une réutilisation partielle : reprendre le montage RLS, le pattern
+  outbox ou le job `gate` dans un autre projet est explicitement autorisé.
+- GitHub affiche désormais la licence dans l'en-tête du dépôt, et le champ SPDX descend
+  dans les métadonnées des paquets construits.
 
-**Si le statu quo est retenu** : l'écrire noir sur blanc dans le README, et fermer cet
-ADR au statut « Accepté ».
+**Coûts**
+
+- Une réutilisation commerciale par un tiers, y compris concurrente, est autorisée. C'est
+  la contrepartie assumée d'une licence permissive.
+- Aucune obligation de reversement : une version modifiée peut rester fermée.
+- Aucune clause de brevets explicite — voir l'alternative Apache-2.0 ci-dessous.
+
+**Neutres**
+
+- En contribuant, on accepte implicitement que sa contribution soit distribuée sous la
+  même licence. Un accord de licence contributeur formel deviendrait utile le jour où
+  plusieurs personnes contribueraient régulièrement.
 
 ## Alternatives écartées
 
-Aucune pour l'instant : c'est précisément l'objet de la décision à prendre.
+| Alternative                                        | Pourquoi écartée                                                                                                                                                                                                                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Apache-2.0**                                     | Équivalente à MIT sur le fond, avec une **clause de brevets** explicite et une obligation de signaler les modifications. Plus protectrice, mais nettement plus longue, pour un bénéfice théorique sur un projet sans portefeuille de brevets                            |
+| **AGPL-3.0**                                       | Copyleft réseau : quiconque exploite une version modifiée en SaaS doit en publier les sources. Cohérent avec un produit SaaS que l'on ne veut pas voir repris — mais l'obligation s'appliquerait **aussi au projet lui-même** s'il devenait un jour commercial et fermé |
+| **BUSL-1.1** (_source-available_)                  | Autorise la lecture et l'usage non concurrent, avec bascule vers une licence libre après quelques années. Ajoute une complexité de gouvernance sans rapport avec la taille du projet                                                                                    |
+| **Rester « tous droits réservés », mais l'écrire** | Aurait levé l'ambiguïté, mais aurait aussi empêché toute réutilisation d'un dépôt volontairement public                                                                                                                                                                 |
 
 ## Où cela vit dans le code
 
-- **Absence** de `LICENSE*` à la racine
-- `README.md` — aucune section licence
-- `frontend-*/package.json` — `"private": true`, sans champ `license`
-- `backend/pyproject.toml` — sans champ `license`
+- `LICENSE` — le texte MIT
+- `README.md` — la section **Licence**
+- `backend/pyproject.toml` — `license = "MIT"`
+- `frontend-b2c/package.json`, `frontend-b2b/package.json`,
+  `documentation/package.json` — `"license": "MIT"`
 
 ## Comment on vérifie que la décision tient
 
-Une fois tranchée : la présence du fichier `LICENSE` et la cohérence du champ `license`
-dans les manifestes. GitHub affiche d'ailleurs la licence détectée dans l'en-tête du
-dépôt — son absence est visible d'un coup d'œil aujourd'hui.
+GitHub détecte la licence à partir du fichier `LICENSE` et l'affiche dans l'en-tête du
+dépôt : sa disparition serait visible d'un coup d'œil. Côté paquet Python, un
+`uv build --wheel` produit des métadonnées portant `License-Expression: MIT` — une
+régression du champ se verrait dans la distribution construite.

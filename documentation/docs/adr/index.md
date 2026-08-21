@@ -19,19 +19,19 @@ une maladresse, et quelqu'un la « corrige ».
 
 ## Le tableau
 
-| N°                                               | Titre                                                             | Statut                   |
-| ------------------------------------------------ | ----------------------------------------------------------------- | ------------------------ |
-| [0001](0001-architecture-hexagonale-et-ddd.md)   | Architecture hexagonale et DDD, organisation « contexte d'abord » | Accepté                  |
-| [0002](0002-multi-tenant-par-rls.md)             | Isolation multi-tenant par Row-Level Security PostgreSQL          | Accepté                  |
-| [0003](0003-jwt-en-cookies-httponly.md)          | JWT en cookies HttpOnly et deux espaces cloisonnés                | Accepté                  |
-| [0004](0004-pattern-outbox.md)                   | Pattern Outbox pour tous les effets de bord                       | Accepté                  |
-| [0005](0005-uuid-soft-delete-index-partiels.md)  | UUID, soft delete et index uniques partiels                       | Accepté                  |
-| [0006](0006-anti-double-reservation-en-base.md)  | Anti-double-réservation délégué à PostgreSQL                      | Accepté                  |
-| [0007](0007-creneaux-calcules-a-la-volee.md)     | Créneaux calculés à la volée, jamais pré-générés                  | Accepté                  |
-| [0008](0008-testcontainers-plutot-que-sqlite.md) | Tests d'intégration sur PostgreSQL réel, jamais SQLite            | Accepté                  |
-| [0009](0009-client-api-genere-et-commite.md)     | Client API Orval généré puis committé                             | Accepté                  |
-| [0010](0010-un-seul-check-requis-gate.md)        | Un seul check requis devant la branche protégée                   | Accepté                  |
-| [0011](0011-licence-du-depot.md)                 | Choix d'une licence pour un dépôt public                          | **Proposé — à trancher** |
+| N°                                               | Titre                                                             | Statut  |
+| ------------------------------------------------ | ----------------------------------------------------------------- | ------- |
+| [0001](0001-architecture-hexagonale-et-ddd.md)   | Architecture hexagonale et DDD, organisation « contexte d'abord » | Accepté |
+| [0002](0002-multi-tenant-par-rls.md)             | Isolation multi-tenant par Row-Level Security PostgreSQL          | Accepté |
+| [0003](0003-jwt-en-cookies-httponly.md)          | JWT en cookies HttpOnly et deux espaces cloisonnés                | Accepté |
+| [0004](0004-pattern-outbox.md)                   | Pattern Outbox pour tous les effets de bord                       | Accepté |
+| [0005](0005-uuid-soft-delete-index-partiels.md)  | UUID, soft delete et index uniques partiels                       | Accepté |
+| [0006](0006-anti-double-reservation-en-base.md)  | Anti-double-réservation délégué à PostgreSQL                      | Accepté |
+| [0007](0007-creneaux-calcules-a-la-volee.md)     | Créneaux calculés à la volée, jamais pré-générés                  | Accepté |
+| [0008](0008-testcontainers-plutot-que-sqlite.md) | Tests d'intégration sur PostgreSQL réel, jamais SQLite            | Accepté |
+| [0009](0009-client-api-genere-et-commite.md)     | Client API Orval généré puis committé                             | Accepté |
+| [0010](0010-un-seul-check-requis-gate.md)        | Un seul check requis devant la branche protégée                   | Accepté |
+| [0011](0011-licence-du-depot.md)                 | Licence MIT pour un dépôt public                                  | Accepté |
 
 ## La section qui compte
 
@@ -56,9 +56,9 @@ On en écrit un **nouveau**, qui le remplace. Le premier passe au statut « Remp
 ADR-XXXX ». L'historique d'une décision a autant de valeur que la décision courante.
 :::
 
-Un ADR peut rester au statut **« Proposé »** : c'est le cas de
-[ADR-0011](0011-licence-du-depot.md). Consigner une question ouverte vaut mieux que la
-laisser implicite.
+Un ADR peut rester au statut **« Proposé »** le temps qu'une question soit tranchée :
+consigner une question ouverte vaut toujours mieux que la laisser implicite.
+[ADR-0011](0011-licence-du-depot.md) a vécu ainsi quelques heures avant d'être accepté.
 
 ## Le lien avec les docstrings des migrations
 
