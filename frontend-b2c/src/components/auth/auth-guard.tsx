@@ -38,8 +38,8 @@ function FullPageSkeleton() {
           {/* Barre de titre simulée */}
           <Skeleton className="h-10 w-64" />
           {/* Bloc de contenu principal simulé */}
-          <Skeleton className="h-48 w-full max-w-2xl" />
-          <Skeleton className="h-24 w-full max-w-2xl" />
+          <Skeleton className="h-48 w-full max-w-[96rem]" />
+          <Skeleton className="h-24 w-full max-w-[96rem]" />
         </div>
       </div>
     </div>

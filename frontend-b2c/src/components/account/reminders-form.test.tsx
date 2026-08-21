@@ -19,7 +19,10 @@ import { RemindersForm } from "@/components/account/reminders-form";
 import { buildOwner } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 
-const simulations = vi.hoisted(() => ({ save: vi.fn(), toastSuccess: vi.fn() }));
+const simulations = vi.hoisted(() => ({
+  save: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
 
 vi.mock("sonner", () => ({
   toast: {
@@ -62,7 +65,9 @@ describe("RemindersForm", () => {
   it("n'enregistre RIEN au clic sur une case", async () => {
     afficher({ email: true, sms: false });
 
-    await userEvent.setup().click(screen.getByRole("checkbox", { name: "Par SMS" }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole("checkbox", { name: "Par SMS" }));
 
     expect(screen.getByRole("checkbox", { name: "Par SMS" })).toBeChecked();
     expect(simulations.save).not.toHaveBeenCalled();
@@ -74,7 +79,9 @@ describe("RemindersForm", () => {
     const utilisateur = userEvent.setup();
 
     await utilisateur.click(screen.getByRole("checkbox", { name: "Par SMS" }));
-    await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await utilisateur.click(
+      screen.getByRole("button", { name: "Enregistrer" }),
+    );
 
     await waitFor(() => expect(simulations.save).toHaveBeenCalled());
     expect(simulations.save.mock.calls[0][0]).toEqual({

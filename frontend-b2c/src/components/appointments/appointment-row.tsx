@@ -23,7 +23,11 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { OwnerAppointmentResponse } from "@/lib/api/generated/vetoLibAPI.schemas";
 import { STATUS_LABELS } from "@/lib/appointments/status";
-import { formatDateLong, formatDateShort, formatTimeRange } from "@/lib/date/format";
+import {
+  formatDateLong,
+  formatDateShort,
+  formatTimeRange,
+} from "@/lib/date/format";
 import { cn } from "@/lib/utils";
 
 interface AppointmentRowProps {
@@ -32,7 +36,10 @@ interface AppointmentRowProps {
   dense?: boolean;
 }
 
-export function AppointmentRow({ appointment, dense = false }: AppointmentRowProps) {
+export function AppointmentRow({
+  appointment,
+  dense = false,
+}: AppointmentRowProps) {
   const status = STATUS_LABELS[appointment.status];
 
   // Nom accessible complet : un lecteur d'écran ne voit pas la mise en
@@ -62,7 +69,9 @@ export function AppointmentRow({ appointment, dense = false }: AppointmentRowPro
           d'écran lirait tout en double. */}
       <span aria-hidden className="flex min-w-0 flex-1 items-start gap-4">
         <span className="w-24 shrink-0 text-sm font-medium tabular-nums">
-          <span className="block">{formatDateShort(appointment.starts_at)}</span>
+          <span className="block">
+            {formatDateShort(appointment.starts_at)}
+          </span>
           <span className="block text-muted-foreground">
             {formatTimeRange(appointment.starts_at, appointment.ends_at)}
           </span>
@@ -73,7 +82,19 @@ export function AppointmentRow({ appointment, dense = false }: AppointmentRowPro
             <span className="text-sm font-medium">
               {appointment.appointment_type_name}
             </span>
-            <Badge variant={status.badgeVariant}>{status.label}</Badge>
+            {/* Le statut est repousse a DROITE en pleine largeur, et
+                accole au titre en variante compacte. Depuis
+                l'elargissement des pages, une ligne fait pres de
+                1500 px : garder tout le contenu cale a gauche
+                creuserait un grand vide en son milieu -- le defaut se
+                deplacerait simplement de l'exterieur vers l'interieur.
+                La ligne se lit desormais date / objet / statut. */}
+            <Badge
+              variant={status.badgeVariant}
+              className={cn(!dense && "sm:ml-auto")}
+            >
+              {status.label}
+            </Badge>
           </span>
           <span className="truncate text-sm text-muted-foreground">
             {appointment.clinic_name}

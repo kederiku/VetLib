@@ -14,7 +14,10 @@ import { PersonalInfoForm } from "@/components/account/personal-info-form";
 import { buildOwner } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 
-const simulations = vi.hoisted(() => ({ save: vi.fn(), toastSuccess: vi.fn() }));
+const simulations = vi.hoisted(() => ({
+  save: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
 
 vi.mock("sonner", () => ({
   toast: {
@@ -84,9 +87,13 @@ describe("PersonalInfoForm", () => {
     const utilisateur = userEvent.setup();
 
     await utilisateur.clear(screen.getByLabelText("Prénom"));
-    await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await utilisateur.click(
+      screen.getByRole("button", { name: "Enregistrer" }),
+    );
 
-    expect(await screen.findByText("Le prénom est requis.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Le prénom est requis."),
+    ).toBeInTheDocument();
     expect(simulations.save).not.toHaveBeenCalled();
   });
 

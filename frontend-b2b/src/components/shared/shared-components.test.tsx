@@ -160,7 +160,7 @@ describe("PageContainer", () => {
       </PageContainer>,
     );
 
-    expect(container.firstChild).toHaveClass("max-w-6xl");
+    expect(container.firstChild).toHaveClass("max-w-[96rem]");
   });
 
   it("accepte des classes supplémentaires sans perdre les siennes", () => {
@@ -171,6 +171,6 @@ describe("PageContainer", () => {
     );
 
     expect(container.firstChild).toHaveClass("pb-0");
-    expect(container.firstChild).toHaveClass("max-w-6xl");
+    expect(container.firstChild).toHaveClass("max-w-[96rem]");
   });
 });

@@ -104,8 +104,20 @@ export function PersonalInfoForm({
         </CardDescription>
       </CardHeader>
 
-      {/* noValidate : validation confiée à zod, pas aux bulles natives. */}
-      <form onSubmit={onSubmit} noValidate>
+      {/* noValidate : validation confiee a zod, pas aux bulles natives.
+
+          flex flex-col gap-(--card-spacing) : la Card est elle-meme un
+          flex-col dont le gap espace en-tete, contenu et pied. Ce <form>
+          s'intercale entre elle et ses sections : sans reprendre sa mise
+          en page, il redevient un simple bloc et le pied se retrouve
+          COLLE au contenu (0 px au lieu de 24). Le piege ne se voit que
+          sur les cartes qui ont a la fois un CardContent et un
+          CardFooter -- c'est-a-dire les trois formulaires de cet ecran. */}
+      <form
+        onSubmit={onSubmit}
+        noValidate
+        className="flex flex-col gap-(--card-spacing)"
+      >
         <CardContent>
           <FieldGroup>
             {errors.root?.server && (
