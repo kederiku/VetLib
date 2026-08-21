@@ -10,7 +10,7 @@
  * déterministe, sans faux timers.
  */
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { AppointmentCard } from "@/components/appointments/appointment-card";
 import { buildOwnerAppointment } from "@/test/fixtures";
