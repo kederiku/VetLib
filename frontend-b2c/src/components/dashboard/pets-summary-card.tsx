@@ -133,7 +133,13 @@ export function PetsSummaryCard({ now }: { now: Date }) {
                         {pet.name}
                         <span className="sr-only"> — {label}</span>
                       </span>
-                      <span className="truncate text-xs text-muted-foreground">
+                      {/* Pas de `truncate` ici, contrairement au nom :
+                          la colonne de droite fait ~130 px et cette ligne
+                          en demande 210, la date serait TOUJOURS coupee
+                          ("Prochain rendez-vou...") -- ce qui vide la
+                          ligne de son seul contenu utile. On la laisse
+                          passer a la ligne. */}
+                      <span className="text-xs text-muted-foreground">
                         {sousLigne(pet.id)}
                       </span>
                     </span>

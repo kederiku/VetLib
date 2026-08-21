@@ -54,6 +54,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import type { ApiError } from "@/lib/api/errors";
 import {
+  getGetMyPetQueryKey,
   getListMyPetsQueryKey,
   useCreatePet,
   useUpdatePet,
@@ -178,8 +179,8 @@ function PetFormDialogContent({
         : await createMutation.mutateAsync({ data });
 
       // La liste des animaux est peut-etre affichee derriere le dialogue
-      // (ou dans le wizard) : invalider par sa cle la fait se rafraichir
-      // partout ou elle est montee.
+      // (ou dans le tunnel de rendez-vous) : invalider par sa cle la
+      // fait se rafraichir partout ou elle est montee.
       await queryClient.invalidateQueries({
         queryKey: getListMyPetsQueryKey(),
       });
@@ -188,6 +189,18 @@ function PetFormDialogContent({
       // mais le mutator jette sur tout statut >= 400 — a l'execution on
       // est forcement en 200/201 ici.
       if (res.status === 200 || res.status === 201) {
+        // LA FICHE A SA PROPRE CLE DE CACHE. La page /animaux/[id] lit
+        // getMyPet, pas listMyPets : sans cette ecriture, elle
+        // continuerait d'afficher les valeurs d'AVANT l'edition jusqu'au
+        // prochain rechargement -- alors qu'un toast vient d'annoncer
+        // l'enregistrement. C'est le piege des deux queryKey pour une
+        // meme entite.
+        //
+        // setQueryData et non invalidateQueries : la reponse EST la
+        // fiche a jour, la re-demander au serveur serait une requete
+        // pour rien.
+        queryClient.setQueryData(getGetMyPetQueryKey(res.data.id), res);
+
         onSaved?.(res.data);
         toast.success(
           isEditing ? "Fiche enregistrée" : `${res.data.name} a été ajouté`,
