@@ -1,27 +1,23 @@
 /**
  * Onglet "Types de rendez-vous" : liste + accès au dialog créer/éditer.
  *
- * Il n'y a volontairement PAS de suppression : les anciens rendez-vous
- * référencent leurs types, la DÉSACTIVATION est le cycle de vie (un type
- * inactif n'est plus proposé à la prise de rendez-vous mais l'historique
- * reste lisible). Même philosophie que les soft deletes du backend.
+ * La coquille (carte, chargement, erreur, état vide, CTA de création)
+ * vient de <SettingsListCard> — cet onglet ne garde que sa query, sa
+ * table et son dialog. Il n'y a volontairement PAS de suppression : les
+ * anciens rendez-vous référencent leurs types, la DÉSACTIVATION est le
+ * cycle de vie (un type inactif n'est plus proposé à la prise de
+ * rendez-vous mais l'historique reste lisible). Même philosophie que
+ * les soft deletes du backend.
  */
 "use client";
 
+import { ClipboardList } from "lucide-react";
 import { useState } from "react";
 
 import { AppointmentTypeDialog } from "@/components/settings/appointment-type-dialog";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { SettingsListCard } from "@/components/settings/settings-list-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -60,74 +56,62 @@ export function AppointmentTypesTab() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Types de rendez-vous</CardTitle>
-        <CardDescription>
-          Les motifs proposés à la prise de rendez-vous, avec leur durée.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {typesQuery.isPending && (
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        )}
+    <>
+      <SettingsListCard
+        title="Types de rendez-vous"
+        description="Les motifs proposés à la prise de rendez-vous, avec leur durée."
+        createLabel="Nouveau type"
+        onCreate={openCreate}
+        isPending={typesQuery.isPending}
+        isError={typesQuery.isError}
+        errorTitle="Impossible de charger les types de rendez-vous."
+        onRetry={() => void typesQuery.refetch()}
+        isEmpty={typesQuery.data?.length === 0}
+        emptyState={{
+          icon: <ClipboardList />,
+          title: "Aucun type de rendez-vous",
+          description:
+            "Créez vos motifs de consultation pour ouvrir la prise de rendez-vous.",
+        }}
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nom</TableHead>
+              <TableHead>Durée</TableHead>
+              <TableHead>Statut</TableHead>
+              {/* Colonne actions sans en-tête visible. */}
+              <TableHead className="w-0" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {typesQuery.data?.map((type) => (
+              <TableRow key={type.id}>
+                <TableCell className="font-medium">{type.name}</TableCell>
+                <TableCell>{type.duration_minutes} min</TableCell>
+                <TableCell>
+                  <Badge variant={type.active ? "secondary" : "outline"}>
+                    {type.active ? "Actif" : "Inactif"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openEdit(type)}
+                  >
+                    Modifier
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </SettingsListCard>
 
-        {typesQuery.isError && (
-          <Alert variant="destructive">
-            <AlertTitle>Impossible de charger les types de rendez-vous.</AlertTitle>
-          </Alert>
-        )}
-
-        {typesQuery.data !== undefined &&
-          (typesQuery.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aucun type de rendez-vous pour l&apos;instant.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Durée</TableHead>
-                  <TableHead>Statut</TableHead>
-                  {/* Colonne actions sans en-tête visible. */}
-                  <TableHead className="w-0" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {typesQuery.data.map((type) => (
-                  <TableRow key={type.id}>
-                    <TableCell className="font-medium">{type.name}</TableCell>
-                    <TableCell>{type.duration_minutes} min</TableCell>
-                    <TableCell>
-                      <Badge variant={type.active ? "secondary" : "outline"}>
-                        {type.active ? "Actif" : "Inactif"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(type)}
-                      >
-                        Modifier
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ))}
-
-        <div>
-          <Button onClick={openCreate}>Nouveau type</Button>
-        </div>
-      </CardContent>
-
-      {/* key : remonte le dialog à chaque ouverture — le formulaire
+      {/* Hors de SettingsListCard : le dialog doit rester monté même
+          quand la liste est vide (le CTA de l'état vide l'ouvre aussi).
+          key : remonte le dialog à chaque ouverture — le formulaire
           repart des bonnes defaultValues sans reset manuel, même en
           rouvrant sur la même cible. */}
       <AppointmentTypeDialog
@@ -136,6 +120,6 @@ export function AppointmentTypesTab() {
         onOpenChange={setDialogOpen}
         type={editingType}
       />
-    </Card>
+    </>
   );
 }

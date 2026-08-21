@@ -2,28 +2,23 @@
  * Onglet "Praticiens" : liste des ressources planifiables + dialog
  * créer/éditer.
  *
- * Même squelette que l'onglet des types de rendez-vous, même cycle de
- * vie : pas de suppression, la DÉSACTIVATION retire le praticien des
- * agendas futurs sans toucher à l'historique. "Ressource" côté backend
+ * La coquille (carte, chargement, erreur, état vide, CTA de création)
+ * vient de <SettingsListCard> — cet onglet ne garde que sa query, sa
+ * table et son dialog. Même cycle de vie que les types de rendez-vous :
+ * pas de suppression, la DÉSACTIVATION retire le praticien des agendas
+ * futurs sans toucher à l'historique. "Ressource" côté backend
  * (extensible aux salles, équipements...), "praticien" côté UI : seul
  * kind=veterinarian existe aujourd'hui.
  */
 "use client";
 
+import { Stethoscope } from "lucide-react";
 import { useState } from "react";
 
 import { PractitionerDialog } from "@/components/settings/practitioner-dialog";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { SettingsListCard } from "@/components/settings/settings-list-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -62,75 +57,60 @@ export function PractitionersTab() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Praticiens</CardTitle>
-        <CardDescription>
-          Les praticiens dont l&apos;agenda peut recevoir des rendez-vous.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {resourcesQuery.isPending && (
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        )}
+    <>
+      <SettingsListCard
+        title="Praticiens"
+        description="Les praticiens dont l'agenda peut recevoir des rendez-vous."
+        createLabel="Nouveau praticien"
+        onCreate={openCreate}
+        isPending={resourcesQuery.isPending}
+        isError={resourcesQuery.isError}
+        errorTitle="Impossible de charger les praticiens."
+        onRetry={() => void resourcesQuery.refetch()}
+        isEmpty={resourcesQuery.data?.length === 0}
+        emptyState={{
+          icon: <Stethoscope />,
+          title: "Aucun praticien",
+          description:
+            "Ajoutez un praticien pour ouvrir son agenda aux rendez-vous.",
+        }}
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nom</TableHead>
+              <TableHead>Statut</TableHead>
+              {/* Colonne actions sans en-tête visible. */}
+              <TableHead className="w-0" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {resourcesQuery.data?.map((resource) => (
+              <TableRow key={resource.id}>
+                <TableCell className="font-medium">{resource.name}</TableCell>
+                <TableCell>
+                  <Badge variant={resource.active ? "secondary" : "outline"}>
+                    {resource.active ? "Actif" : "Inactif"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openEdit(resource)}
+                  >
+                    Modifier
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </SettingsListCard>
 
-        {resourcesQuery.isError && (
-          <Alert variant="destructive">
-            <AlertTitle>Impossible de charger les praticiens.</AlertTitle>
-          </Alert>
-        )}
-
-        {resourcesQuery.data !== undefined &&
-          (resourcesQuery.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aucun praticien pour l&apos;instant.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead className="w-0" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {resourcesQuery.data.map((resource) => (
-                  <TableRow key={resource.id}>
-                    <TableCell className="font-medium">
-                      {resource.name}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={resource.active ? "secondary" : "outline"}
-                      >
-                        {resource.active ? "Actif" : "Inactif"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(resource)}
-                      >
-                        Modifier
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ))}
-
-        <div>
-          <Button onClick={openCreate}>Nouveau praticien</Button>
-        </div>
-      </CardContent>
-
-      {/* key : remonte le dialog à chaque ouverture, pour repartir des
+      {/* Hors de SettingsListCard : le dialog doit rester monté même
+          quand la liste est vide (le CTA de l'état vide l'ouvre aussi).
+          key : remonte le dialog à chaque ouverture, pour repartir des
           bonnes defaultValues sans reset manuel, même en rouvrant sur
           la même cible. */}
       <PractitionerDialog
@@ -139,6 +119,6 @@ export function PractitionersTab() {
         onOpenChange={setDialogOpen}
         resource={editingResource}
       />
-    </Card>
+    </>
   );
 }

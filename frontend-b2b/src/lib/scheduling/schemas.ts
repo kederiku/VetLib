@@ -51,13 +51,15 @@ export const practitionerSchema = z.object({
 
 /**
  * Semaine type d'un praticien : tableau FIXE de 7 jours (index 0 =
- * lundi, la convention backend), chacun ouvert ou fermé avec une plage.
+ * lundi, la convention backend), chacun ouvert ou fermé avec une ou
+ * PLUSIEURS plages horaires (matin + après-midi pour une pause
+ * déjeuner, par exemple) — le miroir exact du modèle backend.
  *
- * Les jours FERMÉS gardent leurs heures en mémoire (rouvrir le mardi
+ * Les jours FERMÉS gardent leurs plages en mémoire (rouvrir le mardi
  * retrouve "09:00-18:00") mais ne sont ni validés ni envoyés. Le
  * superRefine ne contrôle donc que les jours ouverts, et poste chaque
- * erreur sur `days.${i}.end` : elle s'affiche sur LA ligne fautive, pas
- * en vrac sous le formulaire.
+ * erreur sur `days.${i}.ranges.${j}.end` : elle s'affiche sous LA plage
+ * fautive, pas en vrac sous le formulaire.
  */
 export const weeklyScheduleSchema = z
   .object({
@@ -65,8 +67,14 @@ export const weeklyScheduleSchema = z
       .array(
         z.object({
           open: z.boolean(),
-          start: z.string(),
-          end: z.string(),
+          ranges: z
+            .array(
+              z.object({
+                start: z.string(),
+                end: z.string(),
+              }),
+            )
+            .min(1, "Chaque jour doit garder au moins une plage."),
         }),
       )
       .length(7, "La semaine doit compter exactement 7 jours."),
@@ -76,22 +84,51 @@ export const weeklyScheduleSchema = z
       if (!day.open) {
         return;
       }
-      // Un <input type="time"> vidé vaut "" : jour ouvert sans horaire.
-      if (!TIME_HH_MM.test(day.start) || !TIME_HH_MM.test(day.end)) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["days", i, "end"],
-          message: "Renseignez les heures d'ouverture et de fermeture.",
-        });
-        return;
-      }
-      // Comparaison lexicale HH:MM = comparaison chronologique.
-      if (day.end <= day.start) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["days", i, "end"],
-          message: "L'heure de fermeture doit être après l'ouverture.",
-        });
+
+      // 1) Validité de CHAQUE plage prise isolément.
+      day.ranges.forEach((range, j) => {
+        // Un <input type="time"> vidé vaut "" : plage sans horaire.
+        if (!TIME_HH_MM.test(range.start) || !TIME_HH_MM.test(range.end)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["days", i, "ranges", j, "end"],
+            message: "Renseignez les heures d'ouverture et de fermeture.",
+          });
+          return;
+        }
+        // Comparaison lexicale HH:MM = comparaison chronologique.
+        if (range.end <= range.start) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["days", i, "ranges", j, "end"],
+            message: "L'heure de fermeture doit être après l'ouverture.",
+          });
+        }
+      });
+
+      // 2) NON-CHEVAUCHEMENT entre les plages du même jour (le backend
+      // refuse aussi, autant l'expliquer avant l'envoi). On ne compare
+      // que les plages déjà valides individuellement : inutile d'empiler
+      // deux erreurs sur une plage incomplète.
+      const valid = day.ranges
+        .map((range, j) => ({ ...range, j }))
+        .filter(
+          (range) =>
+            TIME_HH_MM.test(range.start) &&
+            TIME_HH_MM.test(range.end) &&
+            range.start < range.end,
+        )
+        // Tri chronologique (lexical HH:MM) : il suffit alors de
+        // vérifier chaque plage contre la précédente.
+        .sort((a, b) => (a.start < b.start ? -1 : 1));
+      for (let k = 1; k < valid.length; k += 1) {
+        if (valid[k].start < valid[k - 1].end) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["days", i, "ranges", valid[k].j, "end"],
+            message: "Deux plages du même jour ne peuvent pas se chevaucher.",
+          });
+        }
       }
     });
   });

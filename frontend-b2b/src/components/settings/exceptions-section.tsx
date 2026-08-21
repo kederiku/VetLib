@@ -13,11 +13,14 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarIcon, Trash2 } from "lucide-react";
+import { CalendarIcon, CalendarOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { DateRange } from "react-day-picker";
 import { fr } from "react-day-picker/locale";
+import { toast } from "sonner";
 
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,12 +41,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type { ApiError } from "@/lib/api/errors";
@@ -90,7 +95,9 @@ export function ExceptionsSection({ resourceId }: { resourceId: string }) {
   const [range, setRange] = useState<DateRange | undefined>(undefined);
   const [reason, setReason] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
-  // Erreur du formulaire d'ajout OU d'une suppression (déjà en français).
+  // Erreur du formulaire d'ajout UNIQUEMENT (déjà en français) : les
+  // erreurs de formulaire restent inline ; celles des actions hors
+  // formulaire (suppression) partent en toast.error.
   const [formError, setFormError] = useState<string | null>(null);
   // Exception dont la suppression est en cours de confirmation.
   const [toDelete, setToDelete] = useState<ScheduleExceptionResponse | null>(
@@ -136,6 +143,7 @@ export function ExceptionsSection({ resourceId }: { resourceId: string }) {
       await queryClient.invalidateQueries({
         queryKey: getListResourceExceptionsQueryKey(resourceId),
       });
+      toast.success("Absence ajoutée");
       // Formulaire prêt pour une prochaine saisie.
       setRange(undefined);
       setReason("");
@@ -148,7 +156,6 @@ export function ExceptionsSection({ resourceId }: { resourceId: string }) {
     if (toDelete === null) {
       return;
     }
-    setFormError(null);
     try {
       await deleteMutation.mutateAsync({
         resourceId,
@@ -157,8 +164,11 @@ export function ExceptionsSection({ resourceId }: { resourceId: string }) {
       await queryClient.invalidateQueries({
         queryKey: getListResourceExceptionsQueryKey(resourceId),
       });
+      toast.success("Absence supprimée");
     } catch (error) {
-      setFormError(messageForApiError(error));
+      // Action hors formulaire : l'erreur part en toast (le bandeau
+      // inline est réservé au formulaire d'ajout).
+      toast.error(messageForApiError(error));
     } finally {
       setToDelete(null);
     }
@@ -188,16 +198,19 @@ export function ExceptionsSection({ resourceId }: { resourceId: string }) {
         )}
 
         {exceptionsQuery.isError && (
-          <Alert variant="destructive">
-            <AlertTitle>Impossible de charger les absences.</AlertTitle>
-          </Alert>
+          <ErrorState
+            title="Impossible de charger les absences."
+            onRetry={() => void exceptionsQuery.refetch()}
+          />
         )}
 
         {exceptionsQuery.data !== undefined &&
           (exceptionsQuery.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aucune absence enregistrée.
-            </p>
+            <EmptyState
+              icon={<CalendarOff />}
+              title="Aucune absence enregistrée"
+              description="Les périodes ajoutées ici bloquent la prise de rendez-vous en ligne."
+            />
           ) : (
             <ul className="flex flex-col gap-2">
               {exceptionsQuery.data.map((exception) => (
@@ -234,53 +247,62 @@ export function ExceptionsSection({ resourceId }: { resourceId: string }) {
             </ul>
           ))}
 
-        {/* Formulaire d'ajout : période (Popover + Calendar range) +
-            raison facultative. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-            <PopoverTrigger
-              render={
-                <Button variant="outline" className="justify-start font-normal" />
-              }
+        {/* Separator + FieldSet : sans eux, le formulaire d'ajout se
+            confondait avec les items de la liste juste au-dessus (mêmes
+            bordures, aucun titre) — on marque nettement la frontière
+            entre "ce qui existe" et "ce qu'on ajoute". */}
+        <Separator />
+        <FieldSet>
+          <FieldLegend variant="label">Ajouter une absence</FieldLegend>
+          <div className="flex flex-wrap items-center gap-2">
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    className="justify-start font-normal"
+                  />
+                }
+              >
+                <CalendarIcon data-icon="inline-start" />
+                <span className="first-letter:uppercase">
+                  {normalizedRange !== undefined
+                    ? formatDateRangeLabel(
+                        normalizedRange.from,
+                        normalizedRange.to,
+                      )
+                    : "Choisir la période"}
+                </span>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="range"
+                  locale={fr}
+                  selected={range}
+                  onSelect={setRange}
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Input
+              type="text"
+              className="w-56"
+              placeholder="Raison (facultatif)"
+              aria-label="Raison de l'absence"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+
+            <Button
+              variant="secondary"
+              disabled={createMutation.isPending}
+              onClick={handleAdd}
             >
-              <CalendarIcon data-icon="inline-start" />
-              <span className="first-letter:uppercase">
-                {normalizedRange !== undefined
-                  ? formatDateRangeLabel(
-                      normalizedRange.from,
-                      normalizedRange.to,
-                    )
-                  : "Choisir la période"}
-              </span>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="range"
-                locale={fr}
-                selected={range}
-                onSelect={setRange}
-              />
-            </PopoverContent>
-          </Popover>
-
-          <Input
-            type="text"
-            className="w-56"
-            placeholder="Raison (facultatif)"
-            aria-label="Raison de l'absence"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-          />
-
-          <Button
-            variant="secondary"
-            disabled={createMutation.isPending}
-            onClick={handleAdd}
-          >
-            {createMutation.isPending && <Spinner data-icon="inline-start" />}
-            Ajouter l&apos;absence
-          </Button>
-        </div>
+              {createMutation.isPending && <Spinner data-icon="inline-start" />}
+              Ajouter l&apos;absence
+            </Button>
+          </div>
+        </FieldSet>
       </CardContent>
 
       {/* Confirmation de suppression : une absence supprimée rouvre

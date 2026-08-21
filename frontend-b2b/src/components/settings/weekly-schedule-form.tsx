@@ -1,25 +1,46 @@
 /**
- * Semaine type d'un praticien : 7 lignes jour + Switch + plage horaire.
+ * Semaine type d'un praticien : 7 lignes jour + Switch + plages horaires.
  *
- * L'API renvoie une LISTE des seuls jours travaillés ; le formulaire la
- * projette sur un tableau FIXE de 7 jours (absent = fermé, avec
- * "09:00-18:00" en mémoire pour pré-remplir une réouverture). À l'envoi,
- * l'opération inverse : seuls les jours ouverts partent, et le PUT est
- * un REMPLACEMENT complet de la semaine côté backend — pas de diff à
- * calculer. Les heures voyagent en "HH:MM:SS" côté API, "HH:MM" côté
- * inputs time natifs : conversion aux deux frontières.
+ * L'API renvoie une LISTE de plages (weekday, start, end) des seuls
+ * jours travaillés — un même jour peut porter PLUSIEURS plages (matin +
+ * après-midi autour d'une pause déjeuner). Le formulaire la projette sur
+ * un tableau FIXE de 7 jours, chacun avec SES plages (absent = fermé,
+ * avec "09:00-18:00" en mémoire pour pré-remplir une réouverture). À
+ * l'envoi, l'opération inverse : toutes les plages des jours ouverts
+ * sont aplaties, et le PUT est un REMPLACEMENT complet de la semaine
+ * côté backend — pas de diff à calculer. Les heures voyagent en
+ * "HH:MM:SS" côté API, "HH:MM" côté inputs time natifs : conversion aux
+ * deux frontières.
+ *
+ * Chaque jour édite ses plages via useFieldArray ; comme un hook ne
+ * peut pas être appelé dans une boucle, chaque ligne est un
+ * sous-composant <DayScheduleRow> qui appelle useFieldArray pour SON
+ * index de jour.
  */
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Plus, Trash2 } from "lucide-react";
+import { useMemo } from "react";
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+  type FieldErrors,
+  type UseFormGetValues,
+  type UseFormRegister,
+} from "react-hook-form";
+import { toast } from "sonner";
 
+import { ErrorState } from "@/components/shared/error-state";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -49,25 +70,185 @@ import {
 const DEFAULT_START = "09:00";
 const DEFAULT_END = "18:00";
 
+// Format HH:MM des <input type="time"> (même garde que dans le schéma
+// zod) : sert ici à sécuriser les calculs de pré-remplissage.
+const TIME_HH_MM = /^\d{2}:\d{2}$/;
+
 /**
- * Projette la liste API (jours travaillés seulement, heures HH:MM:SS)
+ * Ajoute des heures à un "HH:MM" en plafonnant à 23:00 : les
+ * suggestions de plage ne doivent jamais déborder sur le lendemain.
+ */
+function addHoursCapped(time: string, hours: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = Math.min(h * 60 + m + hours * 60, 23 * 60);
+  const hh = String(Math.floor(total / 60)).padStart(2, "0");
+  const mm = String(total % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+/**
+ * Suggère la plage à AJOUTER après les plages existantes d'un jour :
+ * si la dernière finit le matin (avant 14:00), on propose l'après-midi
+ * type 14:00-18:00 ; sinon on enchaîne une heure après la dernière fin,
+ * sur 4 heures, plafonné à 23:00. Simple heuristique de confort : la
+ * plage reste éditable et validée comme les autres.
+ */
+function nextRangeSuggestion(ranges: { start: string; end: string }[]): {
+  start: string;
+  end: string;
+} {
+  const last = ranges[ranges.length - 1];
+  if (last === undefined || !TIME_HH_MM.test(last.end) || last.end < "14:00") {
+    return { start: "14:00", end: "18:00" };
+  }
+  const start = addHoursCapped(last.end, 1);
+  return { start, end: addHoursCapped(start, 4) };
+}
+
+/**
+ * Projette la liste API (plages des jours travaillés, heures HH:MM:SS)
  * sur les 7 jours du formulaire (heures HH:MM pour les inputs time).
- * L'UI gère UNE plage par jour : si le backend en portait plusieurs
- * (possible dans son modèle), on n'édite que la première.
+ * TOUTES les plages d'un jour sont reprises — un PUT qui n'en éditerait
+ * que la première effacerait silencieusement les suivantes.
  */
 function toFormValues(items: WeeklyScheduleResponse[]): WeeklyScheduleFormValues {
   return {
     days: WEEKDAYS.map((weekday) => {
-      const entry = items.find((item) => item.weekday === weekday.value);
-      return entry !== undefined
-        ? {
-            open: true,
-            start: entry.start_time.slice(0, 5),
-            end: entry.end_time.slice(0, 5),
-          }
-        : { open: false, start: DEFAULT_START, end: DEFAULT_END };
+      const ranges = items
+        .filter((item) => item.weekday === weekday.value)
+        .map((item) => ({
+          start: item.start_time.slice(0, 5),
+          end: item.end_time.slice(0, 5),
+        }))
+        // Tri chronologique (lexical HH:MM) : affichage stable quel que
+        // soit l'ordre renvoyé par l'API.
+        .sort((a, b) => (a.start < b.start ? -1 : 1));
+      return ranges.length > 0
+        ? { open: true, ranges }
+        : { open: false, ranges: [{ start: DEFAULT_START, end: DEFAULT_END }] };
     }),
   };
+}
+
+/**
+ * Une ligne de jour : Switch ouvert/fermé + la liste éditable de ses
+ * plages. Sous-composant OBLIGATOIRE : useFieldArray est un hook, il ne
+ * peut pas être appelé dans le .map() du parent — chaque ligne monte le
+ * sien sur `days.${index}.ranges`.
+ */
+function DayScheduleRow({
+  index,
+  label,
+  control,
+  register,
+  errors,
+  getValues,
+}: {
+  /** Index du jour (0 = lundi) : c'est AUSSI le weekday backend. */
+  index: number;
+  label: string;
+  control: Control<WeeklyScheduleFormValues>;
+  register: UseFormRegister<WeeklyScheduleFormValues>;
+  errors: FieldErrors<WeeklyScheduleFormValues>;
+  getValues: UseFormGetValues<WeeklyScheduleFormValues>;
+}) {
+  // Plages du jour : fields fournit les lignes (key stable field.id),
+  // append/remove les mutations. remove est masqué à 1 plage : un jour
+  // ouvert a toujours au moins une plage (mirroir du .min(1) du schéma).
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `days.${index}.ranges`,
+  });
+
+  // Abonnement au Switch du jour : active/désactive les inputs heure.
+  const open = useWatch({ control, name: `days.${index}.open` });
+
+  const rangesErrors = errors.days?.[index]?.ranges;
+
+  return (
+    <div className="grid grid-cols-[6rem_auto_1fr] items-start gap-3">
+      {/* mt-2 : aligne label et Switch sur la PREMIÈRE plage (input
+          h-9), les plages suivantes s'empilent dessous. */}
+      <Label htmlFor={`day-open-${index}`} className="mt-2 text-sm font-medium">
+        {label}
+      </Label>
+      {/* Switch Base UI contrôlé -> Controller. */}
+      <Controller
+        control={control}
+        name={`days.${index}.open`}
+        render={({ field }) => (
+          <Switch
+            id={`day-open-${index}`}
+            className="mt-2"
+            checked={field.value}
+            onCheckedChange={(checked) => field.onChange(checked)}
+          />
+        )}
+      />
+      <div className="flex flex-col gap-2">
+        {fields.map((rangeField, j) => (
+          <div key={rangeField.id} className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {/* Inputs time natifs en register : jour fermé = inputs
+                  désactivés (valeurs gardées en mémoire mais ni
+                  validées ni envoyées). */}
+              <Input
+                type="time"
+                className="w-28"
+                disabled={!open}
+                aria-label={`Ouverture ${label} (plage ${j + 1})`}
+                aria-invalid={!!rangesErrors?.[j]?.end}
+                {...register(`days.${index}.ranges.${j}.start`)}
+              />
+              <span className="text-sm text-muted-foreground">-</span>
+              <Input
+                type="time"
+                className="w-28"
+                disabled={!open}
+                aria-label={`Fermeture ${label} (plage ${j + 1})`}
+                aria-invalid={!!rangesErrors?.[j]?.end}
+                {...register(`days.${index}.ranges.${j}.end`)}
+              />
+              {/* Supprimer la plage : masqué quand il n'en reste qu'une
+                  (un jour ouvert garde au moins une plage). */}
+              {fields.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!open}
+                  aria-label={`Supprimer la plage ${j + 1} (${label})`}
+                  onClick={() => remove(j)}
+                >
+                  <Trash2 />
+                </Button>
+              )}
+            </div>
+            {/* Erreur ciblée de la plage (fin > début, chevauchement...),
+                postée par le superRefine sur days.i.ranges.j.end. */}
+            <FieldError errors={[rangesErrors?.[j]?.end]} />
+          </div>
+        ))}
+        {/* Ajout d'une plage (pause déjeuner...) : visible seulement sur
+            un jour ouvert, pré-remplie par l'heuristique ci-dessus. */}
+        {open && (
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                append(nextRangeSuggestion(getValues(`days.${index}.ranges`)))
+              }
+            >
+              <Plus data-icon="inline-start" />
+              Ajouter une plage
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function WeeklyScheduleForm({ resourceId }: { resourceId: string }) {
@@ -78,8 +259,6 @@ export function WeeklyScheduleForm({ resourceId }: { resourceId: string }) {
     query: { select: (res) => (res.status === 200 ? res.data : []) },
   });
   const setMutation = useSetResourceWeeklySchedule<ApiError>();
-
-  const [saved, setSaved] = useState(false);
 
   const formValues = useMemo(
     () =>
@@ -93,34 +272,60 @@ export function WeeklyScheduleForm({ resourceId }: { resourceId: string }) {
     register,
     control,
     handleSubmit,
+    getValues,
+    setValue,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<WeeklyScheduleFormValues>({
     resolver: zodResolver(weeklyScheduleSchema),
+    // defaultValues AVANT l'arrivee de la query : sans eux, field.value
+    // des Switch de jour serait undefined au premier rendu -> Base UI
+    // verrait un composant non controle devenir controle (warning
+    // console "uncontrolled to controlled Switch").
+    defaultValues: {
+      days: WEEKDAYS.map(() => ({
+        open: false,
+        ranges: [{ start: DEFAULT_START, end: DEFAULT_END }],
+      })),
+    },
     // values : resynchronise quand la query arrive (le composant est
-    // remonté par praticien via key, mais la donnée arrive APRÈS).
+    // remonté par praticien via key, donc AUCUN champ n'est dirty au
+    // montage : keepDirtyValues n'empêche pas de repartir des données
+    // du nouveau praticien).
     values: formValues,
     resetOptions: { keepDirtyValues: true },
   });
 
-  // useWatch (et non watch()) : abonnement déclaré au niveau du
-  // composant, compatible avec les règles react-hooks du projet. Sert à
-  // activer/désactiver les inputs heure quand un Switch de jour bascule.
-  const daysValues = useWatch({ control, name: "days" });
+  // "Copier lundi sur la semaine" : recopie l'état du jour 0 (ouvert +
+  // plages) sur les jours 1 à 6. Les plages sont CLONÉES (map + spread) :
+  // partager les mêmes objets entre jours créerait des modifications
+  // fantômes d'un jour à l'autre. shouldDirty : le bouton Enregistrer
+  // doit voir la semaine comme modifiée.
+  const copyMondayToWeek = () => {
+    const monday = getValues("days.0");
+    for (let i = 1; i < 7; i += 1) {
+      setValue(`days.${i}.open`, monday.open, { shouldDirty: true });
+      setValue(
+        `days.${i}.ranges`,
+        monday.ranges.map((range) => ({ ...range })),
+        { shouldDirty: true },
+      );
+    }
+  };
 
   const onSubmit = handleSubmit(async (values) => {
-    setSaved(false);
-    // Seuls les jours OUVERTS partent ; l'index du tableau EST le
-    // weekday (0 = lundi), capturé avant le filter qui casse les index.
-    const items = values.days
-      .map((day, weekday) => ({ ...day, weekday }))
-      .filter((day) => day.open)
-      .map((day) => ({
-        weekday: day.weekday,
-        // "HH:MM" (input time) -> "HH:MM:SS" (API).
-        start_time: `${day.start}:00`,
-        end_time: `${day.end}:00`,
-      }));
+    // Toutes les plages des jours OUVERTS partent à plat ; l'index du
+    // tableau EST le weekday (0 = lundi).
+    const items = values.days.flatMap((day, weekday) =>
+      day.open
+        ? day.ranges.map((range) => ({
+            weekday,
+            // "HH:MM" (input time) -> "HH:MM:SS" (API).
+            start_time: `${range.start}:00`,
+            end_time: `${range.end}:00`,
+          }))
+        : [],
+    );
 
     try {
       await setMutation.mutateAsync({ resourceId, data: { items } });
@@ -128,7 +333,7 @@ export function WeeklyScheduleForm({ resourceId }: { resourceId: string }) {
       await queryClient.invalidateQueries({
         queryKey: getGetResourceWeeklyScheduleQueryKey(resourceId),
       });
-      setSaved(true);
+      toast.success("Horaires enregistrés");
     } catch (error) {
       // Pas de champ candidat pour un 422 ici (structure calculée) :
       // tout part en bandeau global.
@@ -143,6 +348,19 @@ export function WeeklyScheduleForm({ resourceId }: { resourceId: string }) {
         <CardDescription>
           Les jours et horaires où ce praticien reçoit des rendez-vous.
         </CardDescription>
+        <CardAction>
+          {/* Désactivé tant que la query n'a pas peuplé le formulaire :
+              copier les valeurs par défaut n'aurait pas de sens. */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={scheduleQuery.data === undefined}
+            onClick={copyMondayToWeek}
+          >
+            Copier lundi sur la semaine
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent>
         {scheduleQuery.isPending && (
@@ -154,13 +372,14 @@ export function WeeklyScheduleForm({ resourceId }: { resourceId: string }) {
         )}
 
         {scheduleQuery.isError && (
-          <Alert variant="destructive">
-            <AlertTitle>Impossible de charger la semaine type.</AlertTitle>
-          </Alert>
+          <ErrorState
+            title="Impossible de charger la semaine type."
+            onRetry={() => void scheduleQuery.refetch()}
+          />
         )}
 
         {scheduleQuery.data !== undefined && (
-          <form onSubmit={onSubmit} onChange={() => setSaved(false)} noValidate>
+          <form onSubmit={onSubmit} noValidate>
             <div className="flex flex-col gap-4">
               {errors.root?.server && (
                 <Alert variant="destructive">
@@ -168,74 +387,17 @@ export function WeeklyScheduleForm({ resourceId }: { resourceId: string }) {
                 </Alert>
               )}
 
-              {saved && (
-                <Alert>
-                  <AlertTitle>Horaires enregistrés</AlertTitle>
-                </Alert>
-              )}
-
-              {WEEKDAYS.map((weekday, i) => {
-                // ?? false : avant la première synchronisation de
-                // `values`, le tableau peut être encore indéfini.
-                const open = daysValues?.[i]?.open ?? false;
-                return (
-                  <div
-                    key={weekday.value}
-                    className="grid grid-cols-[6rem_auto_1fr] items-center gap-3"
-                  >
-                    <Label
-                      htmlFor={`day-open-${i}`}
-                      className="text-sm font-medium"
-                    >
-                      {weekday.label}
-                    </Label>
-                    {/* Switch Base UI contrôlé -> Controller ; le
-                        setSaved(false) explicite : son clic ne déclenche
-                        pas le onChange DOM du <form>. */}
-                    <Controller
-                      control={control}
-                      name={`days.${i}.open`}
-                      render={({ field }) => (
-                        <Switch
-                          id={`day-open-${i}`}
-                          checked={field.value}
-                          onCheckedChange={(checked) => {
-                            setSaved(false);
-                            field.onChange(checked);
-                          }}
-                        />
-                      )}
-                    />
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        {/* Inputs time natifs en register : jour fermé =
-                            inputs désactivés (valeurs gardées en mémoire
-                            mais ni validées ni envoyées). */}
-                        <Input
-                          type="time"
-                          className="w-28"
-                          disabled={!open}
-                          aria-label={`Ouverture ${weekday.label}`}
-                          aria-invalid={!!errors.days?.[i]?.end}
-                          {...register(`days.${i}.start`)}
-                        />
-                        <span className="text-sm text-muted-foreground">-</span>
-                        <Input
-                          type="time"
-                          className="w-28"
-                          disabled={!open}
-                          aria-label={`Fermeture ${weekday.label}`}
-                          aria-invalid={!!errors.days?.[i]?.end}
-                          {...register(`days.${i}.end`)}
-                        />
-                      </div>
-                      {/* Erreur ciblée de la ligne (end > start...),
-                          postée par le superRefine sur days.i.end. */}
-                      <FieldError errors={[errors.days?.[i]?.end]} />
-                    </div>
-                  </div>
-                );
-              })}
+              {WEEKDAYS.map((weekday, i) => (
+                <DayScheduleRow
+                  key={weekday.value}
+                  index={i}
+                  label={weekday.label}
+                  control={control}
+                  register={register}
+                  errors={errors}
+                  getValues={getValues}
+                />
+              ))}
 
               <div>
                 <Button type="submit" disabled={isSubmitting}>
