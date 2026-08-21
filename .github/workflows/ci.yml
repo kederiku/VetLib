@@ -87,7 +87,11 @@ jobs:
           # il est invalide automatiquement quand uv.lock change.
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-          python-version-file: backend/.python-version
+          # A garder aligne sur backend/.python-version. L'action n'accepte pas
+          # de chemin de fichier pour Python (contrairement a setup-node) : sans
+          # cette valeur, uv telecharge CPython a chaque job au lieu de le
+          # reprendre du cache.
+          python-version: "3.13"
 
       - name: Le lockfile est-il coherent avec pyproject.toml ?
         # Attrape l'oubli classique : une dependance ajoutee a pyproject.toml
@@ -135,7 +139,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-          python-version-file: backend/.python-version
+          # A garder aligne sur backend/.python-version. L'action n'accepte pas
+          # de chemin de fichier pour Python (contrairement a setup-node) : sans
+          # cette valeur, uv telecharge CPython a chaque job au lieu de le
+          # reprendre du cache.
+          python-version: "3.13"
 
       - run: uv sync --locked
 
@@ -181,7 +189,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-          python-version-file: backend/.python-version
+          # A garder aligne sur backend/.python-version. L'action n'accepte pas
+          # de chemin de fichier pour Python (contrairement a setup-node) : sans
+          # cette valeur, uv telecharge CPython a chaque job au lieu de le
+          # reprendre du cache.
+          python-version: "3.13"
 
       - run: uv sync --locked
 
@@ -233,7 +245,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-          python-version-file: backend/.python-version
+          # A garder aligne sur backend/.python-version. L'action n'accepte pas
+          # de chemin de fichier pour Python (contrairement a setup-node) : sans
+          # cette valeur, uv telecharge CPython a chaque job au lieu de le
+          # reprendre du cache.
+          python-version: "3.13"
 
       - run: uv sync --locked
 
@@ -308,7 +324,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-          python-version-file: backend/.python-version
+          # A garder aligne sur backend/.python-version. L'action n'accepte pas
+          # de chemin de fichier pour Python (contrairement a setup-node) : sans
+          # cette valeur, uv telecharge CPython a chaque job au lieu de le
+          # reprendre du cache.
+          python-version: "3.13"
 
       - run: uv sync --locked
 
@@ -431,7 +451,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-          python-version-file: backend/.python-version
+          # A garder aligne sur backend/.python-version. L'action n'accepte pas
+          # de chemin de fichier pour Python (contrairement a setup-node) : sans
+          # cette valeur, uv telecharge CPython a chaque job au lieu de le
+          # reprendre du cache.
+          python-version: "3.13"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -736,7 +760,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [gate]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # always() est indispensable ici, et pas seulement decoratif : sans fonction
+    # de statut explicite, GitHub ajoute un success() implicite qui evalue TOUTE
+    # la chaine de dependances -- y compris "revue des dependances", volontairement
+    # ignore hors des Pull Requests. Un seul job ignore suffisait alors a faire
+    # sauter la publication. On ne regarde donc QUE le resultat de la porte.
+    if: >-
+      always()
+      && needs.gate.result == 'success'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       # Droit d'ecrire dans le registre d'images de GitHub (ghcr.io).
