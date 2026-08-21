@@ -53,8 +53,12 @@ concurrency:
 env:
   # uv re-synchronise l'environnement (et peut reecrire uv.lock) a chaque
   # "uv run". En CI c'est inacceptable : on validerait des dependances qui ne
-  # sont pas celles du depot. UV_FROZEN l'interdit.
-  UV_FROZEN: "1"
+  # sont pas celles du depot. UV_LOCKED est l'equivalent de l'option --locked
+  # pour TOUTES les commandes uv : elle exige que uv.lock reste inchange, et
+  # fait echouer la commande sinon.
+  # A ne pas confondre avec UV_FROZEN (--frozen), qui se contente d'ignorer le
+  # lockfile sans le verifier -- et que uv refuse de combiner avec --locked.
+  UV_LOCKED: "1"
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
