@@ -166,6 +166,13 @@ L'index n'est produit qu'à l'étape `postBuild`. En développement, la barre ex
 renvoie rien. Testez avec `make docs-serve`.
 :::
 
+Le raccourci **`Cmd`/`Ctrl` + `K`** ouvre la recherche. Son rappel visuel dans le champ
+est volontairement désactivé (`searchBarShortcutHint: false`) : le greffon le rend
+derrière un test `isBrowser` évalué au **premier** rendu — faux côté serveur, vrai côté
+navigateur — ce qui produisait une erreur d'hydratation React en console sur **chaque**
+page. Une erreur permanente en console finit par masquer les vraies. Le raccourci, lui,
+fonctionne toujours.
+
 Les libellés français de la barre vivent dans `i18n/fr/code.json` : le paquet de recherche
 ne fournit pas de locale française. Les libellés du thème lui-même — navigation,
 pagination, « Modifier cette page », admonitions — sont déjà traduits par Docusaurus.
