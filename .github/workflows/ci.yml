@@ -432,8 +432,66 @@ jobs:
         # build ferait echouer la verification sur des types introuvables.
         run: npm run typecheck
 
-      - name: Tests unitaires (Vitest)
+      - name: Tests unitaires et couverture (Vitest)
+        # Les seuils vivent dans vitest.config.mts, sous coverage.thresholds --
+        # meme principe que fail_under dans backend/pyproject.toml. Quand un
+        # seuil n'est pas atteint, Vitest affiche "ERROR: Coverage for
+        # <metrique> (X%) does not meet global threshold (Y%)" et sort en code
+        # 1 : cette etape echoue donc d'elle-meme. Surtout pas de "|| true"
+        # ici, qui rendrait le seuil decoratif.
         run: npm run test:coverage
+
+      - name: Publier le resume de couverture
+        # always() : le resume est publie MEME si l'etape precedente a echoue,
+        # c'est-a-dire precisement quand on veut voir les chiffres. Cela
+        # suppose reportOnFailure dans vitest.config.mts, sans quoi Vitest
+        # supprime le rapport des qu'un test echoue.
+        if: always()
+        env:
+          # Le nom de l'app passe par l'environnement plutot que par une
+          # interpolation directe dans le script : une variable shell citee
+          # est plus robuste, et les expressions injectees dans un bloc "run"
+          # sont signalees par le linter de securite des workflows.
+          APP: ${{ matrix.app }}
+        run: |
+          {
+            echo "## Couverture $APP"
+            echo ""
+            if [ -f coverage/coverage-summary.json ]; then
+              echo "| Metrique | Couvert | Total | % |"
+              echo "|---|---:|---:|---:|"
+              # shellcheck disable=SC2016
+              # Les quotes simples sont VOULUES : le script est du JavaScript,
+              # ses gabarits `${...}` doivent parvenir intacts a node et non
+              # etre interpretes par le shell.
+              node -e '
+                const t = require("./coverage/coverage-summary.json").total;
+                for (const k of ["statements", "branches", "functions", "lines"]) {
+                  console.log(`| ${k} | ${t[k].covered} | ${t[k].total} | ${t[k].pct} % |`);
+                }
+              '
+            else
+              echo "Rapport indisponible : la suite a echoue avant la mesure."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Conserver le rapport de couverture
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          # Un nom par application : deux jobs de la meme matrice ne peuvent
+          # pas ecrire dans le meme artefact.
+          name: coverage-${{ matrix.app }}
+          # ATTENTION : defaults.run.working-directory ne s'applique qu'aux
+          # etapes "run", jamais aux actions. Le chemin part donc de la racine
+          # du depot.
+          path: ${{ matrix.app }}/coverage
+          # Le rapport HTML s'ouvre directement : c'est le moyen le plus rapide
+          # de voir QUELLES lignes manquent quand une PR passe au rouge.
+          retention-days: 7
+          # Si la suite echoue tres tot, coverage/ n'existe pas : ni erreur ni
+          # avertissement pour autant.
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   # Le client API genere est-il a jour avec le schema du backend ?

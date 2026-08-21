@@ -63,4 +63,5 @@ gh pr merge --auto --squash      # fusion automatique dès que la CI passe
 - Le seul check requis est le job **`gate`** de `.github/workflows/ci.yml`. **Ne jamais le renommer** : un check requis introuvable bloque toutes les PR sans message d'erreur (procédure de renommage dans le README).
 - Ajouter un job à la CI implique de l'ajouter à la liste `needs:` de `gate`, sinon son échec passerait inaperçu.
 - Déblocage d'urgence (CI cassée) : désactiver temporairement le ruleset via `gh api --method PUT repos/kederiku/VetLib/rulesets/<id>` avec `{"enforcement":"disabled"}`, puis le réactiver. Il n'y a volontairement pas de contournement silencieux.
-- Reproduire la CI en local : `make check` (sans Docker), `make check-all` (avec), `make coverage`, `make audit`.
+- Reproduire la CI en local : `make check` (sans Docker), `make check-all` (avec), `make coverage` (backend), `make coverage-front` (frontends), `make audit`.
+- Les seuils de couverture sont mesurés puis posés 2 points en dessous (3 pour les branches) : `fail_under` dans `backend/pyproject.toml`, `coverage.thresholds` dans les `vitest.config.mts`. Ne jamais baisser un seuil dans la PR qui l'a cassé — c'est un commit dédié, daté et commenté.

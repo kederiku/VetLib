@@ -27,7 +27,20 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "text-summary"],
+      // Sortie console : le tableau par fichier est LE diagnostic quand la CI
+      // passe au rouge, le resume donne le chiffre global. json-summary
+      // alimente le resume de la Pull Request, html sert a voir quelles lignes
+      // manquent (coverage/index.html, deja gitignore).
+      reporter: ["text", "text-summary", "json-summary", "html"],
+      // Masque les fichiers integralement couverts, comme skip_covered cote
+      // backend. Declare explicitement : Vitest l'active tout seul quand il
+      // detecte un agent, ce qui ferait diverger la sortie entre un poste de
+      // developpement et la CI.
+      skipFull: true,
+      // Sans cela, Vitest EFFACE le rapport des qu'un test echoue -- la CI
+      // n'aurait rien a publier precisement dans le cas ou l'on veut les
+      // chiffres.
+      reportOnFailure: true,
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
         // Code généré par Orval : jamais écrit à la main, donc jamais testé ici.
@@ -38,6 +51,22 @@ export default defineConfig({
         // Fabriques d'objets de test : outillage, pas code applicatif.
         "src/test/**",
       ],
+      // --- Seuils appliques par la CI, equivalent du fail_under du backend.
+      // Mesure de reference au moment de leur mise en place (21/08/2026) :
+      // st 64.7 %, br 63.2 %, fn 60.66 %, li 65.42 %.
+      // Les seuils sont poses 2 points en dessous (3 pour branches, dont les
+      // compteurs v8 bougent au gre de la chaine de compilation). A remonter
+      // quand la couverture reelle progresse : voir la section CI/CD du README.
+      //
+      // Un seul jeu de seuils GLOBAL, volontairement : des seuils par dossier
+      // demanderaient une mesure par dossier, et poser des chiffres non
+      // mesures les rendrait indiscernables de chiffres negocies.
+      thresholds: {
+        statements: 62,
+        branches: 60,
+        functions: 58,
+        lines: 63,
+      },
     },
   },
   resolve: {

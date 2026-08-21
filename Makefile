@@ -34,7 +34,7 @@ B2B     := frontend-b2b
         migrate revision openapi generate-api \
         lint format typecheck test test-unit test-integration coverage \
         check-migrations audit \
-        lint-front build-front typecheck-front test-front check-front \
+        lint-front build-front typecheck-front test-front coverage-front check-front \
         check check-all
 
 # -----------------------------------------------------------------------------
@@ -188,16 +188,23 @@ typecheck-front: ## Vérification TypeScript (tsc --noEmit) sur les 2 frontends
 	cd $(B2C) && npm run typecheck
 	cd $(B2B) && npm run typecheck
 
-test-front: ## Tests unitaires Vitest des 2 frontends
+test-front: ## Tests Vitest des 2 frontends, SANS couverture (boucle de dev rapide)
 	cd $(B2C) && npm test
 	cd $(B2B) && npm test
+
+coverage-front: ## Couverture Vitest des 2 frontends + seuils (ce que fait la CI)
+	@# Exactement la commande du job "frontend" de .github/workflows/ci.yml.
+	@# Les seuils vivent dans les vitest.config.mts : quand ils ne sont pas
+	@# atteints, vitest sort en code 1 et make s'arrete ici.
+	cd $(B2C) && npm run test:coverage
+	cd $(B2B) && npm run test:coverage
 
 # ATTENTION A L'ORDRE : tsconfig.json inclut next-env.d.ts, lequel importe
 # .next/types/routes.d.ts. Ces deux fichiers sont GENERES par `npm run build`
 # et absents du dépôt (gitignorés). Sur un dépôt fraîchement cloné, lancer
 # typecheck-front sans build-front échoue sur des types introuvables : c'est
 # pourquoi cette cible impose la séquence, et que `check` passe par elle.
-check-front: lint-front build-front typecheck-front test-front ## Qualité frontend, dans le bon ordre
+check-front: lint-front build-front typecheck-front coverage-front ## Qualité frontend, dans le bon ordre
 	@echo "Frontends OK."
 
 # -----------------------------------------------------------------------------
