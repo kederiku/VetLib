@@ -33,7 +33,7 @@ au `Makefile` du backend et pilote les projets npm. Voir
 ## Qui parle à qui
 
 ```mermaid
-flowchart TD
+flowchart LR
   subgraph Navigateurs
     P["Propriétaire d'animal"]
     S["Personnel de clinique"]
@@ -58,16 +58,12 @@ flowchart TD
   P -->|"fetch, credentials: include"| API
   S -->|"fetch, credentials: include"| API
 
-  API -->|"SQL (asyncpg)"| PG
-  API -->|"publie des tâches"| RD
+  API -->|SQL| PG
+  API -->|tâches| RD
   API -->|documents| S3
-  W -->|"consomme les tâches"| RD
-  W -->|"relais outbox"| PG
-  SC -->|"déclenche le relais<br/>toutes les minutes"| RD
-
-  API -.->|"app.openapi()"| OA["backend/openapi.json"]
-  OA -.->|Orval| B2C
-  OA -.->|Orval| B2B
+  W -->|tâches| RD
+  W -->|outbox| PG
+  SC -->|"cron 1 min"| RD
 ```
 
 Le point le plus important de ce schéma est ce qu'il **ne** montre pas : il n'y a
@@ -77,9 +73,10 @@ qui appelle l'API. C'est ce qui rend possible l'authentification par cookies Htt
 décrite dans [Authentification](authentification.md) : le cookie appartient au
 navigateur, pas au serveur Next.js.
 
-Les flèches en pointillés décrivent une chaîne de génération, pas un appel à
-l'exécution : FastAPI produit un contrat OpenAPI, Orval en dérive les hooks TypeScript
-des deux frontends. Voir [Le client API généré par Orval](../frontends/client-api-orval.md).
+Une chaîne n'y figure volontairement pas : celle qui va du contrat OpenAPI de FastAPI aux
+hooks TypeScript des deux portails. Ce n'est pas un appel à l'exécution mais une
+génération, et elle a son propre schéma dans
+[Le client API généré par Orval](../frontends/client-api-orval.md).
 
 ## Ce qui tourne dans Docker, et ce qui n'y tourne pas
 
