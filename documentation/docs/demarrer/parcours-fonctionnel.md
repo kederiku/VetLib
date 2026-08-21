@@ -67,6 +67,11 @@ Ce découpage a une conséquence qui mérite d'être comprise : **chaque étape 
 immédiatement**. Abandonner après l'étape 1 laisse un compte parfaitement utilisable, que
 l'on complète ensuite depuis « Mon compte » et « Mes animaux ».
 
+Une fois connecté, on atterrit sur le **tableau de bord** : le prochain rendez-vous en
+grand, les animaux avec leur dernière visite, et une invite à compléter son profil —
+qui disparaît dès qu'il l'est. La navigation se fait par une **sidebar** repliable en
+rail d'icônes, qui devient un tiroir sous 768 px.
+
 Pourquoi créer le compte dès la première étape plutôt qu'à la fin ? Pour que « cette
 adresse est déjà utilisée » remonte tout de suite. L'alternative — vérifier la
 disponibilité de l'email avant de créer quoi que ce soit — exigerait un endpoint public
@@ -92,7 +97,18 @@ deux espaces d'authentification cloisonnés. Voir
 
 ## 4. Réserver un créneau
 
-Toujours sur le portail B2C : choisissez la clinique, le motif, puis un créneau.
+Toujours sur le portail B2C : choisissez la clinique, le motif, l'animal, puis un
+créneau. Un récapitulatif des choix reste affiché pendant tout le parcours — le fil
+d'étapes dit _où_ l'on en est, ce récapitulatif dit _ce qu'on a choisi_.
+
+:::tip Partez d'une fiche animal
+
+Depuis « Mes animaux », ouvrez la fiche d'un compagnon et cliquez « Prendre
+rendez-vous » : l'URL porte `?animal=<id>` et l'animal arrive déjà coché à l'étape 3.
+Aucune étape n'est sautée pour autant — la clinique et le motif restent à choisir, et
+l'animal reste modifiable.
+
+:::
 
 Les créneaux proposés ne sont pas stockés en base : ils sont **calculés à la volée** en
 croisant les horaires hebdomadaires, les exceptions et les rendez-vous déjà actifs.
