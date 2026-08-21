@@ -19,21 +19,19 @@ d'une autre clinique pour son propre chat. Ce sont **deux comptes distincts**, d
 tables distinctes (`users` et `owners`).
 
 ```mermaid
-flowchart LR
+flowchart TD
   subgraph STAFF["Espace personnel (B2B)"]
-    SA["/api/v1/auth/*"]
-    SC1["vetolib_access — 15 min — path /"]
-    SC2["vetolib_refresh — 7 j<br/>path /api/v1/auth/refresh"]
-    ST[("table users")]
-    SK["claim kind = staff<br/>+ cid, role, perms"]
+    direction LR
+    SA["/api/v1/auth/*"] --- SC1["cookies<br/>vetolib_access<br/>vetolib_refresh"]
+    SC1 --- ST[("table users")]
+    ST --- SK["kind = staff<br/>+ cid, role, perms"]
   end
 
   subgraph OWNER["Espace propriétaires (B2C)"]
-    OA["/api/v1/owner/auth/*"]
-    OC1["vetolib_owner_access — 15 min — path /"]
-    OC2["vetolib_owner_refresh — 7 j<br/>path /api/v1/owner/auth/refresh"]
-    OT[("table owners")]
-    OK["claim kind = owner<br/>sub + jti seulement"]
+    direction LR
+    OA["/api/v1/owner/auth/*"] --- OC1["cookies<br/>vetolib_owner_access<br/>vetolib_owner_refresh"]
+    OC1 --- OT[("table owners")]
+    OT --- OK["kind = owner<br/>sub + jti"]
   end
 
   STAFF x--x|"un jeton copié d'un espace<br/>à l'autre est REJETÉ"| OWNER

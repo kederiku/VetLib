@@ -144,6 +144,13 @@ flowchart LR
 ```
 ````
 
+Chaque diagramme porte un bouton **« Agrandir »** : il l'affiche en plein écran, à sa
+taille réelle et défilable, et `Échap` referme. C'est ce qui permet de garder des schémas
+riches sans les découper jusqu'à ce qu'ils tiennent dans la colonne de texte — Mermaid
+réduit sinon un schéma de 2800 px à un quart de sa taille, texte illisible. Le bouton vient
+de `src/theme/Mermaid/index.tsx`, une **enveloppe** du composant de Docusaurus (obtenue par
+`swizzle --wrap`), qui continue donc de recevoir les corrections amont.
+
 Quatre points d'attention :
 
 1. **Mettez les libellés entre guillemets** dès qu'ils contiennent une parenthèse, une
@@ -155,6 +162,10 @@ Quatre points d'attention :
    d'un paragraphe de texte** — c'est une exigence d'accessibilité autant que de qualité.
 4. Mermaid pèse environ 500 ko de JavaScript, chargé uniquement sur les pages qui en
    contiennent. N'en mettez pas partout.
+5. **Préférez `flowchart TD` à `LR`** quand le sens n'a pas d'importance : une colonne de
+   texte est étroite et haute, un schéma vertical y tient sans réduction. Le bouton
+   « Agrandir » reste là pour les schémas qui sont larges par nature — un `erDiagram`, une
+   chaîne de traitement.
 
 ## La recherche
 

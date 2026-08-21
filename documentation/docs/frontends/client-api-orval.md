@@ -10,16 +10,16 @@ keywords: [orval, openapi, tanstack query, génération, drift, operation_id]
 ## La chaîne complète
 
 ```mermaid
-flowchart LR
+flowchart TD
   R["Routeur FastAPI<br/>operation_id explicite"] --> O["app.openapi()"]
-  O --> F["backend/openapi.json<br/>(GITIGNORÉ)"]
-  O --> S["http://localhost:8000/openapi.json"]
+  O --> F["backend/openapi.json<br/>GITIGNORÉ"]
+  O --> S["localhost:8000/openapi.json"]
   S --> C["orval.config.ts"]
-  C --> G["src/lib/api/generated/<br/>(COMMITTÉ, jamais édité)"]
+  C --> G["src/lib/api/generated/<br/>COMMITTÉ, jamais édité"]
   G --> H["hooks TanStack Query<br/>useListMyPets, useBookAppointment..."]
   H --> UI["Composants React"]
-  G -.->|"le job api-client-drift<br/>régénère et compare"| CI["CI"]
-  F -.->|"redocusaurus"| DOC["Ce site, route /api"]
+  G -.->|"api-client-drift<br/>régénère et compare"| CI["CI"]
+  F -.->|redocusaurus| DOC["Ce site, route /api"]
 ```
 
 ## Pourquoi générer plutôt qu'écrire

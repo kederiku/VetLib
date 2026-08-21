@@ -33,7 +33,7 @@ au `Makefile` du backend et pilote les projets npm. Voir
 ## Qui parle à qui
 
 ```mermaid
-flowchart LR
+flowchart TD
   subgraph Navigateurs
     P["Propriétaire d'animal"]
     S["Personnel de clinique"]

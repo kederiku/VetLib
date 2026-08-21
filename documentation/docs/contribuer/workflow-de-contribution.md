@@ -27,18 +27,18 @@ serait fusionnable.
 ## Le cycle
 
 ```mermaid
-flowchart LR
-  A["git switch -c feat/ma-fonctionnalite"] --> B["commits"]
+flowchart TD
+  A["git switch -c feat/..."] --> B["commits"]
   B --> C["make check"]
   C -->|rouge| B
-  C -->|vert| D["git push -u origin ..."]
+  C -->|vert| D["git push"]
   D --> E["gh pr create --fill"]
   E --> F["CI : 12 jobs"]
   F --> G{"gate"}
   G -->|rouge| B
   G -->|vert| H["gh pr merge --auto --squash"]
   H --> I["main"]
-  I --> J["publication des images + de la documentation"]
+  I --> J["publication des images<br/>et de la documentation"]
 ```
 
 ```bash
