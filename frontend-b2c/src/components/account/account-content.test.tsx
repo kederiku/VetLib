@@ -43,7 +43,11 @@ describe("AccountContent", () => {
     // Monter un formulaire vide puis le remplir ferait clignoter la page
     // et risquerait d'écraser une saisie rapide.
     const { container } = renderWithProviders(<AccountContent />);
-    expect(container).toBeEmptyDOMElement();
+    // On interroge la sortie du COMPOSANT (aucun element de contenu), et
+    // non la racine de rendu : celle-ci porte aussi le script anti-flash
+    // de next-themes, monte par les providers de test.
+    expect(container.querySelector("main")).toBeNull();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 
   it("accueille le propriétaire par son prénom", () => {

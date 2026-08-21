@@ -26,7 +26,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className="font-sans">
+    // suppressHydrationWarning : next-themes pose la classe "dark" sur
+    // <html> AVANT l'hydratation (script inline anti-flash) ; sans cet
+    // attribut, React signalerait un faux écart serveur/client sur cette
+    // seule balise (l'avertissement ne se propage pas aux enfants).
+    <html lang="fr" className="font-sans" suppressHydrationWarning>
       <body className="antialiased">
         {/* Providers est un Client Component ("use client") : c'est la
             frontière serveur/client. Un Server Component ne peut pas créer

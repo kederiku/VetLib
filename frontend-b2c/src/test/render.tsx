@@ -3,9 +3,17 @@
  *
  * Un composant testé « à nu » avec render() plante dès qu'il appelle un hook
  * généré par Orval : ceux-ci exigent un QueryClientProvider au-dessus d'eux.
- * Ce module reproduit l'arbre de providers de src/app/providers.tsx qui, côté
- * B2C, se réduit au seul QueryClientProvider — aucun autre contexte React
- * n'existe dans ce projet.
+ * Ce module reproduit l'arbre de providers de src/app/providers.tsx
+ * (ThemeProvider > QueryClientProvider) et, EN OPTION, la partie CLIENTE de
+ * src/components/layout/app-shell.tsx (TooltipProvider + SidebarProvider).
+ *
+ * Pourquoi la coquille est une option et non un défaut : app-shell est un
+ * Server Component asynchrone qui lit les cookies de la requête, donc
+ * impossible à monter dans un test. Sa moitié cliente doit être reconstituée
+ * ici, mais UNIQUEMENT pour les composants qui en dépendent (le header, dont
+ * le bouton de repli appelle le contexte de la barre latérale, et la barre
+ * latérale elle-même). La monter partout ajouterait du balisage parasite à
+ * chaque test.
  */
 import {
   MutationCache,
@@ -19,7 +27,11 @@ import {
   type RenderHookOptions,
   type RenderOptions,
 } from "@testing-library/react";
+import { ThemeProvider } from "next-themes";
 import type { ReactElement, ReactNode } from "react";
+
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 /**
  * Un QueryClient jetable, réglé pour les tests.
@@ -58,16 +70,47 @@ export function createTestQueryClient(): QueryClient {
 type OptionsProviders = {
   /** Client pré-rempli (setQueryData) pour amorcer un cache avant le rendu. */
   queryClient?: QueryClient;
+  /**
+   * Monte TooltipProvider et SidebarProvider, la moitié cliente de l'AppShell.
+   * Indispensable pour la barre latérale et pour le header (dont le bouton de
+   * repli appelle useSidebar()).
+   */
+  withAppShell?: boolean;
 };
 
 /**
  * Fabrique l'enveloppe attendue par l'option `wrapper` de Testing Library.
  * Définie hors du composant appelant pour rester une fonction statique.
  */
-function creerEnveloppe(queryClient: QueryClient) {
+function creerEnveloppe({
+  queryClient,
+  withAppShell,
+}: {
+  queryClient: QueryClient;
+  withAppShell: boolean;
+}) {
   return function Enveloppe({ children }: { children: ReactNode }) {
+    const contenu = withAppShell ? (
+      <TooltipProvider>
+        <SidebarProvider>{children}</SidebarProvider>
+      </TooltipProvider>
+    ) : (
+      children
+    );
+
+    // defaultTheme="light" et enableSystem={false} : thème DÉTERMINISTE. En
+    // production le défaut est "system", mais dépendre en test de la
+    // préférence de la machine rendrait imprévisibles les assertions portant
+    // sur la classe "dark".
     return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="light"
+        enableSystem={false}
+        disableTransitionOnChange
+      >
+        <QueryClientProvider client={queryClient}>{contenu}</QueryClientProvider>
+      </ThemeProvider>
     );
   };
 }
@@ -83,10 +126,17 @@ export function renderWithProviders(
   ui: ReactElement,
   options: Omit<RenderOptions, "wrapper"> & OptionsProviders = {},
 ) {
-  const { queryClient = createTestQueryClient(), ...optionsRendu } = options;
+  const {
+    queryClient = createTestQueryClient(),
+    withAppShell = false,
+    ...optionsRendu
+  } = options;
 
   return {
-    ...render(ui, { wrapper: creerEnveloppe(queryClient), ...optionsRendu }),
+    ...render(ui, {
+      wrapper: creerEnveloppe({ queryClient, withAppShell }),
+      ...optionsRendu,
+    }),
     queryClient,
   };
 }
@@ -96,10 +146,17 @@ export function renderHookWithProviders<Resultat, Props>(
   hook: (props: Props) => Resultat,
   options: Omit<RenderHookOptions<Props>, "wrapper"> & OptionsProviders = {},
 ) {
-  const { queryClient = createTestQueryClient(), ...optionsHook } = options;
+  const {
+    queryClient = createTestQueryClient(),
+    withAppShell = false,
+    ...optionsHook
+  } = options;
 
   return {
-    ...renderHook(hook, { wrapper: creerEnveloppe(queryClient), ...optionsHook }),
+    ...renderHook(hook, {
+      wrapper: creerEnveloppe({ queryClient, withAppShell }),
+      ...optionsHook,
+    }),
     queryClient,
   };
 }

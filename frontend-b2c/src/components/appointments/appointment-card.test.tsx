@@ -59,7 +59,12 @@ describe("AppointmentCard — informations", () => {
       />,
     );
 
-    expect(container.textContent).not.toContain("null");
+    // Assertion portee sur la CARTE et non sur tout le conteneur de
+    // rendu : celui-ci embarque aussi le script anti-flash de
+    // next-themes (monte par les providers de test), dont le code
+    // source contient le mot "null".
+    const carte = container.querySelector('[data-slot="card"]');
+    expect(carte?.textContent).not.toContain("null");
   });
 
   it("affiche le motif libre s'il est renseigné", () => {
