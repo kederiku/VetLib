@@ -101,7 +101,6 @@ export function buildAppointmentType(
     name: "Consultation",
     duration_minutes: 30,
     active: true,
-    resource_id: "00000000-0000-0000-0000-0000000000a1",
     ...overrides,
   };
 }

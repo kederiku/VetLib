@@ -102,6 +102,7 @@ parallèle sur chaque PR :
 | Couverture consolidée | Chute de la couverture backend sous le seuil |
 | Migrations Alembic | Deux heads, migration irréversible, ou modèle modifié sans migration |
 | ESLint, build Next, `tsc`, Vitest (×2 apps) | Régression frontend |
+| Couverture frontend | Chute sous le seuil de chaque app (mesuré 65 %, seuil 63 %) |
 | Dérive du client Orval | Endpoint modifié sans `make generate-api` |
 | pip-audit, npm audit, revue de dépendances | Dépendance vulnérable |
 | actionlint + zizmor | Workflow CI cassé ou vulnérable |
@@ -132,6 +133,7 @@ retirer des jobs sans jamais toucher aux réglages du dépôt.
 
 ```bash
 make check            # tout ce qui ne demande pas Docker (le plus utile au quotidien)
+make coverage-front   # couverture des 2 frontends + application des seuils
 make check-all        # + tests d'intégration + contrôle des migrations
 make coverage         # couverture backend consolidée
 make audit            # vulnérabilités des dépendances
