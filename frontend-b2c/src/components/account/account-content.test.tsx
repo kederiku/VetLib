@@ -1,16 +1,14 @@
 /**
- * Tests de la page « Mon compte ».
+ * Tests de la composition de la page « Mon compte ».
  *
- * Le composant assemble deux blocs et porte une seule décision propre :
- * ne rien afficher tant que le propriétaire n'est pas chargé. Sans cette
- * garde, la page monterait un formulaire de profil vide puis le
- * remplirait — un clignotement à chaque arrivée, et le risque qu'une
- * frappe rapide soit écrasée par les données qui arrivent.
+ * Le point structurel à verrouiller est le PARTAGE de l'état
+ * d'enregistrement : le hook est appelé une seule fois par la page et
+ * distribué aux trois cartes, ce qui sérialise les envois. Deux PUT
+ * concurrents partiraient d'une même base pré-mutation, et le second
+ * écraserait le premier -- une perte de données qu'aucun message
+ * d'erreur ne signalerait.
  *
- * Depuis la refonte, la page ne porte plus ni l'aperçu des rendez-vous
- * (parti au tableau de bord) ni la déconnexion (partie au menu du compte
- * dans le header) : ces deux absences sont testées, parce qu'un
- * doublon serait invisible en relecture de diff.
+ * Les cartes ont leurs propres tests : on les simule ici.
  */
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -20,10 +18,25 @@ import { getGetCurrentOwnerQueryKey } from "@/lib/api/generated/owner-auth/owner
 import { buildOwner } from "@/test/fixtures";
 import { createTestQueryClient, renderWithProviders } from "@/test/render";
 
-// Le formulaire de profil a ses propres tests : on le simule ici pour ne
-// vérifier que l'assemblage.
-vi.mock("@/components/account/profile-form", () => ({
-  ProfileForm: () => <div>Formulaire de profil</div>,
+const recus = vi.hoisted(() => ({ isSaving: [] as boolean[] }));
+
+vi.mock("@/components/account/personal-info-form", () => ({
+  PersonalInfoForm: ({ isSaving }: { isSaving: boolean }) => {
+    recus.isSaving.push(isSaving);
+    return <div>Informations personnelles simulées</div>;
+  },
+}));
+vi.mock("@/components/account/address-form", () => ({
+  AddressForm: ({ isSaving }: { isSaving: boolean }) => {
+    recus.isSaving.push(isSaving);
+    return <div>Adresse simulée</div>;
+  },
+}));
+vi.mock("@/components/account/reminders-form", () => ({
+  RemindersForm: ({ isSaving }: { isSaving: boolean }) => {
+    recus.isSaving.push(isSaving);
+    return <div>Rappels simulés</div>;
+  },
 }));
 
 function afficher(surcharges: Parameters<typeof buildOwner>[0] = {}) {
@@ -38,48 +51,54 @@ function afficher(surcharges: Parameters<typeof buildOwner>[0] = {}) {
 
 describe("AccountContent", () => {
   it("n'affiche rien tant que le propriétaire n'est pas chargé", () => {
-    // Monter un formulaire vide puis le remplir ferait clignoter la page
-    // et risquerait d'écraser une saisie rapide.
+    // Monter des formulaires vides puis les remplir ferait clignoter la
+    // page et risquerait d'écraser une saisie rapide.
     renderWithProviders(<AccountContent />);
-    // On interroge la sortie du COMPOSANT et non la racine de rendu :
-    // celle-ci porte aussi le script anti-flash de next-themes, monté
-    // par les providers de test.
+
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 
-  it("titre la page et assemble ses deux blocs", () => {
+  it("empile les quatre cartes de la page", () => {
     afficher();
 
     expect(
       screen.getByRole("heading", { name: "Mon compte", level: 1 }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Formulaire de profil")).toBeInTheDocument();
+    expect(
+      screen.getByText("Informations personnelles simulées"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Adresse simulée")).toBeInTheDocument();
+    expect(screen.getByText("Rappels simulés")).toBeInTheDocument();
     expect(screen.getByText("Connexion")).toBeInTheDocument();
   });
 
-  it("affiche l'email en lecture seule", () => {
-    // L'email est l'identifiant du compte : il se consulte et se copie,
-    // mais ne se modifie pas depuis cette page.
+  it("partage le MEME état d'enregistrement entre les trois formulaires", () => {
+    // C'est ce partage qui sérialise les envois : sans lui, deux cartes
+    // pourraient enregistrer en même temps depuis une base identique, et
+    // la seconde écraserait la première.
+    recus.isSaving = [];
+    afficher();
+
+    expect(recus.isSaving).toHaveLength(3);
+    expect(new Set(recus.isSaving).size).toBe(1);
+  });
+
+  it("affiche l'email en lecture seule et annonce ce qui n'existe pas", () => {
+    // Sans cette phrase, quelqu'un qui cherche à changer son mot de
+    // passe fouillerait les quatre cartes avant de conclure à tort.
     afficher({ email: "marie.dupont@example.test" });
 
     const champ = screen.getByLabelText("Email");
     expect(champ).toHaveValue("marie.dupont@example.test");
     expect(champ).toHaveAttribute("readonly");
+    expect(screen.getByText(/arrivera prochainement/)).toBeInTheDocument();
   });
 
   it("ne porte plus la déconnexion : elle vit dans le menu du compte", () => {
-    // Deux points de déconnexion dans l'interface seraient un doublon
-    // invisible en relecture de diff.
     afficher();
 
     expect(
       screen.queryByRole("button", { name: /Se déconnecter/ }),
     ).not.toBeInTheDocument();
-  });
-
-  it("ne duplique pas l'aperçu des rendez-vous du tableau de bord", () => {
-    afficher();
-
-    expect(screen.queryByText(/Prochain/)).not.toBeInTheDocument();
   });
 });

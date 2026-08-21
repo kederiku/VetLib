@@ -187,39 +187,56 @@ export const onboardingAddressSchema = addressFields.superRefine(
 );
 
 /**
- * Fiche profil du propriétaire (/mon-compte).
+ * La fiche profil, decoupee en TROIS schemas -- un par carte de l'ecran
+ * "Mon compte".
  *
- * Même bloc adresse que ci-dessus, mais imbriqué sous "address" et
- * accompagné des coordonnées et des préférences de rappel.
+ * L'ecran presentait auparavant un formulaire unique de 400 lignes,
+ * derriere un seul bouton "Enregistrer" : corriger une faute de frappe
+ * dans son prenom faisait repartir l'adresse et les preferences, et une
+ * erreur 422 sur l'adresse bloquait l'enregistrement du prenom. Trois
+ * schemas, trois formulaires, trois portees mentales.
+ *
+ * Le backend n'expose pourtant qu'un PUT de remplacement complet : la
+ * recomposition de la fiche entiere se fait dans
+ * lib/account/use-save-owner-profile.ts, qui fusionne chaque section
+ * avec l'etat serveur courant.
  */
-export const profileSchema = z
-  .object({
-    first_name: z
-      .string()
-      .trim()
-      .min(1, "Le prénom est requis.")
-      .max(100, "Le prénom ne peut pas dépasser 100 caractères."),
-    last_name: z
-      .string()
-      .trim()
-      .min(1, "Le nom est requis.")
-      .max(100, "Le nom ne peut pas dépasser 100 caractères."),
-    // Facultatif ICI, contrairement à l'inscription : le numéro peut être
-    // effacé après coup, et le backend l'accepte nullable.
-    phone: z
-      .string()
-      .trim()
-      .max(30, "Le numéro de téléphone ne peut pas dépasser 30 caractères.")
-      .optional(),
-    address: addressFields,
-    notification_preferences: z.object({
-      email: z.boolean(),
-      sms: z.boolean(),
-    }),
-  })
-  .superRefine((values, ctx) =>
-    checkAddressAllOrNothing(values.address, ctx, ["address"]),
-  );
+export const personalInfoSchema = z.object({
+  first_name: z
+    .string()
+    .trim()
+    .min(1, "Le prénom est requis.")
+    .max(100, "Le prénom ne peut pas dépasser 100 caractères."),
+  last_name: z
+    .string()
+    .trim()
+    .min(1, "Le nom est requis.")
+    .max(100, "Le nom ne peut pas dépasser 100 caractères."),
+  // Facultatif ICI, contrairement à l'inscription : le numéro peut être
+  // effacé après coup, et le backend l'accepte nullable.
+  phone: z
+    .string()
+    .trim()
+    .max(30, "Le numéro de téléphone ne peut pas dépasser 30 caractères."),
+});
+
+/**
+ * Le bloc adresse de la fiche profil.
+ *
+ * C'est EXACTEMENT onboardingAddressSchema : meme forme a plat, meme
+ * regle tout-ou-rien. Les deux ecrans qui portent une adresse (etape 2
+ * de l'inscription et carte Adresse du compte) partagent donc desormais
+ * schema ET forme de valeurs -- ce qu'empechait l'ancienne imbrication
+ * sous "address".
+ */
+export const profileAddressSchema = onboardingAddressSchema;
+
+export const remindersSchema = z.object({
+  notification_preferences: z.object({
+    email: z.boolean(),
+    sms: z.boolean(),
+  }),
+});
 
 // Types dérivés des schémas : la même déclaration sert la validation à
 // l'exécution ET le typage des formulaires react-hook-form.
@@ -228,4 +245,6 @@ export type RegisterOwnerFormValues = z.infer<typeof registerOwnerSchema>;
 export type OnboardingAddressFormValues = z.infer<
   typeof onboardingAddressSchema
 >;
-export type ProfileFormValues = z.infer<typeof profileSchema>;
+export type PersonalInfoFormValues = z.infer<typeof personalInfoSchema>;
+export type ProfileAddressFormValues = z.infer<typeof profileAddressSchema>;
+export type RemindersFormValues = z.infer<typeof remindersSchema>;
