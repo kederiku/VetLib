@@ -118,12 +118,23 @@ updates:
   # --- 5. Images de base des Dockerfiles ------------------------------------
   # Mensuel : les images de base bougent moins vite, et chaque mise a jour
   # demande une verification manuelle un peu plus attentive.
+  # Les montees de version MAJEURE sont ignorees : elles sont contraintes
+  # ailleurs et ne peuvent pas etre decidees par Dependabot.
+  #   - Python : backend/pyproject.toml impose requires-python >=3.13,<3.14,
+  #     une image 3.14 ferait echouer `uv sync` des la construction ;
+  #   - Node : la version vient de .nvmrc (24), partagee avec la CI et les
+  #     postes de developpement ; l'image doit rester alignee dessus.
+  # Une montee majeure reste possible, mais c'est une decision humaine :
+  # changer d'abord la contrainte du projet, puis l'image.
   - package-ecosystem: docker
     directory: /docker/backend
     schedule:
       interval: monthly
     commit-message:
       prefix: "chore(docker)"
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: /docker/frontend
@@ -131,3 +142,6 @@ updates:
       interval: monthly
     commit-message:
       prefix: "chore(docker)"
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
