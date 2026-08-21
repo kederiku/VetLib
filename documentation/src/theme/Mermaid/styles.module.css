@@ -1,0 +1,68 @@
+/**
+ * Styles de l'enveloppe Mermaid (bouton « Agrandir » et vue plein écran).
+ *
+ * Ces règles vivent ici, dans un module CSS attaché au composant, et non dans
+ * src/css/custom.css qui ne contient QUE des variables : une règle de mise en page
+ * globale y écraserait le thème, le drapeau `future.v4` plaçant le CSS de Docusaurus
+ * dans des couches en cascade.
+ */
+
+.cadre {
+  position: relative;
+}
+
+/* Discret mais TOUJOURS visible : un bouton qui n'apparait qu'au survol serait
+   inatteignable sur un écran tactile. */
+.bouton {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+  opacity: 0.55;
+  transition: opacity var(--ifm-transition-fast) ease;
+}
+
+.cadre:hover .bouton,
+.bouton:focus-visible {
+  opacity: 1;
+}
+
+/* Vue agrandie : le cadre passe en surcouche plein écran et le SVG reprend sa
+   taille naturelle (Mermaid lui impose sinon max-width: 100%). */
+.agrandi {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 3.5rem 1rem 1rem;
+  /* --ifm-background-surface-color, et NON --ifm-background-color : cette derniere
+     vaut `transparent` sur ce site (Docusaurus peint le fond ailleurs depuis que les
+     couches en cascade sont actives), la surcouche laisserait donc voir la page. */
+  background-color: var(--ifm-background-surface-color);
+}
+
+.agrandi .bouton {
+  position: fixed;
+  opacity: 1;
+}
+
+.agrandi :global(.docusaurus-mermaid-container) {
+  margin: auto;
+}
+
+/* La taille naturelle est appliquee en JavaScript depuis le viewBox (voir index.tsx) :
+   le CSS ne peut pas lire les dimensions intrinseques d'un SVG. On se contente ici
+   d'empecher le conteneur de le contraindre. */
+.agrandi :global(.docusaurus-mermaid-container) > svg {
+  max-width: none;
+}
+
+/* Zone cliquable derrière le diagramme, pour refermer d'un clic à côté. */
+.fond {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
