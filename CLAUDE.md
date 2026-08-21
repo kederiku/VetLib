@@ -42,5 +42,25 @@ Le **Makefile racine** est le point d'entrée unique de toutes les commandes du 
 - Deux fichiers d'env distincts (`make env` copie les deux) : `.env` racine = interpolation docker-compose (hostnames Docker) ; `backend/.env` = backend lancé hors Docker (`make dev-api`, alembic, tâches locales — URLs localhost).
 - `make migrate` : migrations Alembic (connectées via `ALEMBIC_DATABASE_URL`, superuser).
 - `make check` : toute la qualité sans Docker (ruff, mypy, tests unit, ESLint, tsc) ; en ciblé : `make lint typecheck test-unit` (backend) ou `make lint-front typecheck-front`.
-- Après tout changement d'endpoint : `make generate-api` (API démarrée sur :8000) — régénère le client Orval des **2** frontends.
+- Après tout changement d'endpoint : `make generate-api` (API démarrée sur :8000) — régénère le client Orval des **2** frontends. La CI le vérifie (job `api-client-drift`) : un oubli bloque la PR.
 - **Ne jamais éditer `src/lib/api/generated/`** (sortie Orval, committée).
+- `make check-front` impose l'ordre **lint → build → typecheck → test** : `tsc` a besoin de `next-env.d.ts` et `.next/types/`, générés par le build et gitignorés. Ne jamais lancer `typecheck-front` seul sur un dépôt fraîchement cloné.
+
+## Contribution — `main` est protégée
+
+Le push direct sur `main` est **refusé** par un ruleset GitHub. Toute
+modification passe par une branche + une PR, fusionnable seulement si la CI est
+verte (0 approbation requise, le projet a un seul contributeur).
+
+```bash
+git switch -c feat/ma-fonctionnalite
+make check                       # à lancer AVANT de pousser
+git push -u origin feat/ma-fonctionnalite
+gh pr create --fill
+gh pr merge --auto --squash      # fusion automatique dès que la CI passe
+```
+
+- Le seul check requis est le job **`gate`** de `.github/workflows/ci.yml`. **Ne jamais le renommer** : un check requis introuvable bloque toutes les PR sans message d'erreur (procédure de renommage dans le README).
+- Ajouter un job à la CI implique de l'ajouter à la liste `needs:` de `gate`, sinon son échec passerait inaperçu.
+- Déblocage d'urgence (CI cassée) : désactiver temporairement le ruleset via `gh api --method PUT repos/kederiku/VetLib/rulesets/<id>` avec `{"enforcement":"disabled"}`, puis le réactiver. Il n'y a volontairement pas de contournement silencieux.
+- Reproduire la CI en local : `make check` (sans Docker), `make check-all` (avec), `make coverage`, `make audit`.

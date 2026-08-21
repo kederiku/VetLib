@@ -1,0 +1,75 @@
+# =============================================================================
+# CodeQL - analyse de securite du code source par GitHub.
+#
+# CodeQL "compile" le code en une base de donnees interrogeable, puis y execute
+# des requetes qui cherchent des schemas de vulnerabilites : injection SQL,
+# donnee utilisateur qui atteint une commande systeme, secret code en dur,
+# comparaison de mots de passe non constante... C'est complementaire de ruff et
+# ESLint, qui regardent le style et les erreurs locales, la ou CodeQL suit le
+# CHEMINEMENT d'une donnee a travers plusieurs fichiers.
+#
+# Gratuit sur les depots publics. Les resultats apparaissent dans l'onglet
+# "Security" du depot, pas dans les logs de la CI.
+#
+# Pourquoi un fichier separe de ci.yml :
+#   - il a son propre declencheur hebdomadaire (une faille peut etre decouverte
+#     dans une bibliotheque sans qu'on ait pousse la moindre ligne) ;
+#   - il exige la permission "security-events: write", qu'on ne veut surtout pas
+#     accorder au workflow qui execute le code des Pull Requests.
+# =============================================================================
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Tous les lundis a 04h17 UTC. Une heure "batarde" volontairement : les
+    # taches planifiees a des heures rondes se bousculent chez GitHub et sont
+    # retardees.
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyse:
+    name: CodeQL - ${{ matrix.language }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      # Necessaire pour publier les alertes dans l'onglet Security.
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # build-mode "none" : ni Python ni TypeScript n'ont besoin d'etre
+          # compiles pour etre analyses, CodeQL lit directement les sources.
+          - language: python
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Initialiser CodeQL
+        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # security-and-quality : le jeu de requetes le plus large (securite
+          # + qualite), au prix de quelques minutes supplementaires.
+          queries: security-and-quality
+          config-file: .github/codeql/codeql-config.yml
+
+      - name: Analyser
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        with:
+          category: "/language:${{ matrix.language }}"

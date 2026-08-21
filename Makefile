@@ -29,11 +29,13 @@ B2B     := frontend-b2b
 
 # .PHONY déclare que ces cibles ne produisent PAS de fichier du même nom :
 # sans cela, un fichier nommé "test" ou "install" empêcherait la cible de tourner.
-.PHONY: help env install up up-full down down-volumes ps logs restart \
+.PHONY: help env install install-ci up up-full down down-volumes ps logs restart \
         dev-api worker scheduler dev-b2c dev-b2b \
         migrate revision openapi generate-api \
-        lint format typecheck test test-unit test-integration \
-        lint-front typecheck-front check
+        lint format typecheck test test-unit test-integration coverage \
+        check-migrations audit \
+        lint-front build-front typecheck-front test-front check-front \
+        check check-all
 
 # -----------------------------------------------------------------------------
 # Aide
@@ -60,6 +62,11 @@ install: ## Installe toutes les dépendances (backend uv + npm des 2 frontends)
 	$(MAKE) -C $(BACKEND) install
 	cd $(B2C) && npm install
 	cd $(B2B) && npm install
+
+install-ci: ## Installe STRICTEMENT les versions verrouillées (ce que fait la CI)
+	$(MAKE) -C $(BACKEND) install-ci
+	cd $(B2C) && npm ci
+	cd $(B2B) && npm ci
 
 # -----------------------------------------------------------------------------
 # Infrastructure Docker (postgres, redis, minio, api :8000, worker)
@@ -152,6 +159,19 @@ test-unit: ## Tests unitaires seulement (rapides, sans Docker)
 test-integration: ## Tests d'intégration (PostgreSQL réel via testcontainers, Docker requis)
 	$(MAKE) -C $(BACKEND) test-integration
 
+coverage: ## Couverture backend consolidée (unitaires + intégration ; Docker requis)
+	$(MAKE) -C $(BACKEND) coverage
+
+check-migrations: ## Migrations : head unique, réversibilité, aucune dérive (base requise)
+	$(MAKE) -C $(BACKEND) check-migrations
+
+audit: ## Vulnérabilités connues dans les dépendances (backend + les 2 frontends)
+	cd $(BACKEND) && uv export --format requirements-txt --no-emit-project \
+		--no-hashes --all-groups -o /tmp/vetolib-requirements.txt \
+		&& uvx pip-audit --requirement /tmp/vetolib-requirements.txt --strict
+	cd $(B2C) && npm audit --audit-level=high
+	cd $(B2B) && npm audit --audit-level=high
+
 # -----------------------------------------------------------------------------
 # Qualité frontends
 # -----------------------------------------------------------------------------
@@ -160,13 +180,32 @@ lint-front: ## ESLint sur les 2 frontends
 	cd $(B2C) && npm run lint
 	cd $(B2B) && npm run lint
 
+build-front: ## Build de production des 2 frontends
+	cd $(B2C) && npm run build
+	cd $(B2B) && npm run build
+
 typecheck-front: ## Vérification TypeScript (tsc --noEmit) sur les 2 frontends
 	cd $(B2C) && npm run typecheck
 	cd $(B2B) && npm run typecheck
+
+test-front: ## Tests unitaires Vitest des 2 frontends
+	cd $(B2C) && npm test
+	cd $(B2B) && npm test
+
+# ATTENTION A L'ORDRE : tsconfig.json inclut next-env.d.ts, lequel importe
+# .next/types/routes.d.ts. Ces deux fichiers sont GENERES par `npm run build`
+# et absents du dépôt (gitignorés). Sur un dépôt fraîchement cloné, lancer
+# typecheck-front sans build-front échoue sur des types introuvables : c'est
+# pourquoi cette cible impose la séquence, et que `check` passe par elle.
+check-front: lint-front build-front typecheck-front test-front ## Qualité frontend, dans le bon ordre
+	@echo "Frontends OK."
 
 # -----------------------------------------------------------------------------
 # Raccourci qualité globale
 # -----------------------------------------------------------------------------
 
-check: lint typecheck test-unit lint-front typecheck-front ## Toute la qualité sans Docker (backend + frontends)
+check: lint typecheck test-unit check-front ## Toute la qualité sans Docker (backend + frontends)
 	@echo "Toutes les vérifications sont passées."
+
+check-all: check test-integration check-migrations ## Tout, y compris ce qui nécessite Docker et une base
+	@echo "Vérification complète : le dépôt est dans l'état attendu par la CI."

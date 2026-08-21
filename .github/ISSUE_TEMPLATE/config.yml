@@ -1,0 +1,3 @@
+# Desactive l'issue vide : on veut toujours passer par un des deux formulaires,
+# qui garantissent les informations minimales pour agir.
+blank_issues_enabled: false

@@ -1,0 +1,794 @@
+# =============================================================================
+# CI VetoLib - la porte de qualite obligatoire avant tout merge sur main.
+#
+# Pour un novice, comment lire ce fichier :
+#   - "on:" liste les evenements qui declenchent ce fichier (ici : ouverture ou
+#     mise a jour d'une Pull Request, et push sur main).
+#   - "jobs:" contient des travaux INDEPENDANTS qui tournent EN PARALLELE, sur
+#     des machines jetables fournies par GitHub (les "runners"). Chaque job
+#     repart d'une machine vierge : d'ou le "checkout" et la reinstallation des
+#     dependances au debut de chacun.
+#   - "needs:" est la seule facon d'imposer un ordre entre jobs.
+#   - "steps:" sont les etapes d'un job, executees en sequence. Une etape qui
+#     echoue arrete le job.
+#
+# Le job "gate" tout en bas agrege les resultats : c'est LUI, et lui seul, qui
+# est declare comme "check requis" dans la protection de la branche main. On
+# peut donc ajouter, retirer ou renommer n'importe quel job au-dessus sans
+# jamais toucher a la configuration du depot.
+#
+# Les actions externes sont epinglees par empreinte de commit (SHA) et non par
+# etiquette (v7) : une etiquette peut etre deplacee par son auteur (ou par un
+# attaquant qui compromettrait le depot de l'action), une empreinte non. Le
+# commentaire "# v7" garde la lisibilite, et Dependabot met les deux a jour.
+# =============================================================================
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # Bouton "Run workflow" dans l'onglet Actions, pour relancer a la main.
+  workflow_dispatch:
+
+# IMPORTANT : aucun filtre "paths:" ici. Un workflow filtre par chemin ne se
+# declenche pas sur les PR qui ne touchent pas ces chemins ; le check requis ne
+# serait alors JAMAIS rapporte et la PR resterait bloquee "en attente" pour
+# toujours, sans message d'erreur. Tout tourne sur toutes les PR ; les caches
+# gardent la duree totale autour de 6 a 8 minutes.
+
+# Principe du moindre privilege : par defaut les jobs ne peuvent que LIRE le
+# depot. Les rares jobs qui ont besoin de plus le declarent eux-memes.
+permissions:
+  contents: read
+
+concurrency:
+  # Un nouveau push sur une PR annule le run precedent, devenu obsolete. Sur
+  # main en revanche chaque run va au bout : c'est lui qui publie les images.
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # uv re-synchronise l'environnement (et peut reecrire uv.lock) a chaque
+  # "uv run". En CI c'est inacceptable : on validerait des dependances qui ne
+  # sont pas celles du depot. UV_FROZEN l'interdit.
+  UV_FROZEN: "1"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # BACKEND - style et types
+  # ---------------------------------------------------------------------------
+  backend-quality:
+    name: backend - lint et types
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Sans cela, checkout laisse le jeton GitHub dans .git/config, ou
+          # n'importe quelle etape suivante (ou une dependance compromise)
+          # pourrait le lire. Aucun job d'ici ne pousse de commit.
+          persist-credentials: false
+
+      - name: Installer uv et Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          # Le cache uv evite de retelecharger les dependances a chaque run ;
+          # il est invalide automatiquement quand uv.lock change.
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version-file: backend/.python-version
+
+      - name: Le lockfile est-il coherent avec pyproject.toml ?
+        # Attrape l'oubli classique : une dependance ajoutee a pyproject.toml
+        # sans relancer "uv lock". Sans ce controle, la CI installerait autre
+        # chose que ce qui est verrouille dans le depot.
+        run: uv lock --check
+
+      - name: Installer les dependances
+        # --locked : echoue plutot que de mettre a jour le lockfile.
+        run: uv sync --locked
+
+      - name: ruff (style et bugs courants)
+        # --output-format=github : les erreurs apparaissent en annotations
+        # directement sur les lignes concernees dans la PR.
+        run: uv run ruff check --output-format=github .
+
+      - name: ruff format (mise en forme)
+        run: uv run ruff format --check .
+
+      - name: mypy (typage strict)
+        # Sans argument : la liste des fichiers vient de [tool.mypy] files dans
+        # pyproject.toml (src/vetolib + tests, migrations exclues).
+        run: uv run mypy
+
+  # ---------------------------------------------------------------------------
+  # BACKEND - tests unitaires (rapides, aucun service externe)
+  # ---------------------------------------------------------------------------
+  backend-test-unit:
+    name: backend - tests unitaires
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Nomme le fichier de mesure pour que le job "couverture" puisse fusionner
+      # celui-ci avec celui des tests d'integration.
+      COVERAGE_FILE: .coverage.unit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version-file: backend/.python-version
+
+      - run: uv sync --locked
+
+      - name: pytest tests/unit
+        run: uv run pytest tests/unit --cov --cov-report=term-missing
+
+      - name: Conserver la mesure de couverture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-unit
+          path: backend/.coverage.unit
+          # Indispensable : les fichiers commencant par un point sont ignores
+          # par defaut depuis upload-artifact v4, et l'artefact serait vide.
+          include-hidden-files: true
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # BACKEND - tests d'integration (PostgreSQL et Redis reels via testcontainers)
+  # ---------------------------------------------------------------------------
+  backend-test-integration:
+    name: backend - tests d'integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      COVERAGE_FILE: .coverage.integration
+      # Ryuk est le conteneur de menage de testcontainers : il supprime les
+      # conteneurs orphelins en fin de suite. Inutile ici, le runner entier est
+      # detruit apres le job ; le desactiver economise un demarrage.
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version-file: backend/.python-version
+
+      - run: uv sync --locked
+
+      - name: Pre-telecharger les images des conteneurs de test
+        # Fait en amont pour deux raisons : le temps de telechargement n'entre
+        # pas dans le delai d'attente de testcontainers, et un eventuel refus
+        # du registre (quota de telechargements anonymes) donne ici une erreur
+        # lisible au lieu d'une trace pytest incomprehensible.
+        run: |
+          docker pull postgres:18.6-trixie
+          docker pull redis:8.10.0-alpine3.23
+
+      - name: pytest tests/integration
+        # Ces tests n'ont besoin d'AUCUNE variable d'environnement : le
+        # conftest.py demarre lui-meme Postgres et Redis, pose la configuration
+        # et applique les migrations Alembic. Le runner GitHub fournit un
+        # daemon Docker, c'est le seul prerequis.
+        run: uv run pytest tests/integration --cov --cov-report=term-missing
+
+      - name: Conserver la mesure de couverture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-integration
+          path: backend/.coverage.integration
+          include-hidden-files: true
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # BACKEND - couverture consolidee des deux suites
+  # ---------------------------------------------------------------------------
+  backend-coverage:
+    name: backend - couverture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [backend-test-unit, backend-test-integration]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version-file: backend/.python-version
+
+      - run: uv sync --locked
+
+      - name: Recuperer les mesures des deux suites
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+          path: backend
+
+      - name: Fusionner et verifier le seuil
+        # Les deux suites couvrent des couches differentes (domaine et use cases
+        # pour l'unitaire, infrastructure et HTTP pour l'integration) : seule la
+        # fusion des deux donne un chiffre honnete. Le seuil est defini par
+        # fail_under dans backend/pyproject.toml.
+        run: |
+          uv run coverage combine
+          uv run coverage report --show-missing
+
+      - name: Publier le resume dans la PR
+        if: always()
+        run: |
+          {
+            echo "## Couverture backend"
+            echo ""
+            echo '```'
+            uv run coverage report 2>/dev/null || echo "Rapport indisponible."
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # BACKEND - integrite des migrations Alembic
+  # ---------------------------------------------------------------------------
+  backend-migrations:
+    name: backend - migrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    # Ici on utilise un "service" GitHub plutot que testcontainers : ce job ne
+    # lance pas l'application, il ne fait que dialoguer avec une base vierge.
+    # Le job tourne sur la machine hote (pas dans un conteneur) : on joint donc
+    # PostgreSQL par localhost, jamais par le nom du service.
+    services:
+      postgres:
+        image: postgres:18.6-trixie
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vetolib_ci
+        ports:
+          - 5432:5432
+        # Sans health-cmd, la premiere migration partirait avant que PostgreSQL
+        # accepte les connexions.
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vetolib_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ALEMBIC_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/vetolib_ci
+      # Surtout pas ENV=prod : le garde-fou de config.py refuserait de demarrer
+      # avec des identifiants de developpement.
+      ENV: test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version-file: backend/.python-version
+
+      - run: uv sync --locked
+
+      - name: Un seul head Alembic
+        # Deux migrations creees en parallele sur deux branches produisent deux
+        # "heads" : "alembic upgrade head" echouerait alors en production avec
+        # un message obscur. Le "|| true" est necessaire car grep -c sort en
+        # erreur quand il ne trouve rien, ce qui tuerait l'etape avant notre
+        # propre message d'erreur.
+        run: |
+          heads=$(uv run alembic heads | grep -c "(head)" || true)
+          echo "Nombre de heads : $heads"
+          if [ "$heads" -ne 1 ]; then
+            echo "::error::Il doit y avoir exactement 1 head Alembic, $heads trouve(s). Fusionnez avec 'uv run alembic merge'."
+            uv run alembic heads --verbose
+            exit 1
+          fi
+
+      - name: Appliquer toutes les migrations
+        run: uv run alembic upgrade head
+
+      - name: Detecter un ecart entre les modeles et les migrations
+        # alembic check rejoue un autogenerate en memoire et echoue si le schema
+        # reel differe des modeles SQLAlchemy : c'est le filet qui rattrape
+        # "j'ai ajoute une colonne au modele et oublie la migration".
+        # Il exige une base a jour : d'ou sa place juste apres l'upgrade, et
+        # AVANT le downgrade qui suit.
+        run: uv run alembic check
+
+      - name: Verifier la reversibilite (downgrade puis re-upgrade)
+        # Une migration qu'on ne sait pas defaire est un aller sans retour en
+        # production. Les 5 migrations du projet ont toutes un downgrade() : on
+        # le prouve a chaque PR plutot que de l'esperer. Le re-upgrade verifie
+        # en prime que la chaine est rejouable (role et extension conserves).
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
+  # ---------------------------------------------------------------------------
+  # FRONTENDS - lint, build, types et tests (les 2 apps en parallele)
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: frontend - ${{ matrix.app }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      # fail-fast: false -> si le B2C casse, on veut quand meme savoir si le B2B
+      # casse aussi, plutot que de decouvrir les problemes un par un.
+      fail-fast: false
+      matrix:
+        app: [frontend-b2c, frontend-b2b]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # La version de Node vient du .nvmrc de l'app : une seule source de
+          # verite entre le poste du developpeur, Docker et la CI.
+          node-version-file: ${{ matrix.app }}/.nvmrc
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+      - name: Installer les dependances
+        # npm ci (et non npm install) : installe EXACTEMENT le package-lock.json
+        # et echoue si celui-ci est desynchronise du package.json.
+        run: npm ci
+
+      - name: ESLint
+        # En premier car il ne depend d'aucun artefact de build : c'est le
+        # retour le plus rapide en cas d'erreur.
+        run: npm run lint
+
+      - name: Cache du build Next.js
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          # On ne met en cache QUE .next/cache (le cache de compilation), jamais
+          # .next/ en entier : les types generes doivent etre reconstruits a
+          # chaque build, sinon on reintroduit le probleme que l'etape suivante
+          # cherche justement a eviter.
+          path: ${{ matrix.app }}/.next/cache
+          # github.sha rend la cle unique a chaque run : une cle deja existante
+          # n'est jamais reecrite par GitHub, le cache resterait donc fige.
+          # restore-keys retombe sur le cache le plus recent de la meme app.
+          key: next-${{ matrix.app }}-${{ hashFiles(format('{0}/package-lock.json', matrix.app)) }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ matrix.app }}-${{ hashFiles(format('{0}/package-lock.json', matrix.app)) }}-
+            next-${{ matrix.app }}-
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: TypeScript
+        # ATTENTION A L'ORDRE : tsconfig.json inclut next-env.d.ts, lequel fait
+        # "import ./.next/types/routes.d.ts". Ces deux fichiers sont GENERES par
+        # "next build" et absents du depot (gitignores). Lancer tsc avant le
+        # build ferait echouer la verification sur des types introuvables.
+        run: npm run typecheck
+
+      - name: Tests unitaires (Vitest)
+        run: npm run test:coverage
+
+  # ---------------------------------------------------------------------------
+  # Le client API genere est-il a jour avec le schema du backend ?
+  # ---------------------------------------------------------------------------
+  api-client-drift:
+    name: client API a jour
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          python-version-file: backend/.python-version
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: frontend-b2c/.nvmrc
+          cache: npm
+          # Un seul cache couvrant les deux applications.
+          cache-dependency-path: |
+            frontend-b2c/package-lock.json
+            frontend-b2b/package-lock.json
+
+      - name: Installer le backend
+        run: uv sync --locked
+        working-directory: backend
+
+      - name: Exporter le schema OpenAPI du backend
+        # vetolib.main est importable sans effet de bord (les connexions ne
+        # s'ouvrent qu'au demarrage du lifespan) : on obtient donc le schema
+        # sans base de donnees ni Redis, en quelques secondes. Cette etape sert
+        # aussi de test de fumee "l'application est importable".
+        run: make -C backend openapi
+
+      - name: Servir le schema sur le port attendu par Orval
+        # Les deux orval.config.ts pointent sur http://localhost:8000/openapi.json.
+        # Plutot que de demarrer toute la stack, on sert le fichier deja genere :
+        # le resultat est identique et on teste la vraie configuration, sans la
+        # modifier. nohup + redirection : sans cela l'etape ne rendrait jamais
+        # la main.
+        run: |
+          nohup python3 -m http.server 8000 --directory backend \
+            > /tmp/openapi-server.log 2>&1 &
+          for _ in $(seq 1 40); do
+            if curl -fsS http://localhost:8000/openapi.json -o /dev/null; then
+              echo "Schema disponible."
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "::error::Le serveur de schema n'a pas demarre."
+          cat /tmp/openapi-server.log
+          exit 1
+
+      - name: Regenerer le client du portail B2C
+        # Toujours "npm run generate:api" et jamais "npx orval" : le script npm
+        # place node_modules/.bin dans le PATH, ce dont a besoin le hook
+        # afterAllFilesWrite ("prettier --write") declare par orval.config.ts.
+        working-directory: frontend-b2c
+        run: |
+          npm ci
+          npm run generate:api
+
+      - name: Regenerer le client de l'espace clinique B2B
+        working-directory: frontend-b2b
+        run: |
+          npm ci
+          npm run generate:api
+
+      - name: Comparer avec ce qui est committe
+        # git status plutot que git diff : orval est configure avec clean:true,
+        # il SUPPRIME puis recree le dossier. Un nouveau tag OpenAPI produirait
+        # un fichier non suivi, invisible pour un simple diff.
+        # Les deux chemins sont ecrits en toutes lettres plutot que passes par
+        # une variable : une variable non quotee dependrait du decoupage en
+        # mots du shell, qui ne se comporte pas pareil partout (zsh ne decoupe
+        # pas, bash si). Ici, aucune ambiguite possible.
+        run: |
+          if [ -n "$(git status --porcelain -- frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated)" ]; then
+            echo "::error::Le client API genere n'est plus a jour. Lancez 'make generate-api' et committez le resultat."
+            git status --short -- frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated
+            git --no-pager diff -- frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated
+            exit 1
+          fi
+          echo "Le client API committe correspond bien au schema du backend."
+
+      - name: Conserver le schema OpenAPI de cette PR
+        # Pratique en revue : permet de telecharger le contrat d'API produit par
+        # la branche et de le comparer a celui de main.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: openapi-schema
+          path: backend/openapi.json
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # SECURITE - vulnerabilites connues dans les dependances
+  # ---------------------------------------------------------------------------
+  security-audit:
+    name: audit des dependances
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: frontend-b2c/.nvmrc
+
+      - name: Audit des dependances Python
+        # uv n'a pas d'audit integre : on exporte le lockfile au format
+        # requirements.txt, que pip-audit sait lire, puis on interroge la base
+        # de vulnerabilites PyPI. Si une faille sans correctif bloquait un jour
+        # la CI, on peut l'ecarter explicitement et de facon tracable avec :
+        #   uvx pip-audit ... --ignore-vuln GHSA-xxxx-xxxx-xxxx
+        working-directory: backend
+        run: |
+          uv export --format requirements-txt \
+            --no-emit-project --no-hashes --all-groups -o /tmp/requirements.txt
+          uvx pip-audit --requirement /tmp/requirements.txt --strict
+
+      - name: Audit des dependances du portail B2C
+        # --audit-level=high : les alertes "low" et "moderate" sont trop
+        # bruyantes pour bloquer un merge ; on ne bloque que sur high/critical.
+        working-directory: frontend-b2c
+        run: npm audit --audit-level=high
+
+      - name: Audit des dependances de l'espace clinique B2B
+        working-directory: frontend-b2b
+        run: npm audit --audit-level=high
+
+  # ---------------------------------------------------------------------------
+  # SECURITE - la PR introduit-elle une dependance vulnerable ?
+  # ---------------------------------------------------------------------------
+  dependency-review:
+    name: revue des dependances
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Ce controle compare les lockfiles avant/apres : il n'a de sens que sur une
+    # PR. Sur un push direct il n'y a rien a comparer.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+          # never : sans cela l'action exigerait le droit d'ecrire dans la PR.
+          comment-summary-in-pr: never
+
+  # ---------------------------------------------------------------------------
+  # QUALITE DES WORKFLOWS EUX-MEMES
+  # ---------------------------------------------------------------------------
+  workflow-lint:
+    name: lint des workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: actionlint (syntaxe et erreurs GitHub Actions)
+        # Detecte les fautes que GitHub accepte silencieusement : nom d'action
+        # inexistant, expression invalide, "needs" vers un job absent. Il passe
+        # aussi shellcheck sur chaque bloc "run:". On utilise l'image officielle
+        # plutot qu'un script telecharge a la volee.
+        run: |
+          docker run --rm -v "$PWD:/repo" --workdir /repo \
+            rhysd/actionlint:1.7.12 -color
+
+      - name: zizmor (failles de securite des workflows)
+        # Cherche les vulnerabilites propres a la CI : injection de code via une
+        # expression non echappee, permissions trop larges, actions non
+        # epinglees, jeton laisse dans .git/config...
+        run: uvx zizmor@1.29.0 --min-severity medium .github/workflows/
+
+  # ---------------------------------------------------------------------------
+  # IMAGES DOCKER - le projet se construit-il vraiment ?
+  # ---------------------------------------------------------------------------
+  docker-build:
+    name: docker - ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Le backend et les frontends n'ont PAS le meme contexte de build : le
+          # Dockerfile backend attend le contenu de ./backend a la racine du
+          # contexte, celui des frontends attend la racine du depot (il choisit
+          # l'application via l'argument APP_DIR). A noter : "file" est toujours
+          # resolu depuis la racine du depot, pas depuis le contexte.
+          - name: api
+            context: ./backend
+            dockerfile: docker/backend/Dockerfile
+            target: prod
+            build-args: ""
+            # mode=max conserve toutes les couches intermediaires : precieux
+            # pour le "uv sync" du backend, l'etape la plus couteuse.
+            cache-mode: max
+          - name: portal
+            context: .
+            dockerfile: docker/frontend/Dockerfile
+            target: runner
+            build-args: APP_DIR=frontend-b2c
+            # mode=min pour les frontends : le cache GitHub est plafonne a 10 Go
+            # par depot et il est partage avec les caches npm, uv et Next. Trois
+            # images en mode=max evinceraient tout le reste.
+            cache-mode: min
+          - name: clinic
+            context: .
+            dockerfile: docker/frontend/Dockerfile
+            target: runner
+            build-args: APP_DIR=frontend-b2b
+            cache-mode: min
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - name: Construire l'image ${{ matrix.name }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          build-args: ${{ matrix.build-args }}
+          # push: false -> on valide seulement que l'image se construit. La
+          # publication est faite par le job publish-images, apres le merge.
+          push: false
+          load: false
+          provenance: false
+          tags: vetolib-${{ matrix.name }}:ci
+          # "scope" isole les trois images : sans lui, elles s'ecraseraient
+          # mutuellement dans le cache.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=${{ matrix.cache-mode }},scope=${{ matrix.name }}
+
+  # ---------------------------------------------------------------------------
+  # LA PORTE : le seul check requis par la protection de branche
+  # ---------------------------------------------------------------------------
+  gate:
+    # NE PAS RENOMMER CE JOB. Le nom "gate" est le "required status check"
+    # declare dans le ruleset GitHub "main-protection". Le changer rendrait le
+    # check introuvable et bloquerait TOUTES les PR, sans message d'erreur
+    # explicite. Procedure de renommage : voir la section CI/CD du README.
+    name: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Ce job ne clone rien et n'appelle aucune API : il n'a besoin d'aucun droit.
+    permissions: {}
+    # Cette liste doit rester EXHAUSTIVE : le gate ne regarde que ses "needs".
+    # Un job absent d'ici pourrait echouer sans que personne ne s'en apercoive.
+    needs:
+      - backend-quality
+      - backend-test-unit
+      - backend-test-integration
+      - backend-coverage
+      - backend-migrations
+      - frontend
+      - api-client-drift
+      - security-audit
+      - dependency-review
+      - workflow-lint
+      - docker-build
+    # always() : sans cela, un job "needs" en echec annulerait la porte, qui
+    # resterait a l'etat "skipped". GitHub considere un check ignore comme
+    # REUSSI : la PR redeviendrait fusionnable alors que la CI est rouge.
+    # Ne pas utiliser "!cancelled()" non plus : une annulation du run rendrait
+    # le gate lui-meme ignore, donc vert.
+    if: always()
+    steps:
+      - name: Resultat de chaque job
+        run: echo '${{ toJSON(needs) }}'
+
+      - name: Echec si un job n'est pas passe
+        # "always()" seul rendrait ce job vert quoi qu'il arrive : c'est cette
+        # etape qui traduit reellement les resultats en succes ou en echec.
+        # - failure   : un controle a echoue ;
+        # - cancelled : un run annule n'est pas un run vert ;
+        # - skipped   : ici, le seul cas possible est un job dont une dependance
+        #               a echoue (aucun filtrage par chemin n'est en place), ou
+        #               dependency-review hors PR -- traite plus bas.
+        if: >-
+          contains(needs.*.result, 'failure')
+          || contains(needs.*.result, 'cancelled')
+          || (github.event_name == 'pull_request' && contains(needs.*.result, 'skipped'))
+        run: |
+          echo "::error::Au moins un job de la CI n'est pas passe. Voir le detail ci-dessus."
+          exit 1
+
+      - name: Tous les controles sont au vert
+        run: echo "CI verte, la branche peut etre fusionnee."
+
+  # ---------------------------------------------------------------------------
+  # PUBLICATION DES IMAGES - uniquement apres un merge sur main
+  # ---------------------------------------------------------------------------
+  publish-images:
+    name: publier les images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      # Droit d'ecrire dans le registre d'images de GitHub (ghcr.io).
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: ./backend
+            dockerfile: docker/backend/Dockerfile
+            target: prod
+            build-args: ""
+            cache-mode: max
+          - name: portal
+            context: .
+            dockerfile: docker/frontend/Dockerfile
+            target: runner
+            build-args: APP_DIR=frontend-b2c
+            cache-mode: min
+          - name: clinic
+            context: .
+            dockerfile: docker/frontend/Dockerfile
+            target: runner
+            build-args: APP_DIR=frontend-b2b
+            cache-mode: min
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - name: Se connecter a ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN est fourni automatiquement par GitHub : aucun secret a
+          # creer ni a maintenir dans les reglages du depot.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculer les etiquettes de l'image
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
+          # latest = dernier etat de main ; sha-xxxxxxx = version precise et
+          # immuable, celle qu'on deploie et vers laquelle on revient.
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      - name: Construire et publier
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          build-args: ${{ matrix.build-args }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Meme scope que docker-build : les couches viennent d'etre
+          # construites lors de la CI de la PR, la publication est rapide.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=${{ matrix.cache-mode }},scope=${{ matrix.name }}

@@ -1,0 +1,17 @@
+# Configuration de l'analyse CodeQL.
+#
+# On exclut les dossiers dont le contenu n'est pas ecrit a la main : les
+# alerter n'apporterait rien puisqu'on ne peut pas les corriger sur place, et
+# le bruit finirait par masquer les vraies alertes.
+name: VetoLib
+
+paths-ignore:
+  # Client API genere par Orval : toute correction serait ecrasee a la
+  # prochaine execution de `make generate-api`.
+  - frontend-b2c/src/lib/api/generated
+  - frontend-b2b/src/lib/api/generated
+  # Composants installes via la CLI shadcn/ui : code amont, non maintenu ici.
+  - frontend-b2c/src/components/ui
+  - frontend-b2b/src/components/ui
+  # Migrations Alembic : SQL genere/ecrit une fois, jamais rejoue tel quel.
+  - backend/migrations/versions
