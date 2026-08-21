@@ -1,150 +1,151 @@
 /**
  * Tests de la page « Mes animaux ».
  *
- * Elle porte les quatre états d'une liste plus l'aiguillage vers deux boîtes
- * de dialogue : renommer un animal existant, ou en créer un nouveau. La
- * confusion entre les deux est le risque réel — ouvrir la création avec les
- * données de l'animal précédemment édité créerait un doublon au lieu d'un
- * nouvel animal.
+ * Depuis la refonte, la liste est une GRILLE de cartes-liens et ne porte
+ * plus d'actions par animal : « Modifier » et « Supprimer » ont rejoint
+ * la fiche. Ce n'est pas un choix esthétique — des boutons imbriqués
+ * dans une carte-lien produisent des contrôles emboîtés, au comportement
+ * clavier ambigu — et c'est exactement ce que ces tests verrouillent.
+ *
+ * Le pied de chaque carte porte le suivi de l'animal, dérivé du cache
+ * des rendez-vous : prochain rendez-vous, sinon dernière visite, sinon
+ * l'aveu qu'il n'y en a pas.
  */
-import { screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PetsContent } from "@/components/pets/pets-content";
-import { buildPet } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { getListMyAppointmentsQueryKey } from "@/lib/api/generated/owner-appointments/owner-appointments";
+import { getListMyPetsQueryKey } from "@/lib/api/generated/pets/pets";
+import type {
+  OwnerAppointmentResponse,
+  PetResponse,
+} from "@/lib/api/generated/vetoLibAPI.schemas";
+import { buildOwnerAppointment, buildPet } from "@/test/fixtures";
+import { createTestQueryClient, renderWithProviders } from "@/test/render";
 
-const simulations = vi.hoisted(() => ({ useListMyPets: vi.fn() }));
-
-vi.mock("@/lib/api/generated/pets/pets", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api/generated/pets/pets")>()),
-  useListMyPets: simulations.useListMyPets,
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/animaux",
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
-function requete(surcharges: Record<string, unknown> = {}) {
-  return { data: undefined, isPending: false, isError: false, ...surcharges };
+const MAINTENANT = new Date("2026-08-21T10:00:00Z");
+
+function afficher(
+  pets: PetResponse[],
+  appointments: OwnerAppointmentResponse[] = [],
+) {
+  const queryClient = createTestQueryClient();
+  const enveloppe = (data: unknown) => ({
+    status: 200,
+    data,
+    headers: new Headers(),
+  });
+  queryClient.setQueryData(getListMyPetsQueryKey(), enveloppe(pets));
+  queryClient.setQueryData(
+    getListMyAppointmentsQueryKey(),
+    enveloppe(appointments),
+  );
+  return renderWithProviders(<PetsContent />, { queryClient });
 }
 
-afterEach(() => {
-  vi.clearAllMocks();
+beforeEach(() => {
+  vi.setSystemTime(MAINTENANT);
 });
 
-describe("PetsContent — états de la liste", () => {
-  it("garde le bouton d'ajout pendant le chargement", () => {
-    // L'action principale ne doit jamais dépendre du chargement de la liste.
-    simulations.useListMyPets.mockReturnValue(requete({ isPending: true }));
-    renderWithProviders(<PetsContent />);
+describe("PetsContent", () => {
+  it("titre la page et décrit à quoi elle sert", () => {
+    afficher([buildPet()]);
 
     expect(
       screen.getByRole("heading", { name: "Mes animaux", level: 1 }),
     ).toBeInTheDocument();
+  });
+
+  it("fait de chaque carte un lien vers la fiche de l'animal", () => {
+    afficher([
+      buildPet({ id: "rex", name: "Rex" }),
+      buildPet({ id: "mistigri", name: "Mistigri", species: "cat" }),
+    ]);
+
+    expect(screen.getByRole("link", { name: /Rex/ })).toHaveAttribute(
+      "href",
+      "/animaux/rex",
+    );
+    expect(screen.getByRole("link", { name: /Mistigri/ })).toHaveAttribute(
+      "href",
+      "/animaux/mistigri",
+    );
+  });
+
+  it("compose le sous-titre en faisant disparaître ce qui manque", () => {
+    afficher([
+      buildPet({
+        name: "Rex",
+        species: "dog",
+        breed: "Berger australien",
+        birth_date: "2021-03-12",
+      }),
+      buildPet({
+        id: "kiwi",
+        name: "Kiwi",
+        species: "nac",
+        breed: null,
+        birth_date: null,
+      }),
+    ]);
+
     expect(
-      screen.getByRole("button", { name: /Ajouter un animal/ }),
+      screen.getByText("Chien · Berger australien · 5 ans"),
+    ).toBeInTheDocument();
+    // Pas de " ·  · " : une fiche peu remplie reste propre.
+    expect(screen.getByText("NAC")).toBeInTheDocument();
+  });
+
+  it("ne porte AUCUNE action par animal : elles vivent sur la fiche", () => {
+    // Un bouton dans une carte-lien produit des controles emboites, au
+    // comportement clavier ambigu.
+    afficher([buildPet({ name: "Rex" })]);
+
+    expect(
+      screen.queryByRole("button", { name: /Modifier/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Supprimer/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("privilégie le prochain rendez-vous sur la dernière visite", () => {
+    afficher(
+      [buildPet({ id: "rex", name: "Rex" })],
+      [
+        buildOwnerAppointment({ pet_id: "rex", starts_at: "2026-08-05T07:00:00Z" }),
+        buildOwnerAppointment({ pet_id: "rex", starts_at: "2026-08-24T07:00:00Z" }),
+      ],
+    );
+
+    expect(
+      screen.getByText(/Prochain rendez-vous : 24 août/),
     ).toBeInTheDocument();
   });
 
-  it("annonce l'échec du chargement", () => {
-    simulations.useListMyPets.mockReturnValue(requete({ isError: true }));
-    renderWithProviders(<PetsContent />);
+  it("le dit franchement quand il n'y a jamais eu de visite", () => {
+    afficher([buildPet({ id: "rex", name: "Rex" })]);
 
-    expect(
-      screen.getByText(/Impossible de charger vos animaux/),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Aucune visite enregistrée")).toBeInTheDocument();
   });
 
   it("invite à commencer quand aucun animal n'est enregistré", () => {
-    simulations.useListMyPets.mockReturnValue(requete({ data: [] }));
-    renderWithProviders(<PetsContent />);
+    afficher([]);
 
     expect(
       screen.getByText("Ajoutez votre premier compagnon"),
     ).toBeInTheDocument();
-    // Le bouton d'ajout apparaît deux fois : en tête et dans l'état vide,
-    // où il est bien plus visible.
+    // UN seul bouton d'ajout : l'action d'en-tete s'efface au profit du
+    // CTA de l'etat vide, ou l'oeil se pose.
     expect(
-      screen.getAllByRole("button", { name: /Ajouter un animal/ }),
-    ).toHaveLength(2);
-  });
-
-  it("liste chaque animal avec son espèce", () => {
-    simulations.useListMyPets.mockReturnValue(
-      requete({
-        data: [
-          buildPet({ id: "1", name: "Rex", species: "dog" }),
-          buildPet({ id: "2", name: "Minou", species: "cat" }),
-        ],
-      }),
-    );
-    renderWithProviders(<PetsContent />);
-
-    expect(screen.getByText("Rex")).toBeInTheDocument();
-    expect(screen.getByText("Chien")).toBeInTheDocument();
-    expect(screen.getByText("Minou")).toBeInTheDocument();
-    expect(screen.getByText("Chat")).toBeInTheDocument();
-  });
-
-  it("propose renommer et supprimer sur chaque animal", () => {
-    simulations.useListMyPets.mockReturnValue(
-      requete({ data: [buildPet({ name: "Rex" })] }),
-    );
-    renderWithProviders(<PetsContent />);
-
-    expect(screen.getByRole("button", { name: /Renommer/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Supprimer/ })).toBeInTheDocument();
-  });
-});
-
-describe("PetsContent — ouverture des dialogues", () => {
-  it("ouvre la création avec un formulaire vierge", async () => {
-    simulations.useListMyPets.mockReturnValue(
-      requete({ data: [buildPet({ name: "Rex" })] }),
-    );
-    renderWithProviders(<PetsContent />);
-
-    await userEvent
-      .setup()
-      .click(screen.getByRole("button", { name: /Ajouter un animal/ }));
-
-    const boite = await screen.findByRole("dialog");
-    expect(within(boite).getByLabelText(/Nom/)).toHaveValue("");
-  });
-
-  it("ouvre le renommage prérempli avec l'animal choisi", async () => {
-    simulations.useListMyPets.mockReturnValue(
-      requete({
-        data: [
-          buildPet({ id: "1", name: "Rex" }),
-          buildPet({ id: "2", name: "Minou", species: "cat" }),
-        ],
-      }),
-    );
-    renderWithProviders(<PetsContent />);
-
-    const lignes = screen.getAllByRole("button", { name: /Renommer/ });
-    await userEvent.setup().click(lignes[1]);
-
-    const boite = await screen.findByRole("dialog");
-    expect(within(boite).getByLabelText(/Nom/)).toHaveValue("Minou");
-  });
-
-  it("repasse à un formulaire vierge après un renommage", async () => {
-    // Le vrai risque : réutiliser l'animal précédemment édité ferait
-    // créer un doublon au lieu d'un nouvel animal.
-    simulations.useListMyPets.mockReturnValue(
-      requete({ data: [buildPet({ name: "Rex" })] }),
-    );
-    renderWithProviders(<PetsContent />);
-    const user = userEvent.setup();
-
-    await user.click(screen.getByRole("button", { name: /Renommer/ }));
-    expect(within(await screen.findByRole("dialog")).getByLabelText(/Nom/)).toHaveValue(
-      "Rex",
-    );
-    await user.keyboard("{Escape}");
-
-    await user.click(screen.getByRole("button", { name: /Ajouter un animal/ }));
-    const boite = await screen.findByRole("dialog");
-    expect(within(boite).getByLabelText(/Nom/)).toHaveValue("");
+      screen.getAllByRole("button", { name: "Ajouter un animal" }),
+    ).toHaveLength(1);
   });
 });

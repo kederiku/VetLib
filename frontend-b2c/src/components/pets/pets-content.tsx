@@ -1,60 +1,59 @@
 /**
- * Contenu de la page /animaux : la liste des compagnons du proprietaire.
+ * Contenu de la page /animaux : la grille des compagnons du propriétaire.
  *
- * Une carte par animal (icone d'espece, nom, badge, actions Renommer /
- * Supprimer), un bouton "Ajouter un animal" en tete, et un etat vide
- * engageant pour le premier animal. Les deux dialogues (formulaire et
- * confirmation de suppression) sont piletes d'ici : l'etat local
- * memorise QUEL animal est vise par quelle action.
+ * Une GRILLE de cartes et non une liste : un propriétaire a un à quatre
+ * animaux, une grille les montre tous d'un coup d'oeil là où une colonne
+ * les empile. Chaque carte mène à la fiche, où vivent désormais les
+ * actions (modifier, supprimer) — voir la docstring de pet-card.
  *
- * Client Component : liste via useListMyPets (TanStack Query) ; le cache
- * est partage avec le wizard de prise de rendez-vous (meme queryKey).
+ * Le pied de chaque carte porte le suivi de l'animal (prochain
+ * rendez-vous, sinon dernière visite), dérivé du cache des rendez-vous :
+ * même queryKey que la page /rendez-vous, donc aucune requête ajoutée.
  */
 "use client";
 
-import { PawPrint, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { PawPrint, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { DeletePetDialog } from "@/components/pets/delete-pet-dialog";
+import { PetCard } from "@/components/pets/pet-card";
 import { PetFormDialog } from "@/components/pets/pet-form-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useListMyPets } from "@/lib/api/generated/pets/pets";
-import type { PetResponse } from "@/lib/api/generated/vetoLibAPI.schemas";
-import { SPECIES } from "@/lib/pets/species";
+import { lastVisit, nextForPet } from "@/lib/appointments/derive";
+import { useMyAppointments } from "@/lib/appointments/use-my-appointments";
+import { formatDateShort } from "@/lib/date/format";
 
 export function PetsContent() {
-  // select extrait le tableau une fois pour tous les rendus (le mutator
-  // renvoie { status, data, headers }).
   const {
     data: pets,
     isPending,
     isError,
     refetch,
   } = useListMyPets({ query: { select: (res) => res.data } });
-
-  // Etats des dialogues. formPet : l'animal en cours d'edition (undefined
-  // = creation). deletePet : l'animal vise par la suppression. formOpen
-  // est separe de formPet pour distinguer "ouvert en creation" (formPet
-  // undefined) de "ferme".
+  const { data: appointments } = useMyAppointments();
   const [formOpen, setFormOpen] = useState(false);
-  const [formPet, setFormPet] = useState<PetResponse | undefined>(undefined);
-  const [deletePet, setDeletePet] = useState<PetResponse | null>(null);
 
-  const openCreate = () => {
-    setFormPet(undefined);
-    setFormOpen(true);
-  };
+  // "Maintenant" fige par rendu : l'age affiche et la frontiere
+  // futur/passe sont les memes pour toutes les cartes.
+  const now = useMemo(() => new Date(), []);
 
-  const openEdit = (pet: PetResponse) => {
-    setFormPet(pet);
-    setFormOpen(true);
+  /** « Prochain rendez-vous : 24 août » / « Dernière visite : ... ». */
+  const suivi = (petId: string): string => {
+    if (appointments === undefined) return "";
+    const prochain = nextForPet(appointments, petId, now);
+    if (prochain !== null) {
+      return `Prochain rendez-vous : ${formatDateShort(prochain.starts_at)}`;
+    }
+    const derniere = lastVisit(appointments, petId, now);
+    if (derniere !== null) {
+      return `Dernière visite : ${formatDateShort(derniere.starts_at)}`;
+    }
+    return "Aucune visite enregistrée";
   };
 
   return (
@@ -63,24 +62,25 @@ export function PetsContent() {
         title="Mes animaux"
         description="Les compagnons pour lesquels vous prenez rendez-vous."
         actions={
-          <Button onClick={openCreate}>
-            <Plus data-icon="inline-start" aria-hidden />
-            Ajouter un animal
-          </Button>
+          pets !== undefined && pets.length > 0 ? (
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus data-icon="inline-start" aria-hidden />
+              Ajouter un animal
+            </Button>
+          ) : undefined
         }
       />
 
-      {/* Squelettes pendant le chargement : meme silhouette que les
-          cartes, pas de saut de mise en page a l'arrivee des donnees. */}
+      {/* Squelettes dans la MEME grille que les cartes : sans cela, la
+          mise en page sauterait a l'arrivee des donnees. */}
       {isPending && (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-40 w-full rounded-4xl" />
+          <Skeleton className="h-40 w-full rounded-4xl" />
+          <Skeleton className="h-40 w-full rounded-4xl" />
         </div>
       )}
 
-      {/* Erreur AVEC issue : l'ancien bandeau n'offrait aucun moyen de
-          relancer, il fallait recharger la page à la main. */}
       {isError && (
         <ErrorState
           title="Impossible de charger vos animaux."
@@ -88,15 +88,13 @@ export function PetsContent() {
         />
       )}
 
-      {/* Etat vide : premier contact avec la fonctionnalite, ton
-          engageant + CTA identique au bouton du haut. */}
       {pets !== undefined && pets.length === 0 && (
         <EmptyState
           icon={<PawPrint aria-hidden />}
           title="Ajoutez votre premier compagnon"
           description="Chien, chat, NAC... Enregistrez vos animaux pour leur prendre rendez-vous en quelques clics."
           action={
-            <Button onClick={openCreate}>
+            <Button onClick={() => setFormOpen(true)}>
               <Plus data-icon="inline-start" aria-hidden />
               Ajouter un animal
             </Button>
@@ -105,67 +103,18 @@ export function PetsContent() {
       )}
 
       {pets !== undefined && pets.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {pets.map((pet) => {
-            const { label, icon: Icon } = SPECIES[pet.species];
-            return (
-              <Card key={pet.id}>
-                <CardContent className="flex items-center gap-4">
-                  {/* Pastille d'espece : cercle teinte marque + icone. */}
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-muted">
-                    <Icon className="size-5 text-brand" aria-hidden />
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="truncate font-medium">{pet.name}</span>
-                    <Badge variant="secondary">{label}</Badge>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(pet)}
-                    >
-                      <Pencil data-icon="inline-start" aria-hidden />
-                      {/* Sur mobile, l'icone seule suffit. */}
-                      <span className="hidden sm:inline">Renommer</span>
-                      <span className="sr-only sm:hidden">
-                        Renommer {pet.name}
-                      </span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setDeletePet(pet)}
-                    >
-                      <Trash2 data-icon="inline-start" aria-hidden />
-                      <span className="hidden sm:inline">Supprimer</span>
-                      <span className="sr-only sm:hidden">
-                        Supprimer {pet.name}
-                      </span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {pets.map((pet) => (
+            <li key={pet.id}>
+              <PetCard pet={pet} suivi={suivi(pet.id)} now={now} />
+            </li>
+          ))}
+        </ul>
       )}
 
-      {/* Dialogue creation/edition : formPet decide du mode. */}
-      <PetFormDialog open={formOpen} onOpenChange={setFormOpen} pet={formPet} />
-
-      {/* Dialogue de suppression : monte seulement quand un animal est
-          vise (deletePet porte a la fois "ouvert" et "lequel"). */}
-      {deletePet !== null && (
-        <DeletePetDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setDeletePet(null);
-          }}
-          pet={deletePet}
-        />
-      )}
+      {/* Dialogue de creation, pilote d'ici. L'edition, elle, vit sur la
+          fiche de chaque animal. */}
+      <PetFormDialog open={formOpen} onOpenChange={setFormOpen} />
     </PageContainer>
   );
 }
