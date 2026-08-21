@@ -166,12 +166,17 @@ L'index n'est produit qu'à l'étape `postBuild`. En développement, la barre ex
 renvoie rien. Testez avec `make docs-serve`.
 :::
 
-Le raccourci **`Cmd`/`Ctrl` + `K`** ouvre la recherche. Son rappel visuel dans le champ
-est volontairement désactivé (`searchBarShortcutHint: false`) : le greffon le rend
-derrière un test `isBrowser` évalué au **premier** rendu — faux côté serveur, vrai côté
-navigateur — ce qui produisait une erreur d'hydratation React en console sur **chaque**
-page. Une erreur permanente en console finit par masquer les vraies. Le raccourci, lui,
-fonctionne toujours.
+Le raccourci **`Cmd`/`Ctrl` + `K`** ouvre la recherche, et le champ en affiche le rappel.
+
+:::note Une erreur d'hydratation connue, sans effet sur l'affichage
+Les pages contenant des blocs de code journalisent une erreur React #418 dans la console.
+Elle est _recoverable_ : React régénère le sous-arbre concerné et la page s'affiche
+correctement. Deux pistes ont été explorées puis écartées — le rappel de raccourci de la
+barre de recherche (divergence réelle, mais pas la seule) et la bascule de thème Prism
+entre modes clair et sombre (l'erreur survient dans les deux modes, et un site Docusaurus
+de référence présente la même divergence sans erreur). La trame pointe vers
+`react-helmet-async`, donc la gestion du `<head>` de Docusaurus, pas vers ce dépôt.
+:::
 
 Les libellés français de la barre vivent dans `i18n/fr/code.json` : le paquet de recherche
 ne fournit pas de locale française. Les libellés du thème lui-même — navigation,
