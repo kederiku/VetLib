@@ -84,6 +84,13 @@ updates:
       # Contrainte projet (CLAUDE.md) : TypeScript 7 casse typescript-eslint.
       - dependency-name: typescript
         versions: [">=7"]
+      # @types/node decrit l'API de Node : sa version MAJEURE doit suivre celle
+      # du runtime, definie une seule fois dans .nvmrc (24, la LTS active) et
+      # reprise par la CI et l'image Docker. Laisser passer @types/node 26
+      # (Node courant, non-LTS) ferait accepter par tsc des API absentes a
+      # l'execution. Les correctifs mineurs continuent d'arriver.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # --- 4. Espace clinique B2B (npm) -----------------------------------------
   # Duplique de l'entree precedente : les deux applications sont des projets npm
@@ -114,6 +121,13 @@ updates:
     ignore:
       - dependency-name: typescript
         versions: [">=7"]
+      # @types/node decrit l'API de Node : sa version MAJEURE doit suivre celle
+      # du runtime, definie une seule fois dans .nvmrc (24, la LTS active) et
+      # reprise par la CI et l'image Docker. Laisser passer @types/node 26
+      # (Node courant, non-LTS) ferait accepter par tsc des API absentes a
+      # l'execution. Les correctifs mineurs continuent d'arriver.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # --- 5. Images de base des Dockerfiles ------------------------------------
   # Mensuel : les images de base bougent moins vite, et chaque mise a jour
