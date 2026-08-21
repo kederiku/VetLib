@@ -1,71 +1,64 @@
 /**
- * Contenu du tableau de bord.
+ * Tableau de bord : la journée de la clinique en un écran.
  *
- * Premier écran après connexion : la carte "À confirmer" (rendez-vous
- * pending des 7 prochains jours, le travail du jour de l'accueil) suivie
- * de la carte profil de l'utilisateur courant. La déconnexion a migré
- * dans le pied de la sidebar (AppShell). Client Component : il lit la
- * session via useCurrentUser, un hook TanStack Query.
+ * Trois blocs, tous dérivés de la MEME query agenda (voir
+ * use-dashboard-agenda) : la liste chronologique du jour (2/3 de la
+ * largeur), les demandes à confirmer avec actions directes, et la
+ * répartition de la charge par praticien. L'ancienne carte "profil"
+ * (permissions techniques en badges) a disparu : l'identité vit dans le
+ * menu utilisateur du header.
  */
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { PendingAppointmentsCard } from "@/components/dashboard/pending-appointments-card";
-import { ROLE_LABELS } from "@/lib/auth/roles";
+import Link from "next/link";
+
+import { PendingCard } from "@/components/dashboard/pending-card";
+import { TodayByPractitioner } from "@/components/dashboard/today-by-practitioner";
+import { TodaySection } from "@/components/dashboard/today-section";
+import { PageContainer } from "@/components/shared/page-container";
+import { PageHeader } from "@/components/shared/page-header";
+import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { formatDayLong, parisToday, toParisDisplayDate } from "@/lib/date/format";
 
 export function DashboardContent() {
   const { data: user } = useCurrentUser();
 
-  // L'AuthGuard (layout parent) garantit qu'on n'arrive ici que
-  // connecté ; ce garde-fou couvre l'instant de transition où la query
-  // n'est pas encore résolue (et rassure TypeScript sur undefined).
-  if (user === undefined) {
-    return null;
-  }
+  // "Mercredi 20 août — Clinique du Parc" : Intl produit le jour en
+  // minuscules, on capitalise la première lettre à la main (la
+  // description du PageHeader est du texte, pas un élément stylable).
+  const dayLabel = formatDayLong(toParisDisplayDate(parisToday()));
+  const description = `${dayLabel.charAt(0).toUpperCase()}${dayLabel.slice(1)}${
+    user !== undefined ? ` — ${user.clinic_name}` : ""
+  }`;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-8">
-      <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
+    <PageContainer>
+      <PageHeader
+        title={user !== undefined ? `Bonjour, ${user.first_name}` : "Bonjour"}
+        description={description}
+        actions={
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/agenda" />}
+          >
+            Voir l&apos;agenda
+          </Button>
+        }
+      />
 
-      {/* Rendez-vous en attente de confirmation : l'info la plus
-          actionnable du tableau de bord, donc au-dessus du profil. */}
-      <PendingAppointmentsCard />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {user.first_name} {user.last_name}
-          </CardTitle>
-          <CardDescription>{user.email}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-            <dt className="text-muted-foreground">Clinique</dt>
-            <dd className="font-medium">{user.clinic_name}</dd>
-            <dt className="text-muted-foreground">Rôle</dt>
-            <dd className="font-medium">{ROLE_LABELS[user.role]}</dd>
-          </dl>
-
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-muted-foreground">Permissions</p>
-            <div className="flex flex-wrap gap-1.5">
-              {user.permissions.map((permission) => (
-                <Badge key={permission} variant="secondary">
-                  {permission}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      {/* 2/3 - 1/3 sur grand écran, empilé en dessous : la journée est
+          la matière principale, la colonne droite le "cockpit". */}
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <TodaySection />
+        </div>
+        <div className="flex flex-col gap-6">
+          <PendingCard />
+          <TodayByPractitioner />
+        </div>
+      </div>
+    </PageContainer>
   );
 }
