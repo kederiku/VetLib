@@ -2,10 +2,11 @@
 # Dependabot - ouvre automatiquement des Pull Requests de mise a jour des
 # dependances, et surtout des correctifs de securite.
 #
-# Un "ecosysteme" = un couple (gestionnaire de paquets, repertoire). Ce monorepo
-# en compte cinq : les actions GitHub, le backend Python (uv), les TROIS
-# frontends npm et le site de documentation npm (quatre projets independants,
-# sans workspace) et les images Docker.
+# Une entree ci-dessous = un couple (gestionnaire de paquets, repertoire). Ce
+# monorepo en compte HUIT, reparties sur QUATRE gestionnaires : les actions
+# GitHub, le backend Python (uv), quatre repertoires npm (les trois frontends
+# et le site de documentation, projets independants, sans workspace) et deux
+# repertoires Docker.
 #
 # Les mises a jour sont GROUPEES : sans cela, une semaine ordinaire produirait
 # une dizaine de PR distinctes, chacune declenchant une CI complete. Groupees,

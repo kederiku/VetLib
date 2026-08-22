@@ -23,18 +23,18 @@ reste utilisable directement depuis `backend/`.
 
 ## Environnement et installation
 
-| Cible             | Effet                                                                    |
-| ----------------- | ------------------------------------------------------------------------ |
-| `make env`        | Copie les deux `.env` d'exemple (`cp -n`, jamais d'écrasement)           |
-| `make install`    | Toutes les dépendances : `uv sync` + `npm install` des trois projets npm |
-| `make install-ci` | Versions **strictement** verrouillées : `uv sync --locked` + `npm ci`    |
+| Cible             | Effet                                                                     |
+| ----------------- | ------------------------------------------------------------------------- |
+| `make env`        | Copie les deux `.env` d'exemple (`cp -n`, jamais d'écrasement)            |
+| `make install`    | Toutes les dépendances : `uv sync` + `npm install` des quatre projets npm |
+| `make install-ci` | Versions **strictement** verrouillées : `uv sync --locked` + `npm ci`     |
 
 ## Docker
 
 | Cible               | Effet                                                               |
 | ------------------- | ------------------------------------------------------------------- |
 | `make up`           | Infrastructure + API + worker + scheduler, en arrière-plan          |
-| `make up-full`      | Idem, plus les deux frontends conteneurisés (profil `frontend`)     |
+| `make up-full`      | Idem, plus les trois frontends conteneurisés (profil `frontend`)    |
 | `make down`         | Arrête les conteneurs, **conserve** les données                     |
 | `make down-volumes` | Arrête **et supprime** les volumes : données locales perdues        |
 | `make ps`           | État des conteneurs                                                 |
@@ -50,6 +50,7 @@ reste utilisable directement depuis `backend/`.
 | `make scheduler` | Scheduler TaskIQ en local                               |
 | `make dev-b2c`   | Portail propriétaires, `:3000`                          |
 | `make dev-b2b`   | Portail cliniques, `:3001`                              |
+| `make dev-admin` | Back-office plateforme, `:3003`                         |
 | `make docs`      | Ce site, `:3002`                                        |
 
 Ces cibles ont besoin de `backend/.env` et d'une infrastructure démarrée
@@ -82,10 +83,10 @@ demande à l'invite, ou le lit sur l'entrée standard quand celle-ci est redirig
 
 ## Contrat d'API et client généré
 
-| Cible               | Effet                                                                           |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `make openapi`      | Exporte le contrat dans `backend/openapi.json` (non versionné)                  |
-| `make generate-api` | Régénère le client Orval des **deux** frontends. L'API doit tourner sur `:8000` |
+| Cible               | Effet                                                                            |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `make openapi`      | Exporte le contrat dans `backend/openapi.json` (non versionné)                   |
+| `make generate-api` | Régénère le client Orval des **trois** frontends. L'API doit tourner sur `:8000` |
 
 `make generate-api` est à relancer après **tout** changement d'endpoint. Un oubli est
 détecté par la CI et bloque la demande de fusion. Voir
@@ -107,8 +108,8 @@ détecté par la CI et bloque la demande de fusion. Voir
 
 | Cible                  | Effet                                                |
 | ---------------------- | ---------------------------------------------------- |
-| `make lint-front`      | ESLint sur les deux portails                         |
-| `make build-front`     | Build de production des deux portails                |
+| `make lint-front`      | ESLint sur les trois applications                    |
+| `make build-front`     | Build de production des trois applications           |
 | `make typecheck-front` | `tsc --noEmit`                                       |
 | `make test-front`      | Vitest sans couverture (boucle de développement)     |
 | `make coverage-front`  | Vitest avec couverture et seuils — ce que fait la CI |
@@ -136,11 +137,11 @@ référence d'API est produite au build à partir de `backend/openapi.json`.
 
 ## Les raccourcis
 
-| Cible            | Périmètre                                                                                             |
-| ---------------- | ----------------------------------------------------------------------------------------------------- |
-| `make check`     | Toute la qualité **sans Docker** : backend, frontends, documentation                                  |
-| `make check-all` | `check` + tests d'intégration + contrôle des migrations                                               |
-| `make audit`     | Vulnérabilités connues : `pip-audit`, `npm audit` sur les deux portails, et le script d'audit du site |
+| Cible            | Périmètre                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `make check`     | Toute la qualité **sans Docker** : backend, frontends, documentation                                       |
+| `make check-all` | `check` + tests d'intégration + contrôle des migrations                                                    |
+| `make audit`     | Vulnérabilités connues : `pip-audit`, `npm audit` sur les trois applications, et le script d'audit du site |
 
 `make check` est la commande à lancer avant chaque `git push`. Voir
 [Contribuer : de la branche à la fusion](../contribuer/workflow-de-contribution.md).

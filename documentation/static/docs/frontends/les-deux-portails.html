@@ -1,0 +1,43 @@
+<!--
+  Redirection de l'ANCIENNE adresse de la page des frontends.
+
+  /docs/frontends/les-deux-portails a ete publiee, donc indexee et peut-etre
+  mise en favori. La page s'appelle desormais les-applications-next, un nom qui
+  ne se perime pas au frontend suivant : on ne casse pas l'URL d'origine pour
+  autant.
+
+  Pourquoi un fichier ecrit a la main plutot que le plugin officiel
+  @docusaurus/plugin-client-redirects, qui fait exactement cela : ajouter la
+  moindre dependance a ce projet npm echoue aujourd'hui sur un conflit de pair
+  PREEXISTANT (@mermaid-js/layout-elk 0.2.2 contre le ^0.1.9 attendu par
+  @docusaurus/theme-mermaid 3.10.2). `npm ci` s'en accommode -- il installe le
+  lockfile tel quel -- mais `npm install` refuse de resoudre. Le plugin
+  produirait de toute facon exactement ce fichier : un rafraichissement meta,
+  un remplacement JS et un lien de secours. Le jour ou le conflit sera tranche,
+  ce fichier pourra ceder la place au plugin.
+
+  Le chemin de destination est RELATIF : il fonctionne donc aussi bien sous le
+  sous-chemin /VetLib/ de GitHub Pages qu'en local.
+-->
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Page déplacée — VetoLib</title>
+    <meta name="robots" content="noindex" />
+    <meta http-equiv="refresh" content="0; url=les-applications-next" />
+    <link rel="canonical" href="les-applications-next" />
+    <script>
+      // location.replace et non href : la page de redirection ne doit pas
+      // s'inserer dans l'historique, sinon le bouton « precedent » y revient
+      // et renvoie aussitot vers la destination.
+      window.location.replace("les-applications-next");
+    </script>
+  </head>
+  <body>
+    <p>
+      Cette page s'appelle désormais
+      <a href="les-applications-next">Les trois applications Next.js</a>.
+    </p>
+  </body>
+</html>

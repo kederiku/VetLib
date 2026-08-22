@@ -127,8 +127,9 @@ def downgrade() -> None:
     op.drop_table("clinics")
 ```
 
-Une exception assumée dans `0004` : l'extension `btree_gist` est **conservée** au
-`downgrade`. Elle est partagée, sans coût, et la supprimer casserait d'autres objets.
+Deux exceptions assumées : les extensions `btree_gist` (`0004`) et `unaccent` (`0009`)
+sont **conservées** au `downgrade`. Elles sont partagées, sans coût, et les supprimer
+casserait d'autres objets.
 
 ## La leçon de la migration 0005
 
@@ -146,7 +147,7 @@ Deux enseignements :
 - laissez la convention de nommage faire son travail — passez le nom **court** ;
 - une dérive silencieuse entre modèles et schéma est plus coûteuse qu'une erreur bruyante.
 
-## Les six migrations actuelles
+## Les neuf migrations actuelles
 
 | Révision | Contenu                                                                        |
 | -------- | ------------------------------------------------------------------------------ |
@@ -156,6 +157,9 @@ Deux enseignements :
 | `0004`   | Tout `scheduling` : `btree_gist`, contrainte `EXCLUDE`, RLS sur cinq tables    |
 | `0005`   | Renommage des contraintes `CHECK` vers la convention                           |
 | `0006`   | Fiche animal enrichie : naissance, sexe, race, stérilisation                   |
+| `0007`   | `is_active` sur `clinics` et `owners` — suspendre sans libérer l'adresse email |
+| `0008`   | `platform_admins` — hors RLS (pas de `clinic_id`), `REVOKE` du rôle applicatif |
+| `0009`   | `admin_audit_log` append-only : qui a fait quoi ; `unaccent` pour la recherche |
 
 Leurs docstrings sont, de fait, des mini-décisions d'architecture : elles expliquent
 **pourquoi** `owners` n'a pas de RLS, **pourquoi** `btree_gist` est nécessaire,

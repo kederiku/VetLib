@@ -150,15 +150,16 @@ aux flux pré-tenant de fonctionner, et c'est pourquoi tout le reste passe par
 
 ## Ce qui est tenanté, et ce qui ne l'est pas
 
-| Table                                                                                       | `clinic_id` | RLS | Pourquoi                                                                     |
-| ------------------------------------------------------------------------------------------- | ----------- | --- | ---------------------------------------------------------------------------- |
-| `clinics`                                                                                   | —           | —   | C'est la table des tenants eux-mêmes                                         |
-| `users`                                                                                     | oui         | oui | Un membre du personnel appartient à une clinique                             |
-| `owners`                                                                                    | non         | non | Un propriétaire est un compte **global** : il consultera plusieurs cliniques |
-| `pets`                                                                                      | non         | non | Un animal appartient à son propriétaire, pas à une clinique                  |
-| `resources`, `weekly_schedules`, `schedule_exceptions`, `appointment_types`, `appointments` | oui         | oui | Tout l'agenda est propre à une clinique                                      |
-| `platform_admins`                                                                           | non         | non | Table des **exploitants**, hors du modèle tenant — voir juste en dessous     |
-| `outbox_events`                                                                             | non         | non | Table technique, lue par le relais hors de tout contexte tenant              |
+| Table                                                                                       | `clinic_id` | RLS | Pourquoi                                                                          |
+| ------------------------------------------------------------------------------------------- | ----------- | --- | --------------------------------------------------------------------------------- |
+| `clinics`                                                                                   | —           | —   | C'est la table des tenants eux-mêmes                                              |
+| `users`                                                                                     | oui         | oui | Un membre du personnel appartient à une clinique                                  |
+| `owners`                                                                                    | non         | non | Un propriétaire est un compte **global** : il consultera plusieurs cliniques      |
+| `pets`                                                                                      | non         | non | Un animal appartient à son propriétaire, pas à une clinique                       |
+| `resources`, `weekly_schedules`, `schedule_exceptions`, `appointment_types`, `appointments` | oui         | oui | Tout l'agenda est propre à une clinique                                           |
+| `platform_admins`                                                                           | non         | non | Table des **exploitants**, hors du modèle tenant — voir juste en dessous          |
+| `admin_audit_log`                                                                           | non         | non | Journal de leurs actions, hors du modèle tenant lui aussi — voir juste en dessous |
+| `outbox_events`                                                                             | non         | non | Table technique, lue par le relais hors de tout contexte tenant                   |
 
 Les deux lignes qui surprennent — `owners` et `pets` — sont documentées dans les
 docstrings des migrations `0002` et `0003`. Le raisonnement tient en une phrase : il
@@ -169,23 +170,29 @@ tables tenantées des autres contextes, chacune protégée par sa propre politiq
 `outbox_events` est un cas différent : une politique RLS y **masquerait des événements**
 au relais, qui travaille pour toutes les cliniques à la fois.
 
-### `platform_admins` : protégée par le privilège, pas par une politique
+### `platform_admins` et `admin_audit_log` : protégées par le privilège, pas par une politique
 
-La table des administrateurs de la plateforme n'a pas non plus de `clinic_id` — un
-exploitant n'appartient à aucune clinique — donc aucune politique n'aurait de colonne sur
-laquelle porter. Sa protection est d'une autre nature : la migration `0008` **révoque**
-explicitement tout droit du rôle applicatif `vetolib_app` dessus. Une requête émise par
-erreur sous une transaction tenant échoue alors en « permission denied », au lieu de
-renvoyer silencieusement des empreintes de mots de passe tout-puissants.
+Les deux tables du back-office n'ont pas non plus de `clinic_id` — un exploitant
+n'appartient à aucune clinique, et le journal de ses actions pas davantage — donc aucune
+politique n'aurait de colonne sur laquelle porter. Leur protection est d'une autre nature :
+la migration `0008` pour `platform_admins`, puis la migration `0009` pour
+`admin_audit_log`, exécutent chacune un `REVOKE ALL … FROM vetolib_app` qui **retire** au
+rôle applicatif tout droit dessus. Une requête émise par erreur sous une transaction tenant
+échoue alors en « permission denied », au lieu de renvoyer silencieusement des empreintes de
+mots de passe tout-puissants — ou, pour le journal, la trace de qui a suspendu quelle
+clinique.
 
-Attention au piège que ce `REVOKE` désamorce : `docker/postgres-init/02-app-role.sh` pose
+Attention au piège que ces `REVOKE` désamorcent : `docker/postgres-init/02-app-role.sh` pose
 un `ALTER DEFAULT PRIVILEGES` qui accorde automatiquement `SELECT/INSERT/UPDATE` au rôle
 applicatif sur **toute** table créée ensuite. Confortable pour les tables métier ; c'est
-exactement ce qu'il ne faut pas ici.
+exactement ce qu'il ne faut pas ici. Et comme ce privilège par défaut s'applique table par
+table, le `REVOKE` est à **répéter dans chaque migration** qui ajoute une table de cet
+espace : c'est une ligne à ne pas oublier, jamais un réglage posé une fois pour toutes.
 
 ### L'entorse assumée : le back-office lit à travers les tenants
 
-Le back-office plateforme ([ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md))
+Le back-office plateforme ([ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md)
+pour la décision, [ses écrans](../frontends/back-office-plateforme.md) pour la console elle-même)
 liste les cliniques, les propriétaires et le personnel **toutes cliniques confondues**.
 Ses use cases s'exécutent donc sous UoW **système** : le même mode que la connexion, mais
 utilisé pour lire massivement au lieu de résoudre une identité. Dans cet espace, et dans

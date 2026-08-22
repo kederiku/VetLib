@@ -134,11 +134,11 @@ parallèle sur chaque PR :
 | Prettier, `tsc`, build Docusaurus | Doc mal formatée, lien ou ancre morte, site qui ne se construit plus |
 | pip-audit, npm audit, revue de dépendances | Dépendance vulnérable |
 | actionlint + zizmor | Workflow CI cassé ou vulnérable |
-| Build des 3 images Docker | Image qui ne se construit plus |
+| Build des 4 images Docker | Image qui ne se construit plus |
 
 Après un merge sur `main`, les images sont publiées sur GHCR :
-`ghcr.io/kederiku/vetlib-api`, `-portal` et `-clinic`, étiquetées `latest` et
-`sha-<commit>`.
+`ghcr.io/kederiku/vetlib-api`, `-portal`, `-clinic` et `-admin`, étiquetées
+`latest` et `sha-<commit>`.
 
 Le site de documentation est publié dans la foulée sur GitHub Pages
 (<https://kederiku.github.io/VetLib/>) par le job `publier la documentation`.

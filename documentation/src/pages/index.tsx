@@ -59,12 +59,17 @@ const BRIQUES = [
   {
     chemin: "frontend-b2c/",
     role: "Portail des propriétaires d'animaux (Next.js, :3000)",
-    lien: "/docs/frontends/les-deux-portails",
+    lien: "/docs/frontends/les-applications-next",
   },
   {
     chemin: "frontend-b2b/",
     role: "Portail des cliniques (Next.js, :3001)",
-    lien: "/docs/frontends/les-deux-portails",
+    lien: "/docs/frontends/les-applications-next",
+  },
+  {
+    chemin: "frontend-admin/",
+    role: "Back-office de la plateforme (Next.js, :3003)",
+    lien: "/docs/frontends/back-office-plateforme",
   },
   {
     chemin: "docker/",
@@ -144,7 +149,7 @@ function Demarrage(): ReactNode {
             <p>
               Le Makefile racine est le point d&apos;entrée unique de toutes les
               commandes du projet. Il délègue au Makefile du backend et pilote
-              les deux portails.
+              les trois applications Next.
             </p>
             <Link
               className="button button--primary"

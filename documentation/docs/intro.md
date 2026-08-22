@@ -10,12 +10,15 @@ keywords: [vetolib, documentation, introduction, saas, vétérinaire]
 ## Ce qu'est VetoLib
 
 VetoLib est une plateforme **SaaS B2B2C** de prise de rendez-vous et de gestion pour
-cliniques vétérinaires. Deux publics, un seul backend :
+cliniques vétérinaires. Deux publics clients, une équipe qui exploite le tout, un seul
+backend :
 
 - **les cliniques** (B2B) gèrent leur agenda, leurs praticiens, leurs types de
   rendez-vous et leurs créneaux ;
 - **les propriétaires d'animaux** (B2C) réservent en ligne, suivent leurs rendez-vous et
-  tiennent le carnet de santé de leurs animaux.
+  tiennent le carnet de santé de leurs animaux ;
+- **l'équipe de la plateforme** administre l'ensemble depuis un back-office séparé :
+  cliniques, propriétaires et personnel, toutes cliniques confondues.
 
 Cette double audience explique la quasi-totalité de l'architecture : deux portails
 distincts, trois espaces d'authentification cloisonnés (dont celui, à part, du back-office
@@ -31,6 +34,7 @@ s'adresse à qui doit le comprendre, le faire tourner ou le modifier.
 | ---------------------------------------- | -------------------------------------------------------------------------------- |
 | Le faire tourner sur votre poste         | [Installation](demarrer/installation.md)                                         |
 | Comprendre comment il est construit      | [Vue d'ensemble du monorepo](architecture/vue-d-ensemble.md)                     |
+| Comprendre les interfaces web            | [Les trois applications Next.js](frontends/les-applications-next.md)             |
 | Y contribuer                             | [Contribuer : de la branche à la fusion](contribuer/workflow-de-contribution.md) |
 | Connaître les endpoints                  | [Référence de l'API HTTP](reference/api-http.md)                                 |
 | Savoir **pourquoi** tel choix a été fait | [Décisions d'architecture](adr/index.md)                                         |
@@ -82,7 +86,7 @@ dans une table, dans la même transaction que les données métier ; un relais l
 ensuite. →
 [Événements et outbox](architecture/evenements-et-outbox.md)
 
-**Aucun jeton ne transite dans un corps JSON.** Cookies `HttpOnly`, double jeton, et deux
+**Aucun jeton ne transite dans un corps JSON.** Cookies `HttpOnly`, double jeton, et trois
 espaces d'authentification qui se rejettent mutuellement. →
 [Authentification](architecture/authentification.md)
 

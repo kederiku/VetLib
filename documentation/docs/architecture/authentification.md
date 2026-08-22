@@ -92,7 +92,7 @@ La contrepartie est explicite : une révocation ne prend effet qu'à l'expiratio
 l'utilisateur en base, et un compte désactivé ou un rôle modifié est pris en compte à ce
 moment-là.
 
-## Le claim `kind` : le verrou entre les deux espaces
+## Le claim `kind` : le verrou entre les trois espaces
 
 Les trois espaces partagent le **même secret**, le **même émetteur** et la **même
 audience**. Sans marquage, un jeton signé pour l'un serait cryptographiquement valide

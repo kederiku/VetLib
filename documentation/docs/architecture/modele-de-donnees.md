@@ -23,6 +23,7 @@ erDiagram
   OWNERS    ||--o{ PETS              : "détient"
   OWNERS    ||--o{ APPOINTMENTS      : "réserve"
   PETS      ||--o{ APPOINTMENTS      : "concerne"
+  PLATFORM_ADMINS ||--o{ ADMIN_AUDIT_LOG : "consigne"
 
   CLINICS {
     uuid id PK
@@ -99,17 +100,39 @@ erDiagram
     bool is_active
     timestamptz last_login_at "compte dormant"
   }
+  ADMIN_AUDIT_LOG {
+    uuid id PK
+    timestamptz occurred_at "horodatage metier"
+    uuid actor_id FK "auteur, jamais NULL"
+    string actor_email "denormalise"
+    string action "11 valeurs, ex. clinic.suspended"
+    string target_type "clinic, owner, user"
+    uuid target_id
+    jsonb details "avant, apres"
+  }
 ```
 
 Les tables annotées **TENANT + RLS** portent `clinic_id` et sont protégées par la
 politique `tenant_isolation`. `owners`, `pets` et `outbox_events` ne le sont pas, pour
 les raisons expliquées dans
 [Isolation multi-tenant et RLS](multi-tenant-et-rls.md#ce-qui-est-tenanté-et-ce-qui-ne-lest-pas).
-`outbox_events` et `platform_admins` sont volontairement isolées du graphe : elles n'ont
-de relation avec rien. La seconde est la table des **exploitants** du produit, hors du
-modèle tenant ; elle n'a pas de RLS non plus, mais pour une autre raison — le rôle
+`outbox_events` est la seule table réellement isolée du graphe : elle n'a de relation avec
+rien. `platform_admins` et `admin_audit_log` forment, elles, un îlot à deux — reliées l'une
+à l'autre, mais à aucune table du modèle tenant. Ce sont celles des **exploitants** du
+produit ; elles n'ont pas de RLS non plus, mais pour une autre raison — le rôle
 applicatif n'a tout simplement **aucun droit** dessus. Voir
-[Isolation multi-tenant et RLS](multi-tenant-et-rls.md#platform_admins--protégée-par-le-privilège-pas-par-une-politique).
+[Isolation multi-tenant et RLS](multi-tenant-et-rls.md#platform_admins-et-admin_audit_log--protégées-par-le-privilège-pas-par-une-politique).
+
+`admin_audit_log` est le journal des actions du back-office, celui qui répond après coup à
+« qui a suspendu cette clinique, et quand ? ». Il est **append-only** : contrairement à
+toutes les tables métier, il n'a pas de `deleted_at`, et son port n'expose qu'un ajout
+(`add`) et une lecture — ni `UPDATE`, ni `DELETE`. Un fait consigné à tort ne se corrige
+donc pas : on en consigne un second. Attention à la nature de cette garantie : elle est
+portée par l'**interface**, pas par la base. Contrairement au soft delete, dont les
+`GRANT` du rôle applicatif rattrapent les oublis, rien n'empêcherait un `UPDATE` ici —
+le back-office écrit sous le rôle propriétaire du pool. Il n'a pas non plus de `created_at`, pour qu'il n'y
+ait jamais deux horodatages dont on se demande lequel fait foi — `occurred_at`, fourni par
+le port `Clock`, est le seul.
 
 ## Les conventions transverses
 

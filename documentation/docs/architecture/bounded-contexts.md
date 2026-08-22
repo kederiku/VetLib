@@ -22,17 +22,25 @@ d'un autre contexte**.
 
 ## `identity` — comptes, cliniques, authentification
 
-Le contexte le plus complet. Il détient trois tables : `clinics`, `users` (le personnel)
-et `owners` (les propriétaires d'animaux).
+Le contexte le plus complet. Il détient cinq tables : `clinics`, `users` (le personnel),
+`owners` (les propriétaires d'animaux), `platform_admins` (les exploitants de la
+plateforme) et `admin_audit_log` (leur journal d'actions).
 
-- **Domaine** : `Clinic`, `User`, `Owner`, et les value objects `Email`,
-  `HashedPassword`, `Role`, `Address`, `Timezone`.
-- **Application** : douze use cases — connexion, rafraîchissement, déconnexion,
-  enregistrement d'une clinique, mise à jour du profil…
+- **Domaine** : quatre entités — `Clinic`, `User`, `Owner` et `PlatformAdmin` (le compte
+  fondateur : ni `clinic_id`, ni rôle, l'autorisation y est binaire). La cinquième table a
+  pour pendant `AdminAuditEntry`, qui n'est pas une entité mais un **fait passé**, donc une
+  dataclass `frozen` : son port n'expose qu'un `add()` et une lecture, jamais de mise à jour
+  ni de suppression — une ligne d'audit fausse ne se corrige pas, on en ajoute une seconde.
+  Value objects : `Email`, `HashedPassword`, `Role`, `Address`, `Timezone` et
+  `AccountStatus` (filtre actif/inactif des listes du back-office).
+- **Application** : vingt-neuf use cases — connexion, rafraîchissement, déconnexion,
+  enregistrement d'une clinique, mise à jour du profil, et tout le back-office
+  (listes, suspension d'une clinique, changement de rôle…).
 - **Infrastructure** : hachage Argon2 via pwdlib, émission et vérification des JWT via
   PyJWT, repositories SQLAlchemy.
-- **Présentation** : cinq routeurs — `auth`, `clinics`, `owner_auth`, `owner_profile`,
-  `public_clinics`.
+- **Présentation** : dix routeurs — `auth`, `clinics`, `owner_auth`, `owner_profile`,
+  `public_clinics`, et les cinq du back-office : `admin_auth`, `admin_clinics`,
+  `admin_owners`, `admin_staff`, `admin_stats`.
 
 C'est ici que vit le cloisonnement des trois espaces d'authentification, décrit dans
 [Authentification](authentification.md).

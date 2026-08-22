@@ -17,15 +17,16 @@ téléchargement d'images Docker.
 | --------------------------- | -------------------------- | -------------------------------------------- |
 | **Docker** + Docker Compose | récente                    | PostgreSQL, Redis, MinIO, l'API et le worker |
 | **uv**                      | récente                    | Gestionnaire de paquets Python du backend    |
-| **Node**                    | 24 LTS, à jour             | Les deux portails et ce site                 |
+| **Node**                    | 24 LTS, à jour             | Les trois applications Next.js et ce site    |
 | **make**                    | présent sur macOS et Linux | Point d'entrée unique des commandes          |
 
 Le backend exige **Python 3.13** (`requires-python = ">=3.13,<3.14"`), mais vous n'avez
 pas à l'installer : `uv` s'en charge, en lisant `backend/.python-version`.
 
 La version de Node vient des fichiers `.nvmrc` — il y en a un par projet npm
-(`frontend-b2c/`, `frontend-b2b/`, `documentation/`), tous à `24`. C'est la **seule source
-de vérité** : le poste de développement, la CI et l'image Docker la lisent tous.
+(`frontend-b2c/`, `frontend-b2b/`, `frontend-admin/`, `documentation/`), tous à `24`.
+C'est la **seule source de vérité** : le poste de développement, la CI et l'image Docker
+la lisent tous.
 
 :::caution Node 24, mais une 24.x récente
 Docusaurus 3.10 déclare `"engines": {"node": ">=24.14"}`. Une 24.x plus ancienne
@@ -63,7 +64,8 @@ make install
 Cette cible installe, dans l'ordre :
 
 - les dépendances Python du backend (`uv sync`, qui crée aussi `backend/.venv`) ;
-- les paquets npm de `frontend-b2c/`, `frontend-b2b/` et `documentation/`.
+- les paquets npm de `frontend-b2c/`, `frontend-b2b/`, `frontend-admin/` et
+  `documentation/`.
 
 Il existe une variante `make install-ci` qui utilise `uv sync --locked` et `npm ci` :
 elle installe **exactement** les versions verrouillées et échoue si un fichier de
@@ -92,15 +94,15 @@ make check
 C'est la commande la plus utile du dépôt : elle enchaîne exactement les contrôles de la
 CI qui ne demandent pas Docker.
 
-| Étape         | Ce qu'elle vérifie                                               |
-| ------------- | ---------------------------------------------------------------- |
-| `lint`        | ruff : style et bogues courants du Python                        |
-| `typecheck`   | mypy en mode strict                                              |
-| `test-unit`   | les tests unitaires du backend                                   |
-| `check-front` | ESLint, build Next.js, `tsc` et Vitest sur les **deux** portails |
-| `check-docs`  | Prettier, `tsc` et build Docusaurus de ce site                   |
+| Étape         | Ce qu'elle vérifie                                                    |
+| ------------- | --------------------------------------------------------------------- |
+| `lint`        | ruff : style et bogues courants du Python                             |
+| `typecheck`   | mypy en mode strict                                                   |
+| `test-unit`   | les tests unitaires du backend                                        |
+| `check-front` | ESLint, build Next.js, `tsc` et Vitest sur les **trois** applications |
+| `check-docs`  | Prettier, `tsc` et build Docusaurus de ce site                        |
 
-Comptez plusieurs minutes au premier passage : deux builds Next.js et un build Docusaurus
+Comptez plusieurs minutes au premier passage : trois builds Next.js et un build Docusaurus
 partent de zéro.
 
 Pour aller plus loin, `make check-all` ajoute ce qui exige Docker (tests d'intégration
@@ -112,6 +114,7 @@ sur un vrai PostgreSQL, contrôle des migrations). Voir
 ```bash
 make dev-b2c   # portail propriétaires  -> http://localhost:3000
 make dev-b2b   # portail cliniques      -> http://localhost:3001
+make dev-admin # back-office plateforme -> http://localhost:3003
 make docs      # ce site                -> http://localhost:3002
 ```
 

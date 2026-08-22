@@ -6,7 +6,7 @@ body:
     id: besoin
     attributes:
       label: Besoin métier
-      description: Quel problème concret cela résout-il, et pour qui (clinique, propriétaire) ?
+      description: Quel problème concret cela résout-il, et pour qui (clinique, propriétaire, équipe plateforme) ?
     validations:
       required: true
 

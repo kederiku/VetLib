@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1
-# Dockerfile mutualisé pour les deux frontends Next.js (standalone).
-# Contexte de build : racine du repo ; ARG APP_DIR = frontend-b2c | frontend-b2b.
+# Dockerfile mutualisé pour les trois frontends Next.js (standalone).
+# Contexte de build : racine du repo ;
+# ARG APP_DIR = frontend-b2c | frontend-b2b | frontend-admin.
 #
-# Un seul Dockerfile pour les deux apps : docker-compose passe APP_DIR en argument de
-# build (frontend-b2c pour le portail :3000, frontend-b2b pour les cliniques :3001).
+# Un seul Dockerfile pour les trois apps : docker-compose passe APP_DIR en argument de
+# build (frontend-b2c pour le portail :3000, frontend-b2b pour les cliniques :3001,
+# frontend-admin pour le back-office :3003). Elles partagent le même socle Next et le
+# même `output: "standalone"` : un Dockerfile par application n'apporterait que trois
+# copies à maintenir en phase.
 # Multi-stage : base -> deps -> dev (compose) ou builder -> runner (image prod minimale).
 
 # ARG déclaré avant le premier FROM : portée "globale", mais chaque stage qui l'utilise
@@ -24,9 +28,9 @@ COPY ${APP_DIR}/package.json ${APP_DIR}/package-lock.json ./
 RUN npm ci
 
 # ----- Cible dev (code bind-mounté par compose, node_modules en volume anonyme) -----
-# Aucun COPY du code ici : compose monte ./frontend-b2c (ou -b2b) sur /app, et un volume
-# anonyme préserve le node_modules installé au stage deps (celui de l'hôte, compilé pour
-# macOS/Windows, serait incompatible avec l'Alpine du conteneur).
+# Aucun COPY du code ici : compose monte ./frontend-b2c (ou -b2b, ou -admin) sur /app, et
+# un volume anonyme préserve le node_modules installé au stage deps (celui de l'hôte,
+# compilé pour macOS/Windows, serait incompatible avec l'Alpine du conteneur).
 FROM deps AS dev
 ENV NODE_ENV=development
 CMD ["npm", "run", "dev"]

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 title: "Session et cookies côté client"
 description: "Le mutator customFetch et le rafraîchissement silencieux."
 keywords:
@@ -144,8 +144,9 @@ Orval génère tout le contrat. Mais ce portail ne les utilise jamais, et son mu
 rafraîchit **que** la session propriétaire.
 
 C'est délibéré : une session personnel éventuelle, si le même navigateur est connecté au
-portail B2B, ne doit ni être touchée ni servir de session ici. Le cloisonnement des deux
-espaces vaut aussi côté client.
+portail B2B, ne doit ni être touchée ni servir de session ici. Le cloisonnement des trois
+espaces vaut aussi côté client : le B2B et le back-office appliquent la même règle avec
+leur propre `REFRESH_URL` (`/api/v1/auth/refresh` et `/api/v1/admin/auth/refresh`).
 
 ## La désérialisation
 
