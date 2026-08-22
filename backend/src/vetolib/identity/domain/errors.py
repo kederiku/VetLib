@@ -88,3 +88,29 @@ class UserNotFoundError(EntityNotFoundError):
     """Utilisateur inexistant ou soft-deleted -> 404."""
 
     code = "identity.user_not_found"
+
+
+class ClinicSuspendedError(PermissionDeniedError):
+    """Clinique suspendue par la plateforme : tout son personnel est bloque -> 403.
+
+    A ne pas confondre avec ClinicNotFoundError (404), qui signale une
+    clinique inexistante ou effacee. Ici la clinique existe, ses donnees sont
+    intactes, et la reactivation est un clic dans le back-office : le message
+    metier correct est "suspendue", pas "introuvable".
+
+    Levee APRES la verification du mot de passe et de user.is_active : l'etat
+    d'une clinique ne se revele qu'a quelqu'un qui a deja prouve son identite.
+    """
+
+    code = "identity.clinic_suspended"
+
+
+class OwnerInactiveError(PermissionDeniedError):
+    """Compte proprietaire desactive par la plateforme -> 403.
+
+    Pendant B2C de UserInactiveError. Comme pour le staff, l'erreur n'est
+    levee qu'une fois le mot de passe verifie : sinon elle deviendrait un
+    oracle permettant de tester l'existence d'un compte.
+    """
+
+    code = "identity.owner_inactive"

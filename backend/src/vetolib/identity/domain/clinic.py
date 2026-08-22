@@ -14,7 +14,11 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from vetolib.identity.domain.events import ClinicRegistered
+from vetolib.identity.domain.events import (
+    ClinicReactivated,
+    ClinicRegistered,
+    ClinicSuspended,
+)
 from vetolib.identity.domain.value_objects import Address, Email, Timezone
 from vetolib.shared.domain.entity import Entity
 
@@ -40,6 +44,17 @@ class Clinic(Entity):
     # l'agenda interpretera les horaires d'ouverture dans CE fuseau, la base
     # stockant tout en UTC. Defaut France, marche principal du produit.
     timezone: str = "Europe/Paris"
+    # Statut d'exploitation, pilote par le back-office plateforme.
+    # DISTINCT de deleted_at, et ce n'est pas un detail : deleted_at LIBERE
+    # l'email dans l'index unique partiel uq_clinics_email_active. Une
+    # clinique "supprimee" verrait donc son adresse reprise par un tiers, et
+    # sa restauration echouerait alors sur une violation d'unicite -- sans
+    # aucun moyen de s'en sortir depuis l'application. Une clinique suspendue
+    # garde son email reserve, ses donnees et ses rendez-vous : elle est
+    # seulement gelee, et la reactivation est garantie de fonctionner.
+    # deleted_at reste reserve a l'effacement definitif (RGPD), irreversible
+    # par nature.
+    is_active: bool = True
 
     @classmethod
     def register(
@@ -87,3 +102,28 @@ class Clinic(Entity):
         self.phone = phone
         self.address = address
         self.timezone = timezone.value
+
+    def suspend(self, now: datetime) -> ClinicSuspended | None:
+        """Coupe l'acces de la clinique et de tout son personnel.
+
+        IDEMPOTENT : suspendre une clinique deja suspendue ne leve pas
+        d'erreur et ne renvoie aucun evenement. Un double-clic sur un bouton
+        de back-office ne doit pas afficher une alerte rouge, et l'outbox ne
+        doit pas recevoir un fait qui ne s'est pas produit. Le use case
+        appelant repond alors 200 avec l'etat courant.
+
+        Renvoie l'evenement plutot que de le publier : c'est le use case qui
+        l'ajoute au UnitOfWork, pour qu'il parte dans l'outbox avec la MEME
+        transaction que l'UPDATE (pattern Outbox, comme a l'inscription).
+        """
+        if not self.is_active:
+            return None
+        self.is_active = False
+        return ClinicSuspended(occurred_at=now, clinic_id=self.id, clinic_name=self.name)
+
+    def reactivate(self, now: datetime) -> ClinicReactivated | None:
+        """Retablit l'acces d'une clinique suspendue (idempotent, cf. suspend)."""
+        if self.is_active:
+            return None
+        self.is_active = True
+        return ClinicReactivated(occurred_at=now, clinic_id=self.id, clinic_name=self.name)

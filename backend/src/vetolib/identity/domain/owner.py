@@ -17,7 +17,11 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from vetolib.identity.domain.events import OwnerRegistered
+from vetolib.identity.domain.events import (
+    OwnerDeactivated,
+    OwnerReactivated,
+    OwnerRegistered,
+)
 from vetolib.identity.domain.value_objects import (
     Address,
     Email,
@@ -42,6 +46,12 @@ class Owner(Entity):
     notification_preferences: NotificationPreferences = field(
         default_factory=NotificationPreferences
     )
+    # Statut du compte, pilote par le back-office plateforme. Meme raisonnement
+    # que pour Clinic.is_active : deleted_at libererait l'email dans l'index
+    # unique partiel uq_owners_email_active, ce qui rendrait la reactivation
+    # impossible des qu'un tiers l'aurait repris. Un compte desactive garde son
+    # email, ses animaux et ses rendez-vous ; seule la connexion est coupee.
+    is_active: bool = True
 
     @classmethod
     def register(
@@ -102,3 +112,24 @@ class Owner(Entity):
     def change_password(self, hashed: HashedPassword) -> None:
         """Remplace l'empreinte (rehash transparent au login)."""
         self.hashed_password = hashed
+
+    def deactivate(self, now: datetime) -> OwnerDeactivated | None:
+        """Coupe l'acces du proprietaire au portail B2C (idempotent).
+
+        Ne touche NI aux animaux, NI aux rendez-vous : les cliniques
+        continuent de les voir, un historique medical ne disparait pas parce
+        qu'un compte est ferme. Renvoie None si le compte etait deja
+        desactive, pour que le back-office reste idempotent (voir
+        Clinic.suspend pour le raisonnement complet).
+        """
+        if not self.is_active:
+            return None
+        self.is_active = False
+        return OwnerDeactivated(occurred_at=now, owner_id=self.id, email=self.email.value)
+
+    def reactivate(self, now: datetime) -> OwnerReactivated | None:
+        """Retablit l'acces d'un compte desactive (idempotent, cf. deactivate)."""
+        if self.is_active:
+            return None
+        self.is_active = True
+        return OwnerReactivated(occurred_at=now, owner_id=self.id, email=self.email.value)

@@ -11,7 +11,10 @@ encore la clinique, la recherche par email doit donc voir tous les tenants.
 Sécurité : toute cause d'échec côté identifiants (email mal formé, email
 inconnu, mauvais mot de passe) produit la même InvalidCredentialsError et,
 autant que possible, le même temps de réponse - on ne donne aucun indice
-permettant d'énumérer les comptes existants.
+permettant d'énumérer les comptes existants. Les refus d'ETAT (compte
+désactivé, clinique suspendue) sont en revanche explicites, mais ils
+n'arrivent qu'APRES la vérification du mot de passe : ils ne renseignent
+donc que la personne légitime.
 """
 
 from vetolib.identity.application.dto import CurrentUser, LoginCommand, TokenPair
@@ -23,6 +26,7 @@ from vetolib.identity.application.ports import (
 )
 from vetolib.identity.domain.errors import (
     ClinicNotFoundError,
+    ClinicSuspendedError,
     InvalidCredentialsError,
     UserInactiveError,
 )
@@ -86,6 +90,12 @@ class AuthenticateUser:
             clinic = await uow.clinics.get_by_id(user.clinic_id)
             if clinic is None:
                 raise ClinicNotFoundError("Clinique introuvable.")
+            # Troisieme et dernier controle, dans cet ordre precis :
+            # mot de passe -> compte -> clinique. Une clinique suspendue
+            # bloque TOUT son personnel, y compris ses gerants, mais on ne
+            # le revele qu'a qui a deja prouve son identite.
+            if not clinic.is_active:
+                raise ClinicSuspendedError("Clinique suspendue.")
 
             # Pas de commit ici : lecture seule (hors rehash) et les JWT
             # sont stateless, rien à persister pour ouvrir la session.

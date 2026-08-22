@@ -5,8 +5,10 @@ Mêmes protections que le login staff (AuthenticateUser) :
   InvalidCredentialsError (pas d'oracle d'existence de compte) ;
 - vérification d'un hash factice quand l'email est inconnu (temps constant) ;
 - rehash transparent si les paramètres Argon2 ont évolué.
-Différences : pas de clinique à charger, pas de is_active (la révocation
-d'un owner = soft delete, indistinguable d'un compte inexistant).
+Différence avec le staff : pas de clinique à charger. Le compte a en
+revanche, depuis l'arrivée du back-office plateforme, son propre drapeau
+is_active -- vérifié APRÈS le mot de passe, exactement comme côté staff,
+pour ne pas en faire un oracle d'existence de compte.
 """
 
 from vetolib.identity.application.dto import CurrentOwner, LoginCommand, TokenPair
@@ -16,7 +18,7 @@ from vetolib.identity.application.ports import (
     OwnerTokenProvider,
     PasswordHasher,
 )
-from vetolib.identity.domain.errors import InvalidCredentialsError
+from vetolib.identity.domain.errors import InvalidCredentialsError, OwnerInactiveError
 from vetolib.identity.domain.value_objects import Email, HashedPassword
 
 
@@ -52,6 +54,10 @@ class AuthenticateOwner:
             )
             if not valid:
                 raise InvalidCredentialsError("Identifiants invalides.")
+            # Compte desactive par le back-office : refus explicite, mais
+            # seulement une fois le mot de passe verifie.
+            if not owner.is_active:
+                raise OwnerInactiveError("Compte désactivé.")
 
             if new_hash is not None:
                 # Rehash transparent : migre le parc au fil des connexions.

@@ -70,3 +70,69 @@ class OwnerRegistered(DomainEvent):
             "email": self.email,
             "first_name": self.first_name,
         }
+
+
+@dataclass(frozen=True, kw_only=True)
+class ClinicSuspended(DomainEvent):
+    """Le back-office plateforme vient de suspendre l'acces d'une clinique.
+
+    Emis par Clinic.suspend, et UNIQUEMENT si la clinique etait active : une
+    suspension idempotente (deja suspendue) ne produit aucun evenement, sinon
+    un double-clic remplirait l'outbox de faits qui ne se sont pas produits.
+
+    Consommateur naturel, en asynchrone : prevenir le gerant par email. Les
+    rendez-vous deja pris ne sont volontairement PAS annules -- ce serait une
+    decision metier lourde, pas un effet technique de la suspension.
+    """
+
+    event_type: ClassVar[str] = "identity.clinic_suspended"
+
+    clinic_id: uuid.UUID
+    clinic_name: str
+
+    def payload(self) -> dict[str, object]:
+        return {"clinic_id": str(self.clinic_id), "clinic_name": self.clinic_name}
+
+
+@dataclass(frozen=True, kw_only=True)
+class ClinicReactivated(DomainEvent):
+    """L'acces d'une clinique suspendue vient d'etre retabli."""
+
+    event_type: ClassVar[str] = "identity.clinic_reactivated"
+
+    clinic_id: uuid.UUID
+    clinic_name: str
+
+    def payload(self) -> dict[str, object]:
+        return {"clinic_id": str(self.clinic_id), "clinic_name": self.clinic_name}
+
+
+@dataclass(frozen=True, kw_only=True)
+class OwnerDeactivated(DomainEvent):
+    """Le compte d'un proprietaire vient d'etre desactive par la plateforme.
+
+    Desactivation et NON suppression : les animaux et les rendez-vous restent
+    en base et restent visibles des cliniques concernees. Seule la connexion
+    au portail proprietaires est coupee.
+    """
+
+    event_type: ClassVar[str] = "identity.owner_deactivated"
+
+    owner_id: uuid.UUID
+    email: str
+
+    def payload(self) -> dict[str, object]:
+        return {"owner_id": str(self.owner_id), "email": self.email}
+
+
+@dataclass(frozen=True, kw_only=True)
+class OwnerReactivated(DomainEvent):
+    """Le compte d'un proprietaire desactive vient d'etre retabli."""
+
+    event_type: ClassVar[str] = "identity.owner_reactivated"
+
+    owner_id: uuid.UUID
+    email: str
+
+    def payload(self) -> dict[str, object]:
+        return {"owner_id": str(self.owner_id), "email": self.email}

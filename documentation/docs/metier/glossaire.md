@@ -91,6 +91,14 @@ selon une politique. Le socle de l'isolation multi-tenant. Voir
 
 **Soft delete** — Suppression logique : on pose `deleted_at`, on ne supprime jamais
 physiquement. Les `GRANT` du rôle applicatif n'incluent d'ailleurs pas `DELETE`.
+À ne pas confondre avec la **suspension**, ci-dessous.
+
+**Suspension / désactivation** — Le gel **réversible** d'un accès, porté par la colonne
+`is_active` : une clinique suspendue ou un compte désactivé ne peut plus se connecter,
+mais garde son adresse e-mail réservée et toutes ses données. C'est ce qui la distingue
+du soft delete, qui libère l'e-mail dans les index uniques partiels et interdit donc
+tout retour en arrière. Voir
+[Modèle de données](../architecture/modele-de-donnees.md#suspendre-nest-pas-supprimer--la-colonne-is_active).
 
 **Jeton d'accès / de rafraîchissement** — 15 minutes / 7 jours. Transportés en cookies
 `HttpOnly`, jamais dans un corps JSON.

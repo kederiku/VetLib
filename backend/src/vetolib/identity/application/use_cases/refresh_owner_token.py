@@ -10,7 +10,7 @@ TODO: denylist des `jti` consommés (Redis) pour invalider un refresh volé.
 from vetolib.identity.application.dto import CurrentOwner, TokenPair
 from vetolib.identity.application.mappers import to_current_owner
 from vetolib.identity.application.ports import IdentityUoWFactory, OwnerTokenProvider
-from vetolib.identity.domain.errors import InvalidTokenError
+from vetolib.identity.domain.errors import InvalidTokenError, OwnerInactiveError
 
 
 class RefreshOwnerToken:
@@ -26,4 +26,8 @@ class RefreshOwnerToken:
             owner = await uow.owners.get_by_id(claims.owner_id)
             if owner is None:
                 raise InvalidTokenError("Session expirée.")
+            # Sinon une session ouverte avant la desactivation se
+            # prolongerait indefiniment, rotation apres rotation.
+            if not owner.is_active:
+                raise OwnerInactiveError("Compte désactivé.")
             return self._tokens.issue_pair(owner), to_current_owner(owner)
