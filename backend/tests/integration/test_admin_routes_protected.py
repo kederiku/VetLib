@@ -20,15 +20,25 @@ mais ne protege plus la SUIVANTE.
 Pourquoi ce test vit dans tests/integration : l'arbre de dependances de
 get_current_admin descend jusqu'a get_sessionmaker, qui lit app.state --
 rempli seulement par le lifespan. La fixture "client" fournit exactement cela.
+
+Pourquoi une BOUCLE et non un @pytest.mark.parametrize, qui donnerait pourtant
+un cas de test par route : les parametres d'un parametrize sont evalues a la
+COLLECTE, donc avant toute fixture. Enumerer les routes exige de construire
+l'application, donc d'importer vetolib.main -- et ce module importe le broker
+TaskIQ, qui lit la configuration DES SON IMPORT (voir la docstring d'app_env
+dans conftest.py). Un import a la collecte figerait le broker sur l'URL Redis
+PAR DEFAUT, localhost:6379, au lieu de celle du conteneur de test. Le piege
+est sournois : en developpement docker-compose ecoute justement sur ce port,
+donc tout passe -- et la CI casse. La boucle, elle, s'execute apres les
+fixtures ; le message d'assertion nomme la route fautive, on ne perd rien du
+diagnostic.
 """
 
 import re
 
 import httpx
-import pytest
 
 from tests.integration.conftest import CreateAdmin
-from vetolib.main import create_app
 
 _PREFIXE_ADMIN = "/api/v1/admin"
 
@@ -65,9 +75,11 @@ def _routes_admin() -> list[tuple[str, str]]:
     admin du schema. De toute facon, masquer une route n'est pas un controle
     d'acces, et le schema complet est deja publie.
 
-    Appelee au moment de la COLLECTE pytest (parametrize), donc avant toute
-    fixture : create_app() et openapi() n'ouvrent aucune connexion.
+    L'import de vetolib.main est fait ICI, dans le corps de la fonction, et
+    jamais en tete de module : voir la docstring de module pour la raison.
     """
+    from vetolib.main import create_app
+
     schema = create_app().openapi()
     couples: list[tuple[str, str]] = []
     for chemin, operations in schema.get("paths", {}).items():
@@ -92,8 +104,14 @@ def _url(chemin: str) -> str:
     return re.sub(r"\{[^}]+\}", _UUID_FACTICE, chemin)
 
 
-def test_l_enumeration_des_routes_admin_n_est_pas_vide() -> None:
+def test_l_enumeration_des_routes_admin_n_est_pas_vide(app_env: dict[str, str]) -> None:
     """Le garde-fou du garde-fou.
+
+    Il demande `app_env` alors qu'il ne s'en sert pas : c'est ce qui garantit
+    que la configuration de test est posee AVANT le premier import de
+    vetolib.main. Sans cette dependance, ce test -- le premier du fichier --
+    importerait l'application, donc le broker TaskIQ, qui figerait l'URL Redis
+    par defaut pour toute la session.
 
     Si le prefixe changeait, ou si le routeur n'etait plus branche dans
     main.py, _routes_admin() rendrait une liste vide et les tests parametres
@@ -108,26 +126,25 @@ def test_l_enumeration_des_routes_admin_n_est_pas_vide() -> None:
     assert ROUTES_DE_SESSION.issubset(set(routes))
 
 
-@pytest.mark.parametrize(("methode", "chemin"), _routes_admin())
 async def test_toute_route_admin_exige_le_cookie_administrateur(
-    client: httpx.AsyncClient, methode: str, chemin: str
+    client: httpx.AsyncClient,
 ) -> None:
     """Sans cookie vetolib_admin_access, chaque route admin repond 401."""
-    if (methode, chemin) in ROUTES_DE_SESSION:
-        pytest.skip("Route d'obtention de session : publique par construction.")
+    for methode, chemin in _routes_admin():
+        if (methode, chemin) in ROUTES_DE_SESSION:
+            continue
 
-    reponse = await client.request(methode, _url(chemin), json={})
+        reponse = await client.request(methode, _url(chemin), json={})
 
-    assert reponse.status_code == 401, (
-        f"{methode} {chemin} a repondu {reponse.status_code} sans authentification "
-        f"(401 attendu). Cette route ne passe probablement pas par un routeur admin "
-        f"protege par Depends(get_current_admin)."
-    )
+        assert reponse.status_code == 401, (
+            f"{methode} {chemin} a repondu {reponse.status_code} sans authentification "
+            f"(401 attendu). Cette route ne passe probablement pas par un routeur admin "
+            f"protege par Depends(get_current_admin)."
+        )
 
 
-@pytest.mark.parametrize(("methode", "chemin"), _routes_admin())
 async def test_un_jeton_de_personnel_ne_vaut_rien_sur_l_espace_plateforme(
-    client: httpx.AsyncClient, methode: str, chemin: str
+    client: httpx.AsyncClient,
 ) -> None:
     """Le cloisonnement, verifie route par route et non une seule fois.
 
@@ -156,15 +173,18 @@ async def test_un_jeton_de_personnel_ne_vaut_rien_sur_l_espace_plateforme(
     # Cookie pose sur le CLIENT et non par requete : httpx deprecie la
     # forme par requete, et chaque test recoit de toute facon un client neuf.
     client.cookies.set("vetolib_admin_access", jeton_staff)
-    reponse = await client.request(methode, _url(chemin), json={})
 
-    # Les routes de session valident un corps : un cookie recopie n'y change
-    # rien, elles sont legitimement publiques (401 pour login/refresh sans
-    # corps valide, 422 si le corps est refuse, 204 pour logout).
-    attendus = {401, 422, 204} if (methode, chemin) in ROUTES_DE_SESSION else {401}
-    assert reponse.status_code in attendus, (
-        f"{methode} {chemin} a accepte un jeton de personnel ({reponse.status_code})."
-    )
+    for methode, chemin in _routes_admin():
+        reponse = await client.request(methode, _url(chemin), json={})
+
+        # Les routes de session valident un corps : un cookie recopie n'y
+        # change rien, elles sont legitimement publiques (401 pour
+        # login/refresh sans corps valide, 422 si le corps est refuse,
+        # 204 pour logout).
+        attendus = {401, 422, 204} if (methode, chemin) in ROUTES_DE_SESSION else {401}
+        assert reponse.status_code in attendus, (
+            f"{methode} {chemin} a accepte un jeton de personnel ({reponse.status_code})."
+        )
 
 
 async def test_un_jeton_plateforme_ne_vaut_rien_sur_les_deux_autres_espaces(
