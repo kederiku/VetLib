@@ -33,7 +33,7 @@ DOCS    := documentation
 # sans cela, un fichier nommé "test" ou "install" empêcherait la cible de tourner.
 .PHONY: help env install install-ci up up-full down down-volumes ps logs restart \
         dev-api worker scheduler dev-b2c dev-b2b \
-        migrate revision openapi generate-api \
+        migrate revision create-admin openapi generate-api \
         lint format typecheck test test-unit test-integration coverage \
         check-migrations audit \
         lint-front build-front typecheck-front test-front coverage-front check-front \
@@ -129,6 +129,17 @@ migrate: ## Applique toutes les migrations en attente sur la base
 revision: ## Crée un fichier de migration vide : make revision m="ma description"
 	@test -n "$(m)" || (echo 'Usage : make revision m="description de la migration"' && exit 1)
 	$(MAKE) -C $(BACKEND) revision m="$(m)"
+
+# -----------------------------------------------------------------------------
+# Comptes du back-office plateforme (aucune inscription publique, par choix)
+# -----------------------------------------------------------------------------
+
+create-admin: ## Crée un compte du back-office : make create-admin email=prenom.nom@exemple.fr
+	@# Le mot de passe est demandé à l'invite, jamais passé en argument (il
+	@# serait visible dans l'historique du shell et dans `ps`). Options
+	@# supplémentaires via args= : --reset-password, --disable, --enable.
+	@test -n "$(email)" || (echo 'Usage : make create-admin email=prenom.nom@exemple.fr' && exit 1)
+	$(MAKE) -C $(BACKEND) create-admin email="$(email)" first="$(first)" last="$(last)" args="$(args)"
 
 # -----------------------------------------------------------------------------
 # Client API TypeScript (Orval génère les hooks TanStack Query depuis l'OpenAPI).

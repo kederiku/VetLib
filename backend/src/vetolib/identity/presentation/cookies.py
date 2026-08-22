@@ -131,3 +131,72 @@ def clear_owner_auth_cookies(response: Response, settings: Settings) -> None:
         secure=settings.cookie_secure,
         samesite="lax",
     )
+
+
+# --- Cookies des SUPER-ADMINS (back-office plateforme) ---------------------
+# Troisieme jeu de cookies, et le plus protege des trois. Deux differences
+# assumees par rapport aux espaces staff et proprietaire :
+#
+# 1. PATH RESTREINT DES L'ACCESS. Les deux autres espaces posent leur cookie
+#    d'access sur "/" : il part donc sur toutes les requetes vers l'API. Ici
+#    non. Le back-office n'appelle QUE /api/v1/admin/*, alors le cookie le
+#    plus puissant du systeme ne suit que ces routes. En developpement, les
+#    trois frontends partagent le meme hote (localhost, les cookies ignorent
+#    le port) : cette restriction est ce qui empeche le cookie admin de
+#    partir avec les appels ordinaires du B2C ou du B2B.
+#    Consequence a connaitre : une future route admin posee HORS de ce
+#    prefixe ne recevrait pas le cookie et repondrait 401 -- un echec
+#    visible immediatement, jamais silencieux.
+#
+# 2. SameSite=Strict AU LIEU DE Lax. Le back-office n'a aucun parcours
+#    d'entree cross-site (pas d'OAuth, pas de lien magique par email, pas de
+#    retour de paiement) : le seul inconvenient de Strict -- le cookie
+#    n'accompagne pas une navigation venue d'un lien externe -- est ici sans
+#    effet, l'application appelant l'API en XHR. Contrainte a respecter en
+#    production : l'API et le back-office doivent rester sur le meme domaine
+#    enregistrable (par exemple api.exemple.fr et admin.exemple.fr).
+ADMIN_ACCESS_COOKIE = "vetolib_admin_access"
+ADMIN_REFRESH_COOKIE = "vetolib_admin_refresh"
+ADMIN_COOKIE_PATH = "/api/v1/admin"
+ADMIN_REFRESH_COOKIE_PATH = "/api/v1/admin/auth/refresh"
+
+
+def set_admin_auth_cookies(response: Response, pair: TokenPair, settings: Settings) -> None:
+    """Pose les deux cookies du back-office (path restreint, SameSite strict)."""
+    response.set_cookie(
+        ADMIN_ACCESS_COOKIE,
+        pair.access_token,
+        max_age=settings.jwt_access_ttl_seconds,
+        path=ADMIN_COOKIE_PATH,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )
+    response.set_cookie(
+        ADMIN_REFRESH_COOKIE,
+        pair.refresh_token,
+        # TTL dedie : 12 h, contre 7 jours pour les deux autres espaces.
+        max_age=settings.jwt_admin_refresh_ttl_seconds,
+        path=ADMIN_REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )
+
+
+def clear_admin_auth_cookies(response: Response, settings: Settings) -> None:
+    """Expire les deux cookies admin (delete_cookie doit repeter path/flags)."""
+    response.delete_cookie(
+        ADMIN_ACCESS_COOKIE,
+        path=ADMIN_COOKIE_PATH,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )
+    response.delete_cookie(
+        ADMIN_REFRESH_COOKIE,
+        path=ADMIN_REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )

@@ -17,17 +17,23 @@ assurée par un TRUNCATE des tables avant chaque test (fixture "client").
 """
 
 import os
-from collections.abc import AsyncIterator, Iterator
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import pytest
+import redis.asyncio as aioredis
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.community.redis import RedisContainer
 from testcontainers.postgres import PostgresContainer
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+# Signature de la fabrique de comptes du back-office (voir la fixture en bas).
+CreateAdmin = Callable[..., Awaitable[uuid.UUID]]
 
 
 @pytest.fixture(scope="session")
@@ -101,15 +107,17 @@ def app_env(
 
 
 @pytest.fixture
-async def client(app_env: dict[str, str]) -> AsyncIterator[httpx.AsyncClient]:
-    """Client HTTP sur l'app ASGI, base vidée avant chaque test, lifespan actif
-    (engine + broker démarrés comme en prod).
+async def base_vierge(app_env: dict[str, str]) -> None:
+    """Vide PostgreSQL et Redis avant le test.
 
-    - TRUNCATE plutôt que des transactions annulées : les tests exercent de
-      vrais commits (index uniques, outbox), on repart donc d'une base vide.
-    - ASGITransport parle directement à l'app en mémoire, sans ouvrir de port
-      réseau, mais le cycle requête/réponse reste complet (middlewares,
-      gestionnaires d'erreurs, cookies conservés par le client entre appels).
+    Fixture separee de `client` parce que tous les tests n'ont pas besoin
+    d'un client HTTP : ceux de la commande d'administration, par exemple,
+    parlent directement a la base. Sans etat propre, ils se pollueraient les
+    uns les autres (un compte cree par le test precedent ferait echouer une
+    creation, un compteur d'echecs ferait apparaitre un 429 inexplicable).
+
+    TRUNCATE plutôt que des transactions annulées : les tests exercent de
+    vrais commits (index uniques, outbox), on repart donc d'une base vide.
     """
     engine = create_async_engine(app_env["DATABASE_URL"])
     async with engine.begin() as connection:
@@ -121,11 +129,29 @@ async def client(app_env: dict[str, str]) -> AsyncIterator[httpx.AsyncClient]:
             text(
                 "TRUNCATE users, clinics, owners, pets, appointments, "
                 "schedule_exceptions, weekly_schedules, appointment_types, "
-                "resources, outbox_events CASCADE"
+                "resources, platform_admins, outbox_events CASCADE"
             )
         )
     await engine.dispose()
 
+    # Redis aussi doit repartir vide : le compteur d'echecs de connexion du
+    # back-office y vit (limitation de debit). Sans cette purge, les cinq
+    # echecs volontaires d'un test bloqueraient le login des tests suivants
+    # -- une fuite d'etat entre tests, dont le symptome (un 429 inexplicable)
+    # est particulierement penible a diagnostiquer.
+    redis = aioredis.Redis.from_url(app_env["REDIS_URL"])
+    await redis.flushdb()
+    await redis.aclose()
+
+
+@pytest.fixture
+async def client(base_vierge: None) -> AsyncIterator[httpx.AsyncClient]:
+    """Client HTTP sur l'app ASGI, base vidée avant chaque test, lifespan actif.
+
+    ASGITransport parle directement à l'app en mémoire, sans ouvrir de port
+    réseau, mais le cycle requête/réponse reste complet (middlewares,
+    gestionnaires d'erreurs, cookies conservés par le client entre appels).
+    """
     from vetolib.main import create_app
 
     app = create_app()
@@ -133,3 +159,41 @@ async def client(app_env: dict[str, str]) -> AsyncIterator[httpx.AsyncClient]:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as http_client:
             yield http_client
+
+
+@pytest.fixture
+async def create_platform_admin(app_env: dict[str, str]) -> AsyncIterator[CreateAdmin]:
+    """Fabrique un compte du back-office plateforme, avec un VRAI hash Argon2.
+
+    Il n'existe aucune route d'inscription pour cet espace (c'est le sujet) :
+    les tests passent donc par la couche infrastructure, exactement comme la
+    commande `make create-admin`. Le hash doit etre reel pour que le compte
+    soit ensuite loguable via POST /api/v1/admin/auth/login comme en
+    production.
+    """
+    engine = create_async_engine(app_env["DATABASE_URL"])
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+
+    from vetolib.identity.domain.platform_admin import PlatformAdmin
+    from vetolib.identity.domain.value_objects import Email, HashedPassword
+    from vetolib.identity.infrastructure.password_hasher import PwdlibPasswordHasher
+    from vetolib.identity.infrastructure.uow import SqlAlchemyIdentityUnitOfWork
+
+    async def _creer(email: str, mot_de_passe: str, *, actif: bool = True) -> uuid.UUID:
+        hashed = await PwdlibPasswordHasher().hash(mot_de_passe)
+        async with SqlAlchemyIdentityUnitOfWork(sessionmaker, app_db_role="vetolib_app") as uow:
+            admin = PlatformAdmin.create(
+                email=Email(email),
+                hashed_password=HashedPassword(hashed),
+                first_name="Cedric",
+                last_name="Delagree",
+                now=datetime.now(UTC),
+            )
+            if not actif:
+                admin.deactivate()
+            await uow.admins.add(admin)
+            await uow.commit()
+            return admin.id
+
+    yield _creer
+    await engine.dispose()

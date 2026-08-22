@@ -34,7 +34,7 @@ et `owners` (les propriétaires d'animaux).
 - **Présentation** : cinq routeurs — `auth`, `clinics`, `owner_auth`, `owner_profile`,
   `public_clinics`.
 
-C'est ici que vit le cloisonnement des deux espaces d'authentification, décrit dans
+C'est ici que vit le cloisonnement des trois espaces d'authentification, décrit dans
 [Authentification](authentification.md).
 
 ## `patients` — les animaux

@@ -21,3 +21,26 @@ paths-ignore:
   # que ce code n'est pas ecrit a la main.
   - documentation/build
   - documentation/.docusaurus
+
+# Regles ecartees, avec la raison. Une exclusion sans justification est une
+# alerte qu'on a cachee ; on n'en ajoute donc qu'apres avoir constate que la
+# regle se trompe SUR CE CODE, et on ecrit pourquoi.
+query-filters:
+  # "Statement has no effect" sur le corps `...` des methodes de Protocol.
+  # Les ports de l'architecture hexagonale sont des typing.Protocol : leurs
+  # methodes n'ont, par construction, aucun corps. `...` est la forme
+  # idiomatique recommandee par la documentation Python pour ce cas precis,
+  # et c'est le style de tous les ports du projet. La regle vise les
+  # expressions oubliees dans du code executable ; ici il n'y a pas de code
+  # executable du tout.
+  - exclude:
+      id: py/ineffectual-statement
+  # "__eq__ not overridden when adding attributes" sur les entites du domaine.
+  # Toutes heritent de shared/domain/entity.py, qui definit VOLONTAIREMENT
+  # __eq__ et __hash__ sur le seul `id` : une entite se definit par son
+  # IDENTITE, pas par ses attributs. Deux instances du meme enregistrement,
+  # l'une plus fraiche que l'autre, doivent rester egales. Les redefinir dans
+  # chaque sous-classe casserait precisement l'invariant que la classe de base
+  # etablit -- la regle prend ici la decision de conception pour un oubli.
+  - exclude:
+      id: py/missing-equals

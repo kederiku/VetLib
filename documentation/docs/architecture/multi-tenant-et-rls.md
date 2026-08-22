@@ -157,6 +157,7 @@ aux flux pré-tenant de fonctionner, et c'est pourquoi tout le reste passe par
 | `owners`                                                                                    | non         | non | Un propriétaire est un compte **global** : il consultera plusieurs cliniques |
 | `pets`                                                                                      | non         | non | Un animal appartient à son propriétaire, pas à une clinique                  |
 | `resources`, `weekly_schedules`, `schedule_exceptions`, `appointment_types`, `appointments` | oui         | oui | Tout l'agenda est propre à une clinique                                      |
+| `platform_admins`                                                                           | non         | non | Table des **exploitants**, hors du modèle tenant — voir juste en dessous     |
 | `outbox_events`                                                                             | non         | non | Table technique, lue par le relais hors de tout contexte tenant              |
 
 Les deux lignes qui surprennent — `owners` et `pets` — sont documentées dans les
@@ -167,6 +168,47 @@ tables tenantées des autres contextes, chacune protégée par sa propre politiq
 
 `outbox_events` est un cas différent : une politique RLS y **masquerait des événements**
 au relais, qui travaille pour toutes les cliniques à la fois.
+
+### `platform_admins` : protégée par le privilège, pas par une politique
+
+La table des administrateurs de la plateforme n'a pas non plus de `clinic_id` — un
+exploitant n'appartient à aucune clinique — donc aucune politique n'aurait de colonne sur
+laquelle porter. Sa protection est d'une autre nature : la migration `0008` **révoque**
+explicitement tout droit du rôle applicatif `vetolib_app` dessus. Une requête émise par
+erreur sous une transaction tenant échoue alors en « permission denied », au lieu de
+renvoyer silencieusement des empreintes de mots de passe tout-puissants.
+
+Attention au piège que ce `REVOKE` désamorce : `docker/postgres-init/02-app-role.sh` pose
+un `ALTER DEFAULT PRIVILEGES` qui accorde automatiquement `SELECT/INSERT/UPDATE` au rôle
+applicatif sur **toute** table créée ensuite. Confortable pour les tables métier ; c'est
+exactement ce qu'il ne faut pas ici.
+
+### L'entorse assumée : le back-office lit à travers les tenants
+
+Le back-office plateforme ([ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md))
+liste les cliniques, les propriétaires et le personnel **toutes cliniques confondues**.
+Ses use cases s'exécutent donc sous UoW **système** : le même mode que la connexion, mais
+utilisé pour lire massivement au lieu de résoudre une identité. Dans cet espace, et dans
+celui-là seulement, **la Row-Level Security ne protège plus rien**.
+
+Il faut le dire clairement plutôt que de le laisser croire : la barrière y est du code, et
+le code s'oublie. Cinq contrôles la compensent, aucun n'est facultatif.
+
+1. La dépendance d'authentification est posée sur le **routeur**, pas route par route :
+   une route ajoutée demain est protégée par construction.
+2. Un test d'intégration **énumère** toutes les routes `/api/v1/admin/*` de l'application
+   et exige un `401` strict sans cookie. Il ne peut pas se périmer, puisqu'il découvre les
+   routes dans l'application elle-même.
+3. Le claim `kind` est vérifié sans aucune tolérance, dans les deux sens.
+4. La taille de page est plafonnée côté schéma, et aucune donnée médicale n'entre dans
+   les réponses de cet espace.
+5. Chaque requête du back-office est journalisée avec l'identifiant de l'administrateur,
+   corrélée au `request_id` du middleware.
+
+Ce qui n'est **pas** couvert, et qu'il faut assumer : un bug dans une requête du
+back-office ne sera pas rattrapé par la base. Le durcissement qui le rattraperait —
+`FORCE ROW LEVEL SECURITY` partout et un pool connecté sur un rôle non-propriétaire — est
+un chantier distinct, mentionné dans l'ADR pour que son absence reste une décision.
 
 ## Comment on vérifie que la décision tient
 

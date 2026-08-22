@@ -23,10 +23,13 @@ docker-compose.yml  docker/  backend/  frontend-b2c/ (:3000)  frontend-b2b/ (:30
 ## Conventions
 
 - UUID pour toutes les PK ; **soft deletes** (`deleted_at`, jamais de DELETE) ; pattern **Outbox** (`outbox_events` + relais TaskIQ) pour tout effet de bord asynchrone.
-- Auth : JWT double token en **cookies HttpOnly**, deux espaces INDÉPENDANTS cloisonnés par le claim `kind` (un jeton copié d'un espace à l'autre est rejeté) :
-  staff B2B (`/api/v1/auth/*`, cookies `vetolib_access` 15 min path `/` + `vetolib_refresh` 7 j path `/api/v1/auth/refresh`) et
-  propriétaires B2C (`/api/v1/owner/auth/*` + fiche `PUT /api/v1/owner/profile`, cookies `vetolib_owner_access`/`vetolib_owner_refresh` path `/api/v1/owner/auth/refresh`).
+- Auth : JWT double token en **cookies HttpOnly**, TROIS espaces INDÉPENDANTS cloisonnés par le claim `kind`, exigé **sans aucune tolérance** (un jeton copié d'un espace à l'autre est rejeté) :
+  staff B2B (`kind=staff`, `/api/v1/auth/*`, cookies `vetolib_access` 15 min path `/` + `vetolib_refresh` 7 j path `/api/v1/auth/refresh`),
+  propriétaires B2C (`kind=owner`, `/api/v1/owner/auth/*` + fiche `PUT /api/v1/owner/profile`, cookies `vetolib_owner_access`/`vetolib_owner_refresh` path `/api/v1/owner/auth/refresh`) et
+  **plateforme** (`kind=platform`, back-office des fondateurs, `/api/v1/admin/*`, table `platform_admins`, cookies `vetolib_admin_access` path `/api/v1/admin` + `vetolib_admin_refresh` 12 h path `/api/v1/admin/auth/refresh`, tous deux `SameSite=Strict`).
   Jamais de token dans un body JSON. Le même email peut exister dans `users` (staff) ET `owners` (comptes séparés).
+- **Espace plateforme** : aucune inscription publique (comptes créés par `make create-admin` uniquement), autorisation binaire (ni rôle ni `perms`), compte relu en base à chaque requête, dépendance d'auth posée sur le **routeur** et non route par route. C'est le seul espace qui lit à travers les tenants, donc hors RLS : le test `tests/integration/test_admin_routes_protected.py` énumère toutes les routes `/api/v1/admin/*` et exige un 401 sans cookie — ne jamais le désactiver, et ne jamais poser de route admin hors d'un routeur protégé. Voir ADR-0013.
+- **Suspendre ≠ supprimer** : `clinics.is_active` / `owners.is_active` gèlent un accès de façon réversible ; `deleted_at` reste l'effacement définitif. Ne pas confondre — les index uniques d'email étant partiels (`WHERE deleted_at IS NULL`), un soft delete libère l'adresse et rend la réactivation impossible.
 - Routes FastAPI : toujours un `operation_id` explicite (noms des hooks Orval).
 - UoW : `system_uow()` (flux pré-tenant : login, register) vs `tenant_uow(clinic_id)` (`SET LOCAL ROLE vetolib_app` + `SET LOCAL app.clinic_id`).
 - SQLAlchemy : rester sur 2.0.x (< 2.1) ; TypeScript : rester sur 6.x (TS 7 casse typescript-eslint).

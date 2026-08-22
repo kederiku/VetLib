@@ -12,7 +12,8 @@ keywords:
 
 Les permissions ne concernent que le **personnel de clinique**. Les propriétaires
 d'animaux n'ont ni rôle ni permission : leurs droits découlent entièrement de leur
-identité (« mes animaux », « mes rendez-vous »).
+identité (« mes animaux », « mes rendez-vous »). Les administrateurs de la plateforme
+non plus, mais pour une raison inverse — voir la dernière section de cette page.
 
 ```python
 class Role(StrEnum):
@@ -125,3 +126,34 @@ faille, puisque le backend reste l'autorité.
 
 Le fichier `backend/tests/integration/test_scheduling_permissions.py` vérifie qu'un rôle
 insuffisant reçoit bien un `403` sur les endpoints protégés.
+
+## Les administrateurs de la plateforme, hors matrice
+
+Le troisième espace d'authentification ([ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md))
+échappe entièrement à ce qui précède : un administrateur de la plateforme n'a **ni
+`Role`, ni claim `perms`**. Son jeton porte `kind: "platform"`, et c'est tout : un jeton
+valide ouvre le back-office en entier.
+
+Ce n'est pas un raccourci mais une décision, pour deux raisons.
+
+- **Le produit compte deux ou trois exploitants.** Une matrice d'autorisation sur une
+  population de cette taille est une cérémonie : tous les écrans seraient visibles par
+  tout le monde de toute façon, et une matrice que personne n'exerce est une matrice qui
+  ment.
+- **Les deux vocabulaires n'ont aucun terme commun.** Réutiliser `ROLE_PERMISSIONS`
+  mélangerait dans une même table les droits d'un ASV et ceux d'un exploitant ; un bug
+  qui accorderait un droit de plateforme à un gérant de clinique serait catastrophique.
+
+La contrepartie de cette simplicité est ailleurs : le jeton étant maigre, le compte est
+**relu en base à chaque requête**, donc une révocation prend effet immédiatement. C'est
+l'inverse exact du « fat token » du personnel, et c'est cohérent — l'espace qui voit
+toutes les cliniques est celui où l'on ne peut pas se permettre quinze minutes de
+latence.
+
+Le jour où un rôle « support » en lecture seule deviendra nécessaire, ce sera une
+**décision**, pas une extension mécanique : une colonne `role` sur `platform_admins`, une
+matrice `PLATFORM_ROLE_PERMISSIONS` séparée de celle du personnel, un claim `perms` dans
+le jeton d'accès, et une fabrique `require_admin_permission` calquée sur
+`require_permission`. Le chemin est décrit dans la docstring de
+`PyJWTPlatformAdminTokenProvider` — c'est cette porte de sortie, réelle et documentée,
+qui autorise à ne rien construire aujourd'hui.

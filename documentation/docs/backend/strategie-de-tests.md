@@ -61,17 +61,37 @@ Le coût est maîtrisé par la portée des fixtures : les conteneurs et les migr
 en `scope="session"` et ne tournent qu'une fois pour toute la suite. L'isolation entre
 tests est assurée par un `TRUNCATE` des tables avant chaque test.
 
-Les sept fichiers actuels couvrent les flux critiques :
+Les fichiers actuels couvrent les flux critiques :
 
-| Fichier                          | Ce qu'il prouve                                                     |
-| -------------------------------- | ------------------------------------------------------------------- |
-| `test_rls_isolation.py`          | Une clinique ne voit rien d'une autre, même sans clause de filtrage |
-| `test_auth_flow.py`              | Connexion, rafraîchissement, déconnexion côté personnel             |
-| `test_owner_auth_flow.py`        | Idem côté propriétaires, et le cloisonnement des deux espaces       |
-| `test_scheduling_flow.py`        | Réservation, confirmation, annulation, anti-double-réservation      |
-| `test_scheduling_permissions.py` | Un rôle insuffisant reçoit bien un `403`                            |
-| `test_pets_flow.py`              | Le filtrage applicatif par `owner_id`                               |
-| `test_clinics_me.py`             | Lecture et mise à jour du profil de clinique                        |
+| Fichier                          | Ce qu'il prouve                                                               |
+| -------------------------------- | ----------------------------------------------------------------------------- |
+| `test_rls_isolation.py`          | Une clinique ne voit rien d'une autre, même sans clause de filtrage           |
+| `test_auth_flow.py`              | Connexion, rafraîchissement, déconnexion côté personnel                       |
+| `test_owner_auth_flow.py`        | Idem côté propriétaires, et le cloisonnement des deux espaces                 |
+| `test_scheduling_flow.py`        | Réservation, confirmation, annulation, anti-double-réservation                |
+| `test_scheduling_permissions.py` | Un rôle insuffisant reçoit bien un `403`                                      |
+| `test_pets_flow.py`              | Le filtrage applicatif par `owner_id`                                         |
+| `test_clinics_me.py`             | Lecture et mise à jour du profil de clinique                                  |
+| `test_clinic_suspension.py`      | Les cinq points où une clinique suspendue coupe l'accès de son personnel      |
+| `test_admin_auth_flow.py`        | Le back-office : attributs des cookies, révocation, limitation de débit       |
+| `test_admin_routes_protected.py` | **Toute** route `/api/v1/admin/*` exige le cookie d'administrateur            |
+| `test_admin_bootstrap_cli.py`    | `make create-admin` : création, refus du doublon, garde-fou du dernier compte |
+
+Deux de ces fichiers méritent un mot.
+
+`test_clinic_suspension.py` existe parce que la suspension d'une clinique agit dans cinq
+use cases différents — dont un qui vit dans un **autre** bounded context (le lecteur de
+cliniques de `scheduling`). Un test unitaire par use case ne dirait rien de l'ensemble ;
+seul un parcours HTTP complet prouve que les cinq points sont branchés.
+
+`test_admin_routes_protected.py` est d'une autre nature : il ne teste pas un scénario, il
+**énumère**. Il lit le schéma OpenAPI de l'application, retient toutes les routes
+`/api/v1/admin/*`, et exige un `401` strict sur chacune, sans cookie puis avec un vrai
+cookie du personnel recopié. C'est la contrepartie automatisée du fait que cet espace
+contourne la Row-Level Security ([ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md)) :
+sa barrière étant du code, elle est oubliable, et une liste écrite à la main se périmerait
+dès la route suivante. Un test compagnon vérifie que l'énumération n'est pas vide — le
+mode de panne le plus insidieux d'un test généré est de ne rien tester du tout.
 
 ## Les tests frontend
 

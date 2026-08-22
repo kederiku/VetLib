@@ -38,6 +38,20 @@ export interface AddressPayload {
 }
 
 /**
+ * Profil du super-admin connecte (login, refresh et /admin/auth/me).
+ *
+ * Volontairement maigre : ni permissions, ni role, ni date de derniere
+ * connexion. L'autorisation de cet espace est binaire, et le front n'a
+ * besoin que de quoi afficher un menu utilisateur.
+ */
+export interface AdminResponse {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+/**
  * Etats de la machine a etats stricte d'un rendez-vous.
  *
  * pending -> confirmed -> completed, et pending|confirmed -> cancelled.

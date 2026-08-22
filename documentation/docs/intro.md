@@ -18,7 +18,8 @@ cliniques vétérinaires. Deux publics, un seul backend :
   tiennent le carnet de santé de leurs animaux.
 
 Cette double audience explique la quasi-totalité de l'architecture : deux portails
-distincts, deux espaces d'authentification cloisonnés, et une base de données partagée
+distincts, trois espaces d'authentification cloisonnés (dont celui, à part, du back-office
+réservé aux exploitants), et une base de données partagée
 mais compartimentée clinique par clinique.
 
 ## Ce que ce site contient

@@ -1,6 +1,6 @@
 .PHONY: install install-ci dev worker scheduler lint format typecheck \
         test test-unit test-integration coverage check-migrations \
-        migrate revision openapi
+        migrate revision openapi create-admin
 
 install:
 	uv sync
@@ -42,6 +42,15 @@ migrate:
 
 revision:
 	uv run alembic revision -m "$(m)"
+
+create-admin: ## Cree un compte du back-office plateforme (mot de passe demande a l'invite)
+	@test -n "$(email)" || { echo 'Usage : make create-admin email=prenom.nom@exemple.fr'; exit 1; }
+	@# Le mot de passe n'est JAMAIS passe en argument : il serait visible
+	@# dans l'historique du shell et dans `ps`. La commande le demande a
+	@# l'invite (saisie masquee), ou le lit sur stdin si ce n'est pas un
+	@# terminal (`pass show ... | make create-admin email=...`).
+	uv run python -m vetolib.cli.create_admin --email "$(email)" \
+	  $(if $(first),--first-name "$(first)") $(if $(last),--last-name "$(last)") $(args)
 
 openapi:
 	uv run python -c "import json; from vetolib.main import app; print(json.dumps(app.openapi()))" > openapi.json

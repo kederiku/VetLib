@@ -15,6 +15,7 @@ suffit d'exposer les mêmes méthodes que le port.
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from typing import Self
@@ -23,12 +24,15 @@ from vetolib.identity.application.dto import (
     AccessClaims,
     OwnerAccessClaims,
     OwnerRefreshClaims,
+    PlatformAdminAccessClaims,
+    PlatformAdminRefreshClaims,
     RefreshClaims,
     TokenPair,
 )
 from vetolib.identity.domain.clinic import Clinic
 from vetolib.identity.domain.errors import InvalidTokenError
 from vetolib.identity.domain.owner import Owner
+from vetolib.identity.domain.platform_admin import PlatformAdmin
 from vetolib.identity.domain.user import User
 from vetolib.identity.domain.value_objects import Email, Role
 from vetolib.shared.domain.events import DomainEvent
@@ -126,6 +130,39 @@ class FakeOwnerRepository:
         self._store[owner.id] = owner
 
 
+class FakePlatformAdminRepository:
+    """Double de test du port PlatformAdminRepository (dict en memoire).
+
+    Memes conventions que les deux autres : filtre soft delete a la lecture,
+    pas de commit. count_active reproduit le double filtre du SQL reel
+    (deleted_at IS NULL ET is_active) -- un fake qui compterait toutes les
+    lignes ferait passer le garde-fou "dernier administrateur" pour bon
+    alors qu'il serait faux.
+    """
+
+    def __init__(self, store: dict[uuid.UUID, PlatformAdmin]) -> None:
+        self._store = store
+
+    async def get_by_id(self, admin_id: uuid.UUID) -> PlatformAdmin | None:
+        admin = self._store.get(admin_id)
+        return admin if admin is not None and admin.deleted_at is None else None
+
+    async def get_by_email(self, email: Email) -> PlatformAdmin | None:
+        for admin in self._store.values():
+            if admin.email == email and admin.deleted_at is None:
+                return admin
+        return None
+
+    async def add(self, admin: PlatformAdmin) -> None:
+        self._store[admin.id] = admin
+
+    async def update(self, admin: PlatformAdmin) -> None:
+        self._store[admin.id] = admin
+
+    async def count_active(self) -> int:
+        return sum(1 for a in self._store.values() if a.deleted_at is None and a.is_active)
+
+
 class FakeIdentityUnitOfWork:
     """UoW in-memory : implémente le port IdentityUnitOfWork sans IO.
 
@@ -141,9 +178,11 @@ class FakeIdentityUnitOfWork:
         self.clinic_store: dict[uuid.UUID, Clinic] = {}
         self.user_store: dict[uuid.UUID, User] = {}
         self.owner_store: dict[uuid.UUID, Owner] = {}
+        self.admin_store: dict[uuid.UUID, PlatformAdmin] = {}
         self.clinics = FakeClinicRepository(self.clinic_store)
         self.users = FakeUserRepository(self.user_store)
         self.owners = FakeOwnerRepository(self.owner_store)
+        self.admins = FakePlatformAdminRepository(self.admin_store)
         self.events: list[DomainEvent] = []
         self.commits = 0
         self.rollbacks = 0
@@ -306,3 +345,63 @@ class FakeOwnerTokenProvider:
         return OwnerRefreshClaims(
             owner_id=uuid.UUID(token.removeprefix("owner_refresh:")), jti="fake-jti"
         )
+
+
+class FakePlatformAdminTokenProvider:
+    """Double de test du port PlatformAdminTokenProvider.
+
+    Jetons en clair prefixes ("admin_access:<id>") : les decode_* rejettent
+    tout autre prefixe, ce qui mime structurellement le controle du claim
+    `kind` -- un jeton du fake staff ("access:<id>") ou owner
+    ("owner_access:<id>") est refuse ici, comme en production. Le controle
+    sur les VRAIS adapters PyJWT est couvert par test_admin_tokens.py.
+    """
+
+    def issue_pair(self, admin: PlatformAdmin) -> TokenPair:
+        now = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+        # Durees calquees sur la prod : access 15 min, refresh 12 h (TTL
+        # dedie a l'espace plateforme, plus court que les 7 jours des autres).
+        return TokenPair(
+            access_token=f"admin_access:{admin.id}",
+            refresh_token=f"admin_refresh:{admin.id}",
+            access_expires_at=now + timedelta(minutes=15),
+            refresh_expires_at=now + timedelta(hours=12),
+        )
+
+    def decode_access(self, token: str) -> PlatformAdminAccessClaims:
+        if not token.startswith("admin_access:"):
+            raise InvalidTokenError("Jeton invalide.")
+        return PlatformAdminAccessClaims(
+            admin_id=uuid.UUID(token.removeprefix("admin_access:")), jti="fake-jti"
+        )
+
+    def decode_refresh(self, token: str) -> PlatformAdminRefreshClaims:
+        if not token.startswith("admin_refresh:"):
+            raise InvalidTokenError("Jeton invalide.")
+        return PlatformAdminRefreshClaims(
+            admin_id=uuid.UUID(token.removeprefix("admin_refresh:")), jti="fake-jti"
+        )
+
+
+class FakeLoginThrottle:
+    """Double de test du port LoginThrottle : compteur en memoire.
+
+    Par defaut il ne bloque jamais (`blocage` a None) : les tests de login
+    qui ne s'interessent pas a la limitation n'ont rien a configurer. Ceux
+    qui la testent posent `blocage` et lisent `failures` / `resets`, qui
+    servent d'espions.
+    """
+
+    def __init__(self, blocage: int | None = None) -> None:
+        self.blocage = blocage
+        self.failures: list[tuple[str, ...]] = []
+        self.resets: list[tuple[str, ...]] = []
+
+    async def seconds_until_retry(self, keys: Sequence[str]) -> int | None:
+        return self.blocage
+
+    async def record_failure(self, keys: Sequence[str]) -> None:
+        self.failures.append(tuple(keys))
+
+    async def reset(self, keys: Sequence[str]) -> None:
+        self.resets.append(tuple(keys))

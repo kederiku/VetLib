@@ -13,20 +13,24 @@ test satisfait le port dès qu'il expose les bonnes méthodes, sans hériter
 de quoi que ce soit.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Protocol
 
 from vetolib.identity.application.dto import (
     AccessClaims,
     OwnerAccessClaims,
     OwnerRefreshClaims,
+    PlatformAdminAccessClaims,
+    PlatformAdminRefreshClaims,
     RefreshClaims,
     TokenPair,
 )
 from vetolib.identity.domain.owner import Owner
+from vetolib.identity.domain.platform_admin import PlatformAdmin
 from vetolib.identity.domain.repositories import (
     ClinicRepository,
     OwnerRepository,
+    PlatformAdminRepository,
     UserRepository,
 )
 from vetolib.identity.domain.user import User
@@ -100,6 +104,51 @@ class OwnerTokenProvider(Protocol):
     def decode_refresh(self, token: str) -> OwnerRefreshClaims: ...
 
 
+class PlatformAdminTokenProvider(Protocol):
+    """Émission et décodage des JWT SUPER-ADMIN (adapter : PyJWT en infra).
+
+    Troisième port distinct, et non un provider paramétrable par `kind` : le
+    typage doit rendre IMPOSSIBLE d'injecter le provider staff dans un use
+    case admin. Une classe unique capable d'émettre pour n'importe quel
+    espace transformerait une erreur de câblage en escalade de privilèges ;
+    ici, elle reste une erreur mypy.
+    """
+
+    def issue_pair(self, admin: PlatformAdmin) -> TokenPair: ...
+
+    def decode_access(self, token: str) -> PlatformAdminAccessClaims: ...
+
+    def decode_refresh(self, token: str) -> PlatformAdminRefreshClaims: ...
+
+
+class LoginThrottle(Protocol):
+    """Limitation de débit des tentatives de connexion (adapter : Redis).
+
+    Pourquoi un port de la couche application alors que c'est de la
+    plomberie : la POLITIQUE (combien d'échecs, pendant combien de temps)
+    est une décision, pas un détail technique -- et on veut pouvoir la
+    tester sans Redis.
+
+    Contrat, calqué sur celui de CompromisedPasswordChecker : un adapter
+    injoignable NE LÈVE JAMAIS. Refuser toutes les connexions parce que
+    Redis est tombé transformerait une panne d'un service auxiliaire en
+    panne totale du back-office ; l'adapter se contente alors de journaliser
+    et de laisser passer (fail-open assumé, et écrit noir sur blanc).
+    """
+
+    async def seconds_until_retry(self, keys: Sequence[str]) -> int | None:
+        """Délai d'attente restant en secondes, ou None si la voie est libre."""
+        ...
+
+    async def record_failure(self, keys: Sequence[str]) -> None:
+        """Compte une tentative infructueuse."""
+        ...
+
+    async def reset(self, keys: Sequence[str]) -> None:
+        """Efface les compteurs après une connexion réussie."""
+        ...
+
+
 class IdentityUnitOfWork(UnitOfWork, Protocol):
     """UoW du contexte identity : une transaction + ses repositories.
 
@@ -121,6 +170,12 @@ class IdentityUnitOfWork(UnitOfWork, Protocol):
     # Toujours atteint via la UoW système (les flux owner sont pré-tenant).
     @property
     def owners(self) -> OwnerRepository: ...
+
+    # admins : les comptes du back-office plateforme. Hors tenant, hors RLS
+    # et hors des privilèges du rôle applicatif -- donc atteignable
+    # uniquement sous UoW système, comme les deux autres flux d'authentification.
+    @property
+    def admins(self) -> PlatformAdminRepository: ...
 
 
 # Les use cases reçoivent une FABRIQUE et non un UoW déjà ouvert : chaque

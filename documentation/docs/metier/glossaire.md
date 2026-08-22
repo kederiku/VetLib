@@ -47,7 +47,8 @@ salle ou un équipement (l'énumération `ResourceKind` est prête à les accuei
 30 min ». C'est lui qui détermine la longueur du créneau.
 
 **Utilisateur** (`users`) — Un membre du **personnel** d'une clinique. À ne pas confondre
-avec un propriétaire : ce sont deux tables et deux espaces d'authentification distincts,
+avec un propriétaire : ce sont deux tables et deux espaces d'authentification distincts
+(trois en comptant celui des administrateurs de la plateforme),
 et le même email peut exister dans les deux.
 
 ## Vocabulaire technique
@@ -70,8 +71,19 @@ mais d'`id` différents sont distinctes. Opposé du value object.
 **`gate`** — Le job d'agrégation de la CI, et le **seul** check exigé par la branche
 protégée. Voir [Le pipeline CI](../exploitation/pipeline-ci.md).
 
-**`kind`** — Le claim JWT qui cloisonne les deux espaces d'authentification : `"staff"`
-ou `"owner"`. Un jeton copié d'un espace à l'autre est rejeté.
+**`kind`** — Le claim JWT qui cloisonne les trois espaces d'authentification :
+`"staff"`, `"owner"` ou `"platform"`. Un jeton copié d'un espace à l'autre est rejeté au
+décodage, sans aucune tolérance.
+
+**Administrateur de plateforme** — Un exploitant du produit (table `platform_admins`),
+qui n'appartient à aucune clinique et les voit toutes. Ni rôle ni permission :
+l'autorisation de son espace est binaire. Aucune inscription publique — les comptes se
+créent par `make create-admin`.
+
+**Back-office plateforme** — L'espace d'administration des exploitants
+(`/api/v1/admin/*`). Le seul dont l'isolation ne repose pas sur la RLS, et donc le seul
+dont la barrière est du code. Voir
+[ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md).
 
 **`operation_id`** — L'identifiant explicite d'une route FastAPI. Il **détermine le nom
 du hook** généré par Orval : le changer renomme le hook dans les deux portails.

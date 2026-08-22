@@ -261,3 +261,44 @@ class CurrentOwner:
     phone: str | None
     address: Address | None
     notification_preferences: NotificationPreferences
+
+
+# --- Espace PLATEFORME (back-office des fondateurs) -------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class PlatformAdminAccessClaims:
+    """Contenu decode d'un access token de super-admin.
+
+    Le jeton le plus puissant du systeme est aussi le plus MAIGRE : ni role,
+    ni permissions, ni tenant. C'est l'inverse exact du "fat token" du staff,
+    et c'est un choix delibere : le compte est relu en base a chaque requete, donc une
+    revocation prend effet a la requete suivante et non dans 15 minutes.
+    A cette echelle (une poignee de comptes), la lecture ne coute rien.
+    """
+
+    admin_id: uuid.UUID
+    jti: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class PlatformAdminRefreshClaims:
+    """Contenu decode d'un refresh token de super-admin."""
+
+    admin_id: uuid.UUID
+    jti: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class CurrentAdmin:
+    """Projection du super-admin courant (/admin/auth/me et contexte requete).
+
+    Volontairement sans permissions : l'autorisation de cet espace est
+    binaire. Un champ `permissions` vide inviterait a le remplir un jour sans
+    y penser -- son absence force la decision a etre explicite.
+    """
+
+    id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str

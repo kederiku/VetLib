@@ -59,13 +59,34 @@ class Settings(BaseSettings):
     jwt_audience: str = "vetolib"
     jwt_access_ttl_seconds: int = 900  # 15 min : durée du cookie vetolib_access
     jwt_refresh_ttl_seconds: int = 604_800  # 7 jours : durée du cookie vetolib_refresh
+    # TTL DEDIE au refresh des super-admins : 12 h au lieu de 7 jours. La
+    # session la plus puissante de la plateforme (elle voit tous les tenants)
+    # est aussi celle qui doit le moins durer ; un fondateur qui se reconnecte
+    # chaque jour n'est pas une contrainte. L'access, lui, garde les 15 min
+    # communs -- il est de toute façon revalidé en base à chaque requête.
+    jwt_admin_refresh_ttl_seconds: int = 43_200  # 12 h : cookie vetolib_admin_refresh
+
+    # --- Limitation de débit du login du back-office ------------------------
+    # Trois comptes, aucun verrouillage, un mot de passe pour seule barrière et
+    # un accès à toutes les données de tous les tenants : une attaque en ligne
+    # est le scénario réaliste. Compteur Redis à fenêtre glissante, sur l'IP ET
+    # sur l'email. Volontairement PAS de verrouillage définitif du compte :
+    # ce serait un déni de service offert à l'attaquant, alors qu'aucun canal
+    # de déblocage n'existe (make create-admin ne débloque rien).
+    admin_login_max_attempts: int = 5
+    admin_login_window_seconds: int = 900  # 15 min
 
     # Secure par défaut (cookies transmis en HTTPS seulement) ; à désactiver
     # en dev local http via COOKIE_SECURE=false dans backend/.env.
     cookie_secure: bool = True
-    # Origines des deux frontends Next.js (B2C :3000, B2B :3001) : liste exacte
-    # obligatoire car l'auth par cookies impose allow_credentials (cf. main.py).
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    # Origines des trois frontends Next.js (B2C :3000, B2B :3001, back-office
+    # plateforme :3003) : liste exacte obligatoire car l'auth par cookies
+    # impose allow_credentials (cf. main.py). Pas de joker possible.
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3003",
+    ]
 
     # --- Vérification anti-compromission des mots de passe -----------------
     # La LONGUEUR minimale n'est volontairement PAS ici : c'est une règle
