@@ -17,6 +17,10 @@ from typing import Self
 from sqlalchemy.exc import IntegrityError
 
 from vetolib.identity.domain.errors import EmailAlreadyExistsError
+from vetolib.identity.infrastructure.admin_repositories import (
+    SqlAlchemyAdminAuditLogRepository,
+    SqlAlchemyAdminDirectoryRepository,
+)
 from vetolib.identity.infrastructure.repositories import (
     SqlAlchemyClinicRepository,
     SqlAlchemyOwnerRepository,
@@ -43,6 +47,8 @@ class SqlAlchemyIdentityUnitOfWork(SqlAlchemyUnitOfWork):
     clinics: SqlAlchemyClinicRepository
     owners: SqlAlchemyOwnerRepository
     admins: SqlAlchemyPlatformAdminRepository
+    directory: SqlAlchemyAdminDirectoryRepository
+    audit_log: SqlAlchemyAdminAuditLogRepository
 
     async def __aenter__(self) -> Self:
         # Le parent ouvre la session (et pose rôle + clinic_id en mode
@@ -55,6 +61,11 @@ class SqlAlchemyIdentityUnitOfWork(SqlAlchemyUnitOfWork):
         # Utilisable UNIQUEMENT en mode systeme : le role applicatif n'a
         # aucun droit sur platform_admins (REVOKE de la migration 0008).
         self.admins = SqlAlchemyPlatformAdminRepository(self.session)
+        # Comme admins : reserves au mode systeme. Le role applicatif n'a
+        # aucun droit sur admin_audit_log, et les lectures transverses
+        # seraient de toute facon filtrees par la RLS sous un role tenant.
+        self.directory = SqlAlchemyAdminDirectoryRepository(self.session)
+        self.audit_log = SqlAlchemyAdminAuditLogRepository(self.session)
         return self
 
     async def commit(self) -> None:

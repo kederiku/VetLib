@@ -302,3 +302,219 @@ class CurrentAdmin:
     email: str
     first_name: str
     last_name: str
+
+
+# --- DTOs des listes et fiches du back-office --------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminClinicRow:
+    """Une ligne de la liste des cliniques, telle que l'ecran l'affiche."""
+
+    id: uuid.UUID
+    name: str
+    email: str
+    phone: str | None
+    city: str | None
+    is_active: bool
+    staff_count: int
+    created_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminClinicDetail:
+    """Fiche complete d'une clinique pour le back-office.
+
+    Superset d'AdminClinicRow : l'adresse entiere et le fuseau, dont la liste
+    n'a pas besoin. Deux projections plutot qu'une seule "au cas ou" : une
+    liste de cent lignes n'a aucune raison de transporter cent adresses
+    completes.
+    """
+
+    id: uuid.UUID
+    name: str
+    email: str
+    phone: str | None
+    address: Address | None
+    timezone: str
+    is_active: bool
+    staff_count: int
+    created_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminOwnerRow:
+    """Une ligne de la liste des proprietaires."""
+
+    id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    phone: str | None
+    city: str | None
+    is_active: bool
+    pet_count: int
+    created_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminOwnerDetail:
+    """Fiche complete d'un proprietaire (adresse et preferences comprises)."""
+
+    id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    phone: str | None
+    address: Address | None
+    notification_preferences: NotificationPreferences
+    is_active: bool
+    pet_count: int
+    created_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminStaffRow:
+    """Une ligne de la liste transverse du personnel."""
+
+    id: uuid.UUID
+    clinic_id: uuid.UUID
+    clinic_name: str
+    clinic_is_active: bool
+    email: str
+    first_name: str
+    last_name: str
+    role: Role
+    is_active: bool
+    created_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminActor:
+    """Qui agit, pour la ligne d'audit.
+
+    Passe explicitement a chaque use case d'ECRITURE plutot que devine : une
+    mutation du back-office sans acteur identifie serait une mutation qu'on
+    ne pourrait pas expliquer apres coup.
+    """
+
+    id: uuid.UUID
+    email: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminCreateClinicCommand:
+    """Creation d'une clinique par le back-office, avec un premier gerant OPTIONNEL.
+
+    Deux flux en un seul endpoint : "je cree la clinique ET son gerant" (le
+    cas courant) et "je cree la clinique, j'ajouterai les gerants demain".
+    Quand le bloc gerant est present, tout part dans UNE transaction.
+
+    L'email de la clinique et celui du gerant sont DISTINCTS, contrairement a
+    l'inscription publique qui n'en connait qu'un : une clinique a une
+    adresse de contact (contact@lilas.fr) qui n'est pas l'identifiant de
+    connexion d'une personne (marie.durand@lilas.fr).
+    """
+
+    name: str
+    email: str
+    phone: str | None
+    address_line1: str | None
+    address_line2: str | None
+    postal_code: str | None
+    city: str | None
+    country: str | None
+    timezone: str
+    manager: "AdminCreateClinicManager | None"
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminCreateClinicManager:
+    """Le premier gerant, dans la commande de creation d'une clinique.
+
+    DTO distinct d'AdminCreateStaffCommand, et pas par gout de la
+    duplication : a cet instant la clinique n'existe pas encore, il n'y a
+    donc pas de clinic_id a fournir. Reutiliser l'autre commande obligerait a
+    y mettre une valeur factice -- c'est-a-dire a mentir dans un type pour
+    economiser quatre lignes.
+    """
+
+    email: str
+    first_name: str
+    last_name: str
+    role: Role
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminCreateStaffCommand:
+    """Creation d'un membre du personnel dans une clinique existante.
+
+    Pas de mot de passe : il est GENERE par le use case et renvoye une seule
+    fois. Voir AdminStaffCreated.
+    """
+
+    clinic_id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    role: Role
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminStaffCreated:
+    """Resultat d'une creation de compte du personnel.
+
+    ATTENTION -- `temporary_password` est le SEUL moment ou ce secret est
+    lisible. Il n'est stocke nulle part en clair, ne figure dans aucun
+    journal, n'apparait pas dans l'audit, et aucune route ne permet de le
+    relire.
+
+    Oui, cela fait transiter un secret dans une reponse, ce que la convention
+    du projet interdit -- pour les JETONS. Ce n'en est pas un : c'est un
+    identifiant que l'administrateur doit lire et transmettre, et il n'existe
+    aujourd'hui aucun autre canal (l'envoi d'email n'est pas branche). C'est
+    une decision assumee, pas un oubli ; elle disparaitra le jour ou un flux
+    d'invitation par email existera.
+    """
+
+    user_id: uuid.UUID
+    email: str
+    role: Role
+    temporary_password: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminUpdateClinicCommand:
+    """Mise a jour de la fiche d'une clinique par le back-office.
+
+    Sans email, comme Clinic.update_profile : l'adresse est l'identifiant
+    d'inscription. Qu'un administrateur puisse la changer d'un clic serait
+    une prise de controle en un geste, pas une correction de fiche.
+    """
+
+    clinic_id: uuid.UUID
+    name: str
+    phone: str | None
+    address_line1: str | None
+    address_line2: str | None
+    postal_code: str | None
+    city: str | None
+    country: str | None
+    timezone: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class AdminUpdateOwnerCommand:
+    """Mise a jour de la fiche d'un proprietaire. Sans email ni mot de passe."""
+
+    owner_id: uuid.UUID
+    first_name: str
+    last_name: str
+    phone: str | None
+    address_line1: str | None
+    address_line2: str | None
+    postal_code: str | None
+    city: str | None
+    country: str | None
+    notify_email: bool
+    notify_sms: bool

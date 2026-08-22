@@ -73,10 +73,16 @@ migration_ fait ce qu'elle fait ; l'ADR dit pourquoi _le projet entier_ fonction
 
 ## Décisions candidates
 
-Deux sujets méritent un ADR mais n'en ont pas encore :
+Trois sujets méritent un ADR mais n'en ont pas encore :
 
 - **Monorepo sans espace de travail npm** — chaque sous-projet a son propre
   `package-lock.json`. Le raisonnement est esquissé dans
   [Vue d'ensemble du monorepo](../architecture/vue-d-ensemble.md#pourquoi-un-monorepo-sans-espace-de-travail-npm).
 - **Logs structurés structlog et `request_id` de corrélation** — décrit dans
   [Une requête HTTP, de bout en bout](../architecture/requete-de-bout-en-bout.md).
+- **Enveloppe de pagination des listes** — `?limit=&offset=&search=&sort_by=&sort_dir=`
+  et `{ items, total, limit, offset }`, plafonné à 100. Décrit dans
+  [Ajouter un endpoint](../backend/ajouter-un-endpoint.md#pagination-des-listes). Ce choix
+  entre dans le contrat OpenAPI, descend par Orval dans les trois clients et sera imité
+  par tous les futurs endpoints paginés : il méritera un ADR le jour où un second
+  consommateur aura besoin d'une pagination par curseur.

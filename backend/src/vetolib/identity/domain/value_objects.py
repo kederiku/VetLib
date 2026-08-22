@@ -268,3 +268,16 @@ class NotificationPreferences:
 
     email: bool = True
     sms: bool = False
+
+
+class AccountStatus(StrEnum):
+    """Filtre de statut des listes du back-office.
+
+    Volontairement DEUX valeurs et non trois : "tous" s'exprime par l'ABSENCE
+    de filtre (None), pas par une troisieme valeur d'enum. Sinon deux facons
+    d'ecrire la meme chose se retrouveraient dans l'OpenAPI, donc dans les
+    trois clients generes -- et un jour l'une des deux serait mal traduite.
+    """
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"

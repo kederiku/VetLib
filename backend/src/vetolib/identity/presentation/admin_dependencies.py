@@ -23,18 +23,33 @@ from typing import Annotated
 import structlog
 from fastapi import Depends, HTTPException, Request, status
 
-from vetolib.identity.application.dto import CurrentAdmin
+from vetolib.identity.application.dto import AdminActor, CurrentAdmin
 from vetolib.identity.application.ports import LoginThrottle
 from vetolib.identity.application.use_cases.admin import (
     AuthenticateAdmin,
+    ChangeAdminStaffRole,
+    CreateAdminClinic,
+    CreateAdminStaff,
+    GetAdminClinic,
+    GetAdminOwner,
     GetCurrentAdmin,
+    GetPlatformStats,
+    ListAdminClinics,
+    ListAdminOwners,
+    ListAdminStaff,
     RefreshAdminToken,
+    SetAdminClinicStatus,
+    SetAdminOwnerStatus,
+    SetAdminStaffStatus,
+    UpdateAdminClinic,
+    UpdateAdminOwner,
 )
 from vetolib.identity.infrastructure.login_throttle import RedisLoginThrottle
 from vetolib.identity.infrastructure.password_hasher import PwdlibPasswordHasher
 from vetolib.identity.infrastructure.token_provider import PyJWTPlatformAdminTokenProvider
 from vetolib.identity.presentation.cookies import ADMIN_ACCESS_COOKIE
 from vetolib.identity.presentation.dependencies import (
+    BreachCheckerDep,
     SettingsDep,
     UoWFactoryDep,
     get_clock,
@@ -112,3 +127,101 @@ async def get_current_admin(
 
 
 CurrentAdminDep = Annotated[CurrentAdmin, Depends(get_current_admin)]
+
+
+# --- Use cases du back-office ------------------------------------------------
+# Un `get_` par use case, comme dans dependencies.py. La route declare
+# Depends(get_xxx) et recoit un objet pret a l'emploi, sans jamais connaitre
+# SQLAlchemy ni PyJWT.
+
+
+def get_list_admin_clinics(uow_factory: UoWFactoryDep) -> ListAdminClinics:
+    return ListAdminClinics(uow_factory)
+
+
+def get_list_admin_owners(uow_factory: UoWFactoryDep) -> ListAdminOwners:
+    return ListAdminOwners(uow_factory)
+
+
+def get_list_admin_staff(uow_factory: UoWFactoryDep) -> ListAdminStaff:
+    return ListAdminStaff(uow_factory)
+
+
+def get_platform_stats(uow_factory: UoWFactoryDep) -> GetPlatformStats:
+    return GetPlatformStats(uow_factory)
+
+
+def get_get_admin_clinic(uow_factory: UoWFactoryDep) -> GetAdminClinic:
+    return GetAdminClinic(uow_factory)
+
+
+def get_create_admin_clinic(
+    uow_factory: UoWFactoryDep,
+    hasher: Annotated[PwdlibPasswordHasher, Depends(get_password_hasher)],
+    clock: Annotated[SystemClock, Depends(get_clock)],
+    breaches: BreachCheckerDep,
+) -> CreateAdminClinic:
+    return CreateAdminClinic(uow_factory, hasher, clock, breaches)
+
+
+def get_update_admin_clinic(
+    uow_factory: UoWFactoryDep, clock: Annotated[SystemClock, Depends(get_clock)]
+) -> UpdateAdminClinic:
+    return UpdateAdminClinic(uow_factory, clock)
+
+
+def get_set_admin_clinic_status(
+    uow_factory: UoWFactoryDep, clock: Annotated[SystemClock, Depends(get_clock)]
+) -> SetAdminClinicStatus:
+    return SetAdminClinicStatus(uow_factory, clock)
+
+
+def get_create_admin_staff(
+    uow_factory: UoWFactoryDep,
+    hasher: Annotated[PwdlibPasswordHasher, Depends(get_password_hasher)],
+    clock: Annotated[SystemClock, Depends(get_clock)],
+    breaches: BreachCheckerDep,
+) -> CreateAdminStaff:
+    return CreateAdminStaff(uow_factory, hasher, clock, breaches)
+
+
+def get_change_admin_staff_role(
+    uow_factory: UoWFactoryDep, clock: Annotated[SystemClock, Depends(get_clock)]
+) -> ChangeAdminStaffRole:
+    return ChangeAdminStaffRole(uow_factory, clock)
+
+
+def get_set_admin_staff_status(
+    uow_factory: UoWFactoryDep, clock: Annotated[SystemClock, Depends(get_clock)]
+) -> SetAdminStaffStatus:
+    return SetAdminStaffStatus(uow_factory, clock)
+
+
+def get_get_admin_owner(uow_factory: UoWFactoryDep) -> GetAdminOwner:
+    return GetAdminOwner(uow_factory)
+
+
+def get_update_admin_owner(
+    uow_factory: UoWFactoryDep, clock: Annotated[SystemClock, Depends(get_clock)]
+) -> UpdateAdminOwner:
+    return UpdateAdminOwner(uow_factory, clock)
+
+
+def get_set_admin_owner_status(
+    uow_factory: UoWFactoryDep, clock: Annotated[SystemClock, Depends(get_clock)]
+) -> SetAdminOwnerStatus:
+    return SetAdminOwnerStatus(uow_factory, clock)
+
+
+def get_admin_actor(current: CurrentAdminDep) -> AdminActor:
+    """Projette la session courante en ACTEUR pour le journal d'audit.
+
+    Dependance a part entiere plutot que conversion dans chaque route : une
+    mutation du back-office sans acteur identifie serait une mutation qu'on
+    ne pourrait pas expliquer six mois plus tard. La rendre disponible en une
+    annotation supprime la tentation de l'oublier.
+    """
+    return AdminActor(id=current.id, email=current.email)
+
+
+AdminActorDep = Annotated[AdminActor, Depends(get_admin_actor)]

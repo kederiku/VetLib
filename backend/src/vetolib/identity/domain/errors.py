@@ -136,3 +136,25 @@ class PlatformAdminNotFoundError(EntityNotFoundError):
     """
 
     code = "identity.platform_admin_not_found"
+
+
+class OwnerNotFoundError(EntityNotFoundError):
+    """Proprietaire inexistant ou efface -> 404."""
+
+    code = "identity.owner_not_found"
+
+
+class LastManagerError(ConflictError):
+    """Refus de retirer le DERNIER gerant actif d'une clinique -> 409.
+
+    Retrograder ou desactiver ce compte rendrait la clinique ingouvernable :
+    plus personne n'y detiendrait `clinic:manage`, donc plus de fiche
+    clinique, plus de reglages d'agenda, plus de gestion du personnel. Et
+    aucune route ne permettrait de reparer depuis l'interface de la clinique
+    elle-meme.
+
+    Ce n'est pas de la prudence excessive : c'est un etat dont on ne sort
+    pas, cree par un clic qui a l'air anodin.
+    """
+
+    code = "identity.last_manager"

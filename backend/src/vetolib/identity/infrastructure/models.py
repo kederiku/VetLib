@@ -16,10 +16,11 @@ conventions du projet : PK UUID, created_at, soft delete (deleted_at) et,
 pour les tables liées à une clinique, clinic_id -> cible des policies RLS.
 """
 
+import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -197,4 +198,48 @@ class PlatformAdminModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMi
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+    )
+
+
+class AdminAuditLogModel(Base, UUIDPrimaryKeyMixin):
+    """Table `admin_audit_log` : journal append-only des actions du back-office.
+
+    Volontairement SANS SoftDeleteMixin et SANS TimestampMixin :
+
+    - pas de deleted_at, parce qu'une ligne d'audit ne se supprime pas, meme
+      logiquement. Le port n'expose d'ailleurs ni update ni delete ;
+    - pas de created_at genere par la base : l'horodatage metier est
+      `occurred_at`, fourni par le port Clock comme partout ailleurs. En
+      avoir deux inviterait a se demander lequel fait foi.
+
+    Comme platform_admins, cette table est hors du modele tenant et le role
+    applicatif n'y a aucun droit (REVOKE de la migration 0009).
+    """
+
+    __tablename__ = "admin_audit_log"
+
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    actor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("platform_admins.id", name="fk_admin_audit_log_actor_id_platform_admins"),
+        nullable=False,
+    )
+    # Denormalise : l'email reste lisible meme si le compte est desactive
+    # plus tard, et une jointure de moins sur chaque ligne d'ecran.
+    actor_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    action: Mapped[str] = mapped_column(String(60), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    target_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    # Avant/apres. JAMAIS de mot de passe ni d'empreinte : ce journal est
+    # destine a etre lu.
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+
+    __table_args__ = (
+        # Les deux seules questions qu'on posera a ce journal : "que s'est-il
+        # passe sur CET objet ?" et "qu'a fait CETTE personne ?". Un index
+        # par question, chacun se terminant par occurred_at pour que le tri
+        # antichronologique soit servi par l'index lui-meme.
+        Index("ix_admin_audit_log_target", "target_type", "target_id", "occurred_at"),
+        Index("ix_admin_audit_log_actor", "actor_id", "occurred_at"),
     )
