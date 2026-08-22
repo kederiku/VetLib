@@ -139,7 +139,7 @@ async def confirm_appointment(
 Le nom du hook TypeScript en découle directement : `confirmAppointment` produit
 `useConfirmAppointment`. Sans `operation_id` explicite, FastAPI en fabrique un à partir
 du nom de fonction et du chemin, illisible et instable. **Le renommer est un changement
-cassant** pour les deux portails.
+cassant** pour les trois applications Next.
 :::
 
 Règle de sécurité systématique : **l'identité vient de la session, jamais du corps**.

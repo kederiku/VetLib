@@ -68,15 +68,23 @@ Voir
 
 ### L'authentification
 
-Aucun en-tête `Authorization`. Tout passe par des **cookies `HttpOnly`**, dans **deux
+Aucun en-tête `Authorization`. Tout passe par des **cookies `HttpOnly`**, dans **trois
 espaces cloisonnés** :
 
 | Espace                | Préfixe                | Cookies                                         |
 | --------------------- | ---------------------- | ----------------------------------------------- |
 | Personnel de clinique | `/api/v1/auth/*`       | `vetolib_access`, `vetolib_refresh`             |
 | Propriétaires         | `/api/v1/owner/auth/*` | `vetolib_owner_access`, `vetolib_owner_refresh` |
+| Plateforme            | `/api/v1/admin/auth/*` | `vetolib_admin_access`, `vetolib_admin_refresh` |
 
-Un jeton d'un espace est **rejeté** par l'autre, grâce au claim `kind`. Voir
+Le troisième espace, celui du back-office de la plateforme, est plus contraint que les
+deux autres : son cookie d'accès porte `path=/api/v1/admin` et non `/`, ses deux cookies
+sont en `SameSite=Strict`, son jeton de rafraîchissement ne vit que 12 heures au lieu de
+7 jours, et il n'existe **aucune** route d'inscription — les comptes se créent par
+`make create-admin`. C'est le seul espace qui lit à travers tous les tenants, d'où ce
+durcissement.
+
+Un jeton d'un espace est **rejeté** par les deux autres, grâce au claim `kind`. Voir
 [Authentification](../architecture/authentification.md).
 
 ### Les tags, et les bounded contexts
@@ -92,6 +100,11 @@ Un jeton d'un espace est **rejeté** par l'autre, grâce au claim `kind`. Voir
 | `pets`               | `patients`                | Propriétaires                                      |
 | `scheduling`         | `scheduling`              | Personnel                                          |
 | `owner-appointments` | `scheduling`              | Propriétaires                                      |
+| `admin-auth`         | `identity`                | Plateforme (connexion publique, débit limité)      |
+| `admin-clinics`      | `identity`                | Plateforme                                         |
+| `admin-owners`       | `identity`                | Plateforme                                         |
+| `admin-staff`        | `identity`                | Plateforme                                         |
+| `admin-stats`        | `identity`                | Plateforme                                         |
 
 Le tag détermine aussi le sous-dossier généré par Orval (`mode: "tags-split"`).
 
@@ -199,7 +212,54 @@ donc efface**. Même convention que `PUT /api/v1/owner/profile`.
 | `POST`  | `/api/v1/owner/appointments`                         | `bookAppointment`     |
 | `POST`  | `/api/v1/owner/appointments/{appointment_id}/cancel` | `cancelMyAppointment` |
 
-_42 endpoints. Table générée à partir de `backend/openapi.json` — la référence
+### `admin-auth` — 4 endpoints
+
+| Méthode | Chemin                       | `operation_id`      |
+| ------- | ---------------------------- | ------------------- |
+| `POST`  | `/api/v1/admin/auth/login`   | `adminLogin`        |
+| `POST`  | `/api/v1/admin/auth/logout`  | `adminLogout`       |
+| `GET`   | `/api/v1/admin/auth/me`      | `getCurrentAdmin`   |
+| `POST`  | `/api/v1/admin/auth/refresh` | `adminRefreshToken` |
+
+### `admin-clinics` — 8 endpoints
+
+| Méthode | Chemin                                         | `operation_id`           |
+| ------- | ---------------------------------------------- | ------------------------ |
+| `GET`   | `/api/v1/admin/clinics`                        | `listAdminClinics`       |
+| `POST`  | `/api/v1/admin/clinics`                        | `createAdminClinic`      |
+| `GET`   | `/api/v1/admin/clinics/{clinic_id}`            | `getAdminClinic`         |
+| `PUT`   | `/api/v1/admin/clinics/{clinic_id}`            | `updateAdminClinic`      |
+| `POST`  | `/api/v1/admin/clinics/{clinic_id}/reactivate` | `reactivateAdminClinic`  |
+| `GET`   | `/api/v1/admin/clinics/{clinic_id}/staff`      | `listAdminClinicStaff`   |
+| `POST`  | `/api/v1/admin/clinics/{clinic_id}/staff`      | `createAdminClinicStaff` |
+| `POST`  | `/api/v1/admin/clinics/{clinic_id}/suspend`    | `suspendAdminClinic`     |
+
+### `admin-owners` — 5 endpoints
+
+| Méthode | Chemin                                       | `operation_id`         |
+| ------- | -------------------------------------------- | ---------------------- |
+| `GET`   | `/api/v1/admin/owners`                       | `listAdminOwners`      |
+| `GET`   | `/api/v1/admin/owners/{owner_id}`            | `getAdminOwner`        |
+| `PUT`   | `/api/v1/admin/owners/{owner_id}`            | `updateAdminOwner`     |
+| `POST`  | `/api/v1/admin/owners/{owner_id}/deactivate` | `deactivateAdminOwner` |
+| `POST`  | `/api/v1/admin/owners/{owner_id}/reactivate` | `reactivateAdminOwner` |
+
+### `admin-staff` — 4 endpoints
+
+| Méthode | Chemin                                     | `operation_id`         |
+| ------- | ------------------------------------------ | ---------------------- |
+| `GET`   | `/api/v1/admin/staff`                      | `listAdminStaff`       |
+| `POST`  | `/api/v1/admin/staff/{user_id}/activate`   | `activateAdminStaff`   |
+| `POST`  | `/api/v1/admin/staff/{user_id}/deactivate` | `deactivateAdminStaff` |
+| `PUT`   | `/api/v1/admin/staff/{user_id}/role`       | `changeAdminStaffRole` |
+
+### `admin-stats` — 1 endpoints
+
+| Méthode | Chemin                | `operation_id`  |
+| ------- | --------------------- | --------------- |
+| `GET`   | `/api/v1/admin/stats` | `getAdminStats` |
+
+_65 endpoints. Table générée à partir de `backend/openapi.json` — la référence
 interactive reste la source de vérité pour les schémas et les codes de réponse._
 
 ## Régénérer le contrat

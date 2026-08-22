@@ -1,28 +1,33 @@
 ---
 sidebar_position: 1
-title: "Les deux portails Next.js"
-description: "B2C et B2B : périmètres, App Router et socle d'interface."
-keywords: [next.js, app router, shadcn, tailwind, b2b, b2c]
+title: "Les trois applications Next.js"
+description: "B2C, B2B et back-office : périmètres, App Router et socle commun."
+keywords: [next.js, app router, shadcn, tailwind, b2b, b2c, back-office]
 ---
 
-# Les deux portails Next.js
+# Les trois applications Next.js
 
-## Deux applications, deux publics
+## Trois applications, trois publics
 
-|                           | `frontend-b2c`                   | `frontend-b2b`                   |
-| ------------------------- | -------------------------------- | -------------------------------- |
-| Nom npm                   | `vetolib-portal`                 | `vetolib-clinic`                 |
-| Port                      | 3000                             | 3001                             |
-| Public                    | Propriétaires d'animaux          | Personnel de clinique            |
-| Espace d'authentification | `/api/v1/owner/auth/*`           | `/api/v1/auth/*`                 |
-| Image publiée             | `ghcr.io/kederiku/vetlib-portal` | `ghcr.io/kederiku/vetlib-clinic` |
+|                           | `frontend-b2c`                   | `frontend-b2b`                   | `frontend-admin`                |
+| ------------------------- | -------------------------------- | -------------------------------- | ------------------------------- |
+| Nom npm                   | `vetolib-portal`                 | `vetolib-clinic`                 | `vetolib-admin`                 |
+| Port                      | 3000                             | 3001                             | 3003                            |
+| Public                    | Propriétaires d'animaux          | Personnel de clinique            | Équipe de la plateforme         |
+| Espace d'authentification | `/api/v1/owner/auth/*`           | `/api/v1/auth/*`                 | `/api/v1/admin/auth/*`          |
+| Image publiée             | `ghcr.io/kederiku/vetlib-portal` | `ghcr.io/kederiku/vetlib-clinic` | `ghcr.io/kederiku/vetlib-admin` |
 
-Ce sont **deux projets npm indépendants**, chacun avec son `package-lock.json`. Voir
+Les deux premières sont les **portails clients** ; la troisième est la console
+d'exploitation, détaillée dans [Le back-office
+plateforme](back-office-plateforme.md). Cette page décrit ce que les trois ont en
+commun — et c'est presque tout.
+
+Ce sont **trois projets npm indépendants**, chacun avec son `package-lock.json`. Voir
 [Vue d'ensemble du monorepo](../architecture/vue-d-ensemble.md#pourquoi-un-monorepo-sans-espace-de-travail-npm).
 
 ## Le socle technique
 
-Identique des deux côtés :
+Identique dans les trois applications :
 
 | Brique                   | Version                                          |
 | ------------------------ | ------------------------------------------------ |
@@ -35,8 +40,12 @@ Identique des deux côtés :
 | TypeScript               | 6.0.3                                            |
 | Vitest + Testing Library | tests                                            |
 
-Les deux portails ont désormais la même liste de dépendances, `next-themes` (bascule
-clair/sombre) et `sonner` (notifications éphémères) compris.
+Les deux portails ont exactement la même liste de dépendances, `next-themes` (bascule
+clair/sombre) et `sonner` (notifications éphémères) compris. Le back-office en diffère
+sur deux points, tous deux justifiés par son périmètre : il ajoute
+`@tanstack/react-table` (les datatables de la console) et retire `date-fns` et
+`react-day-picker` (aucun calendrier — il n'y a pas de rendez-vous dans une console
+d'exploitation).
 
 :::note TypeScript reste en 6.x
 Une contrainte du projet, inscrite dans `CLAUDE.md` et verrouillée dans
@@ -46,7 +55,7 @@ Dependabot dans les trois projets npm.
 
 ## L'organisation des routes
 
-Les deux applications utilisent le même découpage par **groupes de routes** — les
+Les trois applications utilisent le même découpage par **groupes de routes** — les
 parenthèses ne produisent pas de segment d'URL, elles servent à partager une mise en
 page :
 
@@ -63,18 +72,28 @@ src/app/
 └── globals.css
 ```
 
-| `frontend-b2c`                 | `frontend-b2b`          |
-| ------------------------------ | ----------------------- |
-| `(protected)/tableau-de-bord`  | `(protected)/dashboard` |
-| `(protected)/rendez-vous`      | `(protected)/agenda`    |
-| `(protected)/rendez-vous/[id]` | —                       |
-| `(protected)/animaux`          | —                       |
-| `(protected)/animaux/[id]`     | —                       |
-| `(protected)/mon-compte`       | `(protected)/reglages`  |
+| `frontend-b2c`                 | `frontend-b2b`          | `frontend-admin`              |
+| ------------------------------ | ----------------------- | ----------------------------- |
+| `(protected)/tableau-de-bord`  | `(protected)/dashboard` | `(protected)/tableau-de-bord` |
+| `(protected)/rendez-vous`      | `(protected)/agenda`    | `(protected)/cliniques`       |
+| `(protected)/rendez-vous/[id]` | —                       | `(protected)/cliniques/[id]`  |
+| `(protected)/animaux`          | —                       | `(protected)/proprietaires`   |
+| `(protected)/animaux/[id]`     | —                       | `(protected)/personnel`       |
+| `(protected)/mon-compte`       | `(protected)/reglages`  | —                             |
 
 Les routes du B2C sont **en français**, y compris `/tableau-de-bord` là où le B2B garde
 `/dashboard` : l'URL d'un portail grand public est vue par ses utilisateurs — barre
 d'adresse, favoris, lien partagé — celle d'un outil professionnel beaucoup moins.
+
+Le back-office est en français lui aussi, pour une autre raison : la console est en
+`noindex`, il n'y a donc aucun enjeu de référencement, et le vocabulaire métier est
+français sans équivalent net dans le code (« propriétaires » quand l'API dit `owners`).
+Le libellé du menu, le titre de la page et le segment d'URL deviennent alors le **même
+mot**, ce qui rend `pageTitleForPath` évident au lieu d'être une table de correspondance
+mentale.
+
+Le back-office n'a **pas** de route `register` : aucun compte ne s'y crée en ligne, ils
+sont créés par `make create-admin`.
 
 ### Le cas particulier de `/register` côté B2C
 
@@ -116,35 +135,40 @@ Deux conséquences pratiques :
 
 ## Ce qui est mutualisé, et ce qui ne l'est pas
 
-**Identiques au caractère près** entre les deux portails : `tsconfig.json`,
+**Identiques au caractère près** dans les trois applications : `tsconfig.json`,
 `eslint.config.mjs`, `postcss.config.mjs`, `components.json`, `vitest.setup.ts`, et la
 liste des dépendances de développement.
 
-**Dupliqués mais différents** : `src/lib/api/generated/` — chaque portail possède sa
-propre copie du client, régénérée par sa propre commande.
+**Dupliqués mais différents** : `src/lib/api/generated/` — chaque application possède
+sa propre copie du client, régénérée par sa propre commande. Et `src/app/globals.css`,
+dont la teinte de marque diffère : émeraude (OKLCH 163) pour le B2C, indigo (277) pour
+le B2B, azur (220) pour le back-office — le point le plus équidistant des deux marques
+produit, et quasi complémentaire du rouge `destructive`.
 
 **Spécifiques** : tout `src/lib/<domaine>/` (`pets`, `appointments` et `account` côté
-B2C ; `agenda`, `scheduling`, `clinic`, `auth` côté B2B).
+B2C ; `agenda`, `scheduling`, `clinic`, `auth` côté B2B ; `table`, `clinics`, `owners`
+et `staff` côté back-office).
 
 **La même coquille, transposée** : `AppShell` + `AppSidebar` + `SiteHeader` +
 `UserMenu`, avec `lib/navigation.ts` pour source unique des entrées de menu et du titre
 de page, et `components/shared/` pour les primitives de mise en page
 (`PageContainer`, `PageHeader`, `EmptyState`, `ErrorState`). Une seule différence
-assumée : le B2C n'a **ni rôle ni permission** — un propriétaire voit tout son espace, la
+assumée : seul le B2B a des **rôles et des permissions**. Un propriétaire voit tout son
+espace, et l'autorisation du back-office est binaire ; dans ces deux applications, la
 sidebar ne filtre donc rien.
 
 ### Les deux largeurs de page
 
-Le `PageContainer` est le **seul endroit** de chaque portail où une largeur de page se
-décide : `SidebarInset`, au-dessus, est en `w-full flex-1` sans plafond. D'où la règle du
+Le `PageContainer` est le **seul endroit** de chaque application où une largeur de page
+se décide : `SidebarInset`, au-dessus, est en `w-full flex-1` sans plafond. D'où la règle du
 `CLAUDE.md` — un écran ne fixe jamais sa propre largeur.
 
-| Variante | Largeur                   | Pour quoi                                                                     |
-| -------- | ------------------------- | ----------------------------------------------------------------------------- |
-| défaut   | `max-w-[96rem]` (1536 px) | Écrans denses : tableaux de bord, listes, grille d'animaux, agenda            |
-| `narrow` | `max-w-3xl` (768 px)      | Lecture et formulaires : Mon compte, fiche d'un rendez-vous, tunnel, réglages |
+| Variante | Largeur                   | Pour quoi                                                                      |
+| -------- | ------------------------- | ------------------------------------------------------------------------------ |
+| défaut   | `max-w-[96rem]` (1536 px) | Écrans denses : tableaux de bord, listes, grille d'animaux, agenda, datatables |
+| `narrow` | `max-w-3xl` (768 px)      | Lecture et formulaires : Mon compte, fiche d'un rendez-vous, tunnel, réglages  |
 
-Les deux portails partagent la même largeur dense. Le raisonnement initial — « les listes
+Les trois applications partagent la même largeur dense. Le raisonnement initial — « les listes
 d'un particulier sont plus courtes, donc le B2C doit être plus étroit » — confondait la
 longueur des listes avec la largeur de la fenêtre : sur un écran de 1920, le B2C laissait
 près de 500 px de vide de chaque côté.
@@ -156,9 +180,9 @@ Le plafond, lui, reste volontaire. Sans lui, une ligne de rendez-vous s'étirera
 
 L'état replié de la sidebar est persisté dans le cookie `sidebar_state`, relu par un
 Server Component pour éviter le flash ouvert → replié au rechargement. En développement
-local, ce cookie n'est **pas** cloisonné par port : `localhost:3000` et `localhost:3001`
-le partagent, replier la sidebar d'un portail replie donc celle de l'autre. Sans
-conséquence en production, où les domaines diffèrent.
+local, ce cookie n'est **pas** cloisonné par port : `localhost:3000`, `localhost:3001`
+et `localhost:3003` le partagent, replier la sidebar d'une application replie donc celle
+des deux autres. Sans conséquence en production, où les domaines diffèrent.
 
 Le partage se fait par duplication assumée, pas par un paquet commun. Un paquet
 partagé imposerait un espace de travail npm, avec les inconvénients décrits dans la vue
@@ -166,7 +190,7 @@ d'ensemble.
 
 ## Deux détails d'implémentation qui méritent d'être connus
 
-### L'« indice de session » du portail B2B
+### L'« indice de session »
 
 Les cookies sont `HttpOnly` : JavaScript ne peut donc pas savoir si une session existe
 autrement qu'en interrogeant l'API. Pour un visiteur qui arrive sur `/login` sans s'être
@@ -175,7 +199,8 @@ console — un `401` sur `/me`, puis un `401` sur le rafraîchissement tenté pa
 
 `src/lib/auth/session-hint.ts` pose donc un drapeau dans `localStorage` à la connexion et
 le retire à la déconnexion. Le garde public ne lance la vérification que si le drapeau est
-présent.
+présent. Le mécanisme est repris à l'identique dans le B2B et dans le back-office, sous
+des clés distinctes.
 
 C'est un **indice, pas une vérité** : les cookies restent la seule autorité. Le drapeau
 peut se tromper dans les deux sens sans rien casser — drapeau présent mais cookies
@@ -188,8 +213,8 @@ comme si le drapeau n'existait pas. Côté rendu serveur, toutes les fonctions n
 
 ### La configuration ESLint
 
-Configuration plate (ESLint 10), identique dans les deux portails, avec un seul réglage
-manuel :
+Configuration plate (ESLint 10), identique dans les trois applications, avec un seul
+réglage manuel :
 
 ```js
 settings: { react: { version: "19.2" } },

@@ -13,7 +13,7 @@ keywords: [tests, pytest, testcontainers, vitest, couverture, seuils]
 flowchart TD
   U["tests/unit<br/>doublures en mémoire, zéro entrée-sortie<br/>millisecondes, SANS Docker"]
   I["tests/integration<br/>PostgreSQL et Redis réels (testcontainers)<br/>application FastAPI complète"]
-  F["Vitest × 2 portails<br/>jsdom, Testing Library"]
+  F["Vitest × 3 applications<br/>jsdom, Testing Library"]
 
   U --> P1["Prouve : règles métier, transitions,<br/>calcul des créneaux, validation"]
   I --> P2["Prouve : RLS, SET LOCAL, index partiels,<br/>contrainte EXCLUDE, trajet HTTP complet"]
@@ -63,21 +63,23 @@ tests est assurée par un `TRUNCATE` des tables avant chaque test.
 
 Les fichiers actuels couvrent les flux critiques :
 
-| Fichier                          | Ce qu'il prouve                                                               |
-| -------------------------------- | ----------------------------------------------------------------------------- |
-| `test_rls_isolation.py`          | Une clinique ne voit rien d'une autre, même sans clause de filtrage           |
-| `test_auth_flow.py`              | Connexion, rafraîchissement, déconnexion côté personnel                       |
-| `test_owner_auth_flow.py`        | Idem côté propriétaires, et le cloisonnement des deux espaces                 |
-| `test_scheduling_flow.py`        | Réservation, confirmation, annulation, anti-double-réservation                |
-| `test_scheduling_permissions.py` | Un rôle insuffisant reçoit bien un `403`                                      |
-| `test_pets_flow.py`              | Le filtrage applicatif par `owner_id`                                         |
-| `test_clinics_me.py`             | Lecture et mise à jour du profil de clinique                                  |
-| `test_clinic_suspension.py`      | Les cinq points où une clinique suspendue coupe l'accès de son personnel      |
-| `test_admin_auth_flow.py`        | Le back-office : attributs des cookies, révocation, limitation de débit       |
-| `test_admin_routes_protected.py` | **Toute** route `/api/v1/admin/*` exige le cookie d'administrateur            |
-| `test_admin_bootstrap_cli.py`    | `make create-admin` : création, refus du doublon, garde-fou du dernier compte |
+| Fichier                          | Ce qu'il prouve                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `test_rls_isolation.py`          | Une clinique ne voit rien d'une autre, même sans clause de filtrage                                   |
+| `test_auth_flow.py`              | Connexion, rafraîchissement, déconnexion côté personnel                                               |
+| `test_owner_auth_flow.py`        | Idem côté propriétaires, et le cloisonnement des deux espaces                                         |
+| `test_scheduling_flow.py`        | Réservation, confirmation, annulation, anti-double-réservation                                        |
+| `test_scheduling_permissions.py` | Un rôle insuffisant reçoit bien un `403`                                                              |
+| `test_pets_flow.py`              | Le filtrage applicatif par `owner_id`                                                                 |
+| `test_clinics_me.py`             | Lecture et mise à jour du profil de clinique                                                          |
+| `test_clinic_suspension.py`      | Les cinq points où une clinique suspendue coupe l'accès de son personnel                              |
+| `test_admin_auth_flow.py`        | Le back-office : attributs des cookies, révocation, limitation de débit                               |
+| `test_admin_routes_protected.py` | **Toute** route `/api/v1/admin/*` exige le cookie d'administrateur                                    |
+| `test_admin_directory_flow.py`   | Recherche sans accent (`unaccent`), jokers échappés, et la lecture à travers **toutes** les cliniques |
+| `test_admin_mutations_flow.py`   | Créer, suspendre, désactiver : l'effet réel, et la ligne d'audit écrite                               |
+| `test_admin_bootstrap_cli.py`    | `make create-admin` : création, refus du doublon, garde-fou du dernier compte                         |
 
-Deux de ces fichiers méritent un mot.
+Trois de ces fichiers méritent un mot.
 
 `test_clinic_suspension.py` existe parce que la suspension d'une clinique agit dans cinq
 use cases différents — dont un qui vit dans un **autre** bounded context (le lecteur de
@@ -92,6 +94,16 @@ contourne la Row-Level Security ([ADR-0013](../adr/0013-troisieme-espace-authent
 sa barrière étant du code, elle est oubliable, et une liste écrite à la main se périmerait
 dès la route suivante. Un test compagnon vérifie que l'énumération n'est pas vide — le
 mode de panne le plus insidieux d'un test généré est de ne rien tester du tout.
+
+`test_admin_directory_flow.py` garde l'autre moitié de la même décision. Ses listes
+doivent voir **plusieurs cliniques à la fois** : le test central inscrit deux cliniques
+par le flux public, puis demande une seule liste de personnel et exige d'y retrouver les
+deux. Si quelqu'un branchait un jour le back-office sur un UoW tenant, la Row-Level
+Security ne renverrait plus que le personnel d'une clinique — sans erreur, sans alerte,
+juste une liste tranquillement incomplète. C'est la contrepartie automatisée de l'entorse
+assumée dans [Isolation multi-tenant et RLS](../architecture/multi-tenant-et-rls.md) :
+dans cet espace, la base ne rattrape plus rien, donc la propriété doit être prouvée par un
+test — et seule une vraie base, politiques actives, peut la prouver.
 
 ## Les tests frontend
 
@@ -112,6 +124,7 @@ make coverage-front    # avec couverture et seuils : ce que fait la CI
 | Backend (`fail_under`) | **85 %**                      | 87 % au 2026-08-21                    |
 | `frontend-b2c`         | st 62 / br 60 / fn 58 / li 63 | st 64,7 / br 63,2 / fn 60,7 / li 65,4 |
 | `frontend-b2b`         | st 63 / br 59 / fn 56 / li 63 | st 65,1 / br 62,2 / fn 58,0 / li 65,5 |
+| `frontend-admin`       | st 79 / br 68 / fn 73 / li 80 | st 81,2 / br 71,8 / fn 75,2 / li 82,1 |
 
 La méthode est constante : **on mesure, puis on pose le seuil deux points en dessous**
 (trois pour les branches, dont les compteurs v8 bougent au gré de la chaîne de
@@ -135,11 +148,11 @@ seuil devient une formalité qu'on ajuste à la baisse jusqu'à ce qu'il ne mesu
 
 ## Ce que la CI en fait
 
-| Job                             | Contenu                                                                 |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| `backend - tests unitaires`     | `pytest tests/unit`, produit `.coverage.unit`                           |
-| `backend - tests d'integration` | `pytest tests/integration`, produit `.coverage.integration`             |
-| `backend - couverture`          | Récupère les deux, `coverage combine`, applique `fail_under`            |
-| `frontend - <app>`              | ESLint, build, `tsc`, Vitest avec seuils, pour chacun des deux portails |
+| Job                             | Contenu                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `backend - tests unitaires`     | `pytest tests/unit`, produit `.coverage.unit`                                 |
+| `backend - tests d'integration` | `pytest tests/integration`, produit `.coverage.integration`                   |
+| `backend - couverture`          | Récupère les deux, `coverage combine`, applique `fail_under`                  |
+| `frontend - <app>`              | ESLint, build, `tsc`, Vitest avec seuils, pour chacune des trois applications |
 
 Voir [Le pipeline d'intégration continue](../exploitation/pipeline-ci.md).

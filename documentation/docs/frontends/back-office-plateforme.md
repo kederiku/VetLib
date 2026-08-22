@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 2
 title: "Le back-office plateforme"
 description: "La console d'administration : datatables serveur, cliniques, propriétaires et personnel."
 keywords:
@@ -21,9 +21,10 @@ seule qui voie les données de **toutes** les cliniques à la fois.
 | Référencement             | `X-Robots-Tag: noindex, nofollow`                 |
 
 Le socle technique est celui des deux portails (Next 16 App Router, React 19,
-Tailwind 4, shadcn/ui sur Base UI, TanStack Query, Vitest), avec **une seule
-dépendance de plus** : `@tanstack/react-table`. Le cloisonnement de l'espace
-d'authentification est décrit dans
+Tailwind 4, shadcn/ui sur Base UI, TanStack Query, Vitest), à **deux différences
+près** : il ajoute `@tanstack/react-table` pour ses datatables, et retire
+`date-fns` et `react-day-picker` — une console d'exploitation n'a aucun calendrier
+à afficher. Le cloisonnement de l'espace d'authentification est décrit dans
 [ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md).
 
 ## Les écrans

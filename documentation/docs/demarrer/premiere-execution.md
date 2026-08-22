@@ -52,6 +52,7 @@ l'exécution. Voir [Migrations de base de données](../backend/migrations-alembi
 | Portail B2C (propriétaires) | 3000        |
 | Portail B2B (cliniques)     | 3001        |
 | Documentation (ce site)     | 3002        |
+| Back-office plateforme      | 3003        |
 | PostgreSQL                  | 5432        |
 | Redis                       | 6379        |
 | MinIO — API / console       | 9000 / 9001 |
@@ -111,7 +112,12 @@ make logs s=api     # un seul
 ```bash
 make dev-b2c   # http://localhost:3000
 make dev-b2b   # http://localhost:3001
+make dev-admin # http://localhost:3003
 ```
+
+Le back-office plateforme n'a **aucun compte par défaut**, et aucune inscription
+publique : créez le vôtre avec `make create-admin email=prenom.nom@exemple.fr` avant de
+vous y connecter.
 
 Chaque commande occupe son terminal. Pour voir ce qu'on peut faire ensuite, suivez
 [Tour du produit en 10 minutes](parcours-fonctionnel.md).

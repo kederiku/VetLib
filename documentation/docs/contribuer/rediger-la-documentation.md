@@ -19,6 +19,7 @@ documentation/
 ├── src/css/custom.css      # UNIQUEMENT des variables --ifm-*
 ├── src/pages/index.tsx     # la page d'accueil
 ├── static/img/
+├── static/docs/            # redirections des anciennes URL, écrites à la main
 └── docs/                   # tout le contenu
     ├── intro.md
     └── <categorie>/
@@ -76,6 +77,49 @@ Pour une nouvelle catégorie, ajoutez un `_category_.json` :
   }
 }
 ```
+
+## Renommer ou déplacer une page
+
+Une URL déjà publiée ne se casse pas : elle est indexée par les moteurs et peut-être en
+favori chez un lecteur. On dépose donc, à l'ancien chemin, une **page de redirection
+écrite à la main** — un fichier `.html` sous `static/`, qui est recopié tel quel dans le
+site construit :
+
+```text
+docs/frontends/les-applications-next.md        la page, sous son nouveau nom
+static/docs/frontends/les-deux-portails.html   la redirection, à l'ancien chemin
+```
+
+Deux mécanismes se combinent pour que cela marche. Le site pose
+`trailingSlash: false`, donc Docusaurus publie chaque page comme `<chemin>.html` plutôt
+que `<chemin>/index.html` ; et GitHub Pages, devant une adresse sans extension, essaie
+`<chemin>.html`. L'ancienne URL retombe donc sur le fichier de redirection.
+
+Recopiez le modèle, `static/docs/frontends/les-deux-portails.html`, dont l'en-tête
+explique chacun des choix ci-dessous. Trois points comptent :
+
+- le chemin de destination reste **relatif** (`les-applications-next`, jamais
+  `/docs/frontends/...`) : le site vit sous le sous-chemin `/VetLib/` de GitHub Pages,
+  qu'un chemin absolu ignorerait ;
+- la bascule se fait avec **`location.replace()`, pas `location.href`** : la page de
+  redirection ne doit pas entrer dans l'historique, sinon le bouton « précédent » y
+  revient et repart aussitôt vers la destination ;
+- elle porte aussi un rafraîchissement `<meta http-equiv="refresh">`, un
+  `<meta name="robots" content="noindex">` et un lien visible dans le corps — pour les
+  navigateurs sans JavaScript, et pour ne pas faire indexer un doublon.
+
+Ce HTML est du code comme un autre : sous `static/`, `.prettierignore` n'écarte que les
+binaires de `static/img`, donc `make docs-format` le reformate et `make check-docs` le
+vérifie.
+
+:::note Pourquoi pas `@docusaurus/plugin-client-redirects`
+Le plugin officiel fait exactement cela, mais il est aujourd'hui impossible à installer :
+`npm install` échoue sur un conflit de pair **préexistant** — `@mermaid-js/layout-elk`
+0.2.2 contre le `^0.1.9` attendu par `@docusaurus/theme-mermaid` 3.10.2. Seul `npm ci` s'en
+accommode, parce qu'il installe le lockfile sans rien résoudre. Le plugin produirait de
+toute façon ces mêmes fichiers ; le jour où le conflit sera tranché, ils lui céderont la
+place.
+:::
 
 ## `.md` ou `.mdx` ?
 

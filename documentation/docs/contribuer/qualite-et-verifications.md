@@ -15,13 +15,13 @@ make check
 
 Elle enchaîne, dans cet ordre :
 
-| Étape         | Outil                                                         |
-| ------------- | ------------------------------------------------------------- |
-| `lint`        | ruff (`check` + `format --check`)                             |
-| `typecheck`   | mypy strict                                                   |
-| `test-unit`   | pytest sur `tests/unit`                                       |
-| `check-front` | ESLint, build Next, `tsc`, Vitest — sur les **deux** portails |
-| `check-docs`  | Prettier, `tsc`, build Docusaurus                             |
+| Étape         | Outil                                                              |
+| ------------- | ------------------------------------------------------------------ |
+| `lint`        | ruff (`check` + `format --check`)                                  |
+| `typecheck`   | mypy strict                                                        |
+| `test-unit`   | pytest sur `tests/unit`                                            |
+| `check-front` | ESLint, build Next, `tsc`, Vitest — sur les **trois** applications |
+| `check-docs`  | Prettier, `tsc`, build Docusaurus                                  |
 
 C'est le miroir exact des contrôles de CI **qui ne demandent pas Docker**. Le README et
 le gabarit de demande de fusion promettent tous deux cette équivalence : elle doit rester
@@ -109,11 +109,12 @@ compris.
 
 ## Les seuils de couverture
 
-| Périmètre      | Seuil actuel                  |
-| -------------- | ----------------------------- |
-| Backend        | 85 % (mesuré 87 %)            |
-| `frontend-b2c` | st 62 / br 60 / fn 58 / li 63 |
-| `frontend-b2b` | st 63 / br 59 / fn 56 / li 63 |
+| Périmètre        | Seuil actuel                  |
+| ---------------- | ----------------------------- |
+| Backend          | 85 % (mesuré 87 %)            |
+| `frontend-b2c`   | st 62 / br 60 / fn 58 / li 63 |
+| `frontend-b2b`   | st 63 / br 59 / fn 56 / li 63 |
+| `frontend-admin` | st 79 / br 68 / fn 73 / li 80 |
 
 La méthode : **mesurer, puis poser le seuil deux points en dessous** — trois pour les
 branches, dont les compteurs v8 bougent au gré de la chaîne de compilation.

@@ -5,7 +5,7 @@
   "link": {
     "type": "generated-index",
     "title": "Frontends",
-    "description": "Les trois applications Next.js, le client API généré et la gestion de session côté navigateur.",
+    "description": "Le socle commun aux trois applications Next.js, le back-office de la plateforme, le client API généré et la gestion de session côté navigateur.",
     "slug": "/frontends"
   }
 }

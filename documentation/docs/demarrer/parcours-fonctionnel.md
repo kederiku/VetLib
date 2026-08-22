@@ -1,15 +1,16 @@
 ---
 sidebar_position: 5
 title: "Tour du produit en 10 minutes"
-description: "Faire vivre un rendez-vous de bout en bout via les deux portails."
-keywords: [démonstration, parcours, rendez-vous, b2b, b2c]
+description: "Faire vivre un rendez-vous de bout en bout, des deux portails clients au back-office."
+keywords: [démonstration, parcours, rendez-vous, b2b, b2c, back-office]
 ---
 
 # Tour du produit en 10 minutes
 
 Ce parcours fait naître, confirmer et terminer un rendez-vous en passant par les deux
 portails. Il suppose la pile démarrée (voir [Première exécution](premiere-execution.md))
-et les deux frontends lancés :
+et ces deux portails lancés — le back-office, troisième application Next, n'entre en
+scène qu'à l'étape 7 :
 
 ```bash
 make dev-b2c   # http://localhost:3000
@@ -150,6 +151,21 @@ annuler.
 L'annulation libère le créneau **automatiquement**, sans code supplémentaire : le statut
 `cancelled` sort du périmètre du `WHERE status IN ('pending', 'confirmed')` de la
 contrainte d'exclusion.
+
+## 7. Regarder la même histoire depuis le back-office
+
+```bash
+make create-admin email=prenom.nom@exemple.fr   # une seule fois, mot de passe à l'invite
+make dev-admin                                  # http://localhost:3003
+```
+
+La clinique créée à l'étape 1 et le compte propriétaire de l'étape 3 apparaissent tous
+deux dans la console d'exploitation — `/cliniques` et `/proprietaires` —, cette fois
+**toutes cliniques confondues**. C'est le troisième espace d'authentification
+([ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md)), et le seul dont
+l'isolation ne repose pas sur la RLS : il lit délibérément à travers les tenants. Le
+détail des écrans est dans
+[Le back-office plateforme](../frontends/back-office-plateforme.md).
 
 ## Ce qui s'est passé dans les coulisses
 

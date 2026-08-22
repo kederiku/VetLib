@@ -69,17 +69,24 @@ scripts d'initialisation, pas le backend.
 
 ### Authentification
 
-| Variable                      | Valeur de dev                          | Rôle                                                                                     |
-| ----------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `JWT_SECRET`                  | `dev-only-secret-change-me-0123456789` | Secret HS256. **Refusé en production**                                                   |
-| `JWT_ISSUER` / `JWT_AUDIENCE` | `vetolib`                              | Claims `iss` et `aud`, vérifiés au décodage                                              |
-| `JWT_ACCESS_TTL_SECONDS`      | `900` (15 min)                         | Durée du cookie d'accès                                                                  |
-| `JWT_REFRESH_TTL_SECONDS`     | `604800` (7 j)                         | Durée du cookie de rafraîchissement                                                      |
-| `COOKIE_SECURE`               | `false` en dev                         | `true` en production : cookies réservés au HTTPS                                         |
-| `CORS_ORIGINS`                | les trois applications Next            | Liste **exacte**, sans joker : l'authentification par cookies impose `allow_credentials` |
+| Variable                        | Valeur de dev                          | Rôle                                                                                           |
+| ------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`                    | `dev-only-secret-change-me-0123456789` | Secret HS256. **Refusé en production**                                                         |
+| `JWT_ISSUER` / `JWT_AUDIENCE`   | `vetolib`                              | Claims `iss` et `aud`, vérifiés au décodage                                                    |
+| `JWT_ACCESS_TTL_SECONDS`        | `900` (15 min)                         | Durée du cookie d'accès                                                                        |
+| `JWT_REFRESH_TTL_SECONDS`       | `604800` (7 j)                         | Durée du cookie de rafraîchissement                                                            |
+| `JWT_ADMIN_REFRESH_TTL_SECONDS` | `43200` (12 h)                         | Rafraîchissement du back-office : la session qui voit **tous** les tenants doit le moins durer |
+| `ADMIN_LOGIN_MAX_ATTEMPTS`      | `5`                                    | Échecs tolérés avant un `429` sur le login du back-office                                      |
+| `ADMIN_LOGIN_WINDOW_SECONDS`    | `900` (15 min)                         | Fenêtre de ce compteur : le refus se lève seul, aucun canal de déblocage n'existe              |
+| `COOKIE_SECURE`                 | `false` en dev                         | `true` en production : cookies réservés au HTTPS                                               |
+| `CORS_ORIGINS`                  | les trois applications Next            | Liste **exacte**, sans joker : l'authentification par cookies impose `allow_credentials`       |
 
 Voir [Authentification](../architecture/authentification.md) pour ce que ces durées
-impliquent.
+impliquent, et
+[Ce que l'espace plateforme fait différemment](../architecture/authentification.md#ce-que-lespace-plateforme-fait-différemment-et-pourquoi)
+pour le détail du compteur d'échecs — clés Redis, double comptage IP et e-mail, et ce
+qui se passe quand Redis tombe. Le raisonnement n'est écrit qu'à cet endroit-là :
+deux copies divergeraient à la première évolution du seuil.
 
 ### Divers
 
@@ -117,4 +124,7 @@ production qui tourne silencieusement avec un secret connu de tous**. La borne d
   développement, et il est justement ce que le validateur interdit en production.
 - **Aucun secret dans ce site.** Le dépôt est public, donc ce site l'est aussi : les
   valeurs listées ici sont celles des fichiers `.env.example`, c'est-à-dire des valeurs
-  de développement destinées à être remplacées.
+  de développement destinées à être remplacées. Quelques réglages fins — les `ADMIN_LOGIN_*`,
+  `JWT_ADMIN_REFRESH_TTL_SECONDS`, `JWT_ISSUER`, `JWT_AUDIENCE` — n'y figurent pas : leur
+  valeur est alors le défaut déclaré dans `Settings`, et il faut ajouter la ligne à son
+  propre `.env` pour s'en écarter.

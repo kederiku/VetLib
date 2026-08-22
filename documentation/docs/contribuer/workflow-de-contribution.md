@@ -68,9 +68,9 @@ chore(ci): aligner @types/node sur le runtime du projet
 docs: espaces d'auth staff/owner dans CLAUDE.md
 ```
 
-Les portées observées : `b2b`, `b2c`, `backend`, `scheduling`, `front`, `ci`, `deps`,
-`deps-dev`. Dependabot utilise `chore(deps)`, `chore(deps-dev)` et `ci(deps)`, configurés
-dans `dependabot.yml`.
+Les portées observées : `b2b`, `b2c`, `admin`, `backend`, `scheduling`, `front`, `ci`,
+`deps`, `deps-dev`. Dependabot utilise `chore(deps)`, `chore(deps-dev)` et `ci(deps)`,
+configurés dans `dependabot.yml`.
 
 ## La checklist de la demande de fusion
 
@@ -83,7 +83,7 @@ Le gabarit est pré-rempli par `gh pr create --fill`. Trois sections.
 - `make check` passe en local ;
 - `make test-integration` si le backend ou le schéma a changé ;
 - migration Alembic ajoutée si un modèle a changé, **et un seul `head`** ;
-- `make generate-api` relancé et **les deux** clients committés, si un endpoint a changé ;
+- `make generate-api` relancé et **les trois** clients committés, si un endpoint a changé ;
 - commentaires pédagogiques en français sur tout code nouveau ou modifié ;
 - composants `shadcn/ui` + Tailwind côté frontend, pas de CSS maison.
 

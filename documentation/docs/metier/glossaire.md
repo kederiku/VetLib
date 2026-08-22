@@ -83,10 +83,11 @@ créent par `make create-admin`.
 **Back-office plateforme** — L'espace d'administration des exploitants
 (`/api/v1/admin/*`). Le seul dont l'isolation ne repose pas sur la RLS, et donc le seul
 dont la barrière est du code. Voir
+[Le back-office plateforme](../frontends/back-office-plateforme.md) et
 [ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md).
 
 **`operation_id`** — L'identifiant explicite d'une route FastAPI. Il **détermine le nom
-du hook** généré par Orval : le changer renomme le hook dans les deux portails.
+du hook** généré par Orval : le changer renomme le hook dans les trois applications.
 
 **Orval** — Le générateur qui transforme le contrat OpenAPI en hooks TanStack Query.
 
@@ -112,8 +113,9 @@ du soft delete, qui libère l'e-mail dans les index uniques partiels et interdit
 tout retour en arrière. Voir
 [Modèle de données](../architecture/modele-de-donnees.md#suspendre-nest-pas-supprimer--la-colonne-is_active).
 
-**Jeton d'accès / de rafraîchissement** — 15 minutes / 7 jours. Transportés en cookies
-`HttpOnly`, jamais dans un corps JSON.
+**Jeton d'accès / de rafraîchissement** — 15 minutes / 7 jours, sauf dans l'espace
+plateforme où le rafraîchissement tombe à **12 heures** — c'est le jeton le plus puissant
+du système. Transportés en cookies `HttpOnly`, jamais dans un corps JSON.
 
 **Tenant** — Le locataire d'une base partagée. Ici, la clinique.
 

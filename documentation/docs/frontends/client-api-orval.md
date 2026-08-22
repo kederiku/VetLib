@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 title: "Le client API généré par Orval"
 description: "De l'operation_id FastAPI aux hooks TanStack Query."
 keywords: [orval, openapi, tanstack query, génération, drift, operation_id]
@@ -50,13 +50,13 @@ Sans `operation_id` explicite, FastAPI en fabrique un à partir du nom de foncti
 chemin : illisible, et instable au moindre remaniement.
 
 :::warning Renommer un `operation_id` est un changement cassant
-Le hook est renommé dans les **deux** portails, et tous ses appels cessent de compiler.
-C'est visible et rattrapable — mais à faire sciemment.
+Le hook est renommé dans les **trois** applications, et tous ses appels cessent de
+compiler. C'est visible et rattrapable — mais à faire sciemment.
 :::
 
 ## La configuration
 
-Les deux `orval.config.ts` sont identiques :
+Les trois `orval.config.ts` sont identiques :
 
 ```ts
 export default defineConfig({
@@ -93,13 +93,18 @@ produirait des `useQuery` sur des `POST`.
 
 ## Les tags, et donc les dossiers générés
 
-| Tag                                 | Contexte                             |
-| ----------------------------------- | ------------------------------------ |
-| `auth`, `clinics`, `public-clinics` | `identity`, côté personnel et public |
-| `owner-auth`, `owner-profile`       | `identity`, côté propriétaires       |
-| `pets`                              | `patients`                           |
-| `scheduling`, `owner-appointments`  | `scheduling`                         |
-| `health`                            | `shared`                             |
+| Tag                                                                         | Contexte                             |
+| --------------------------------------------------------------------------- | ------------------------------------ |
+| `auth`, `clinics`, `public-clinics`                                         | `identity`, côté personnel et public |
+| `owner-auth`, `owner-profile`                                               | `identity`, côté propriétaires       |
+| `admin-auth`, `admin-clinics`, `admin-owners`, `admin-staff`, `admin-stats` | `identity`, côté plateforme          |
+| `pets`                                                                      | `patients`                           |
+| `scheduling`, `owner-appointments`                                          | `scheduling`                         |
+| `health`                                                                    | `shared`                             |
+
+Les trois applications reçoivent **tous** ces dossiers, y compris ceux qu'elles
+n'appelleront jamais : il n'y a qu'un seul contrat et aucun filtre par tag. Ce code mort
+est élagué au build, et exclu d'ESLint, de CodeQL et de la couverture.
 
 ## `generated/` est committé et **jamais** édité
 
@@ -124,7 +129,8 @@ make -C backend openapi             # produit backend/openapi.json
 python3 -m http.server 8000 --directory backend &   # sert le fichier
 npm ci && npm run generate:api      # dans chaque frontend
 git status --porcelain -- frontend-b2c/src/lib/api/generated \
-                          frontend-b2b/src/lib/api/generated
+                          frontend-b2b/src/lib/api/generated \
+                          frontend-admin/src/lib/api/generated
 ```
 
 L'astuce du `http.server` évite de démarrer toute la pile : Orval n'a besoin que du
@@ -137,8 +143,10 @@ de télécharger le contrat produit par une branche et de le comparer à celui d
 
 ```bash
 make up                # l'API doit répondre sur :8000
-make generate-api      # régénère les DEUX portails
-git add frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated
+make generate-api      # régénère les TROIS applications Next
+git add frontend-b2c/src/lib/api/generated \
+        frontend-b2b/src/lib/api/generated \
+        frontend-admin/src/lib/api/generated
 ```
 
 Puis vérifiez les appels : un champ renommé ou devenu obligatoire fait échouer
