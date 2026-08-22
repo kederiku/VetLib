@@ -191,12 +191,65 @@ Dès que la signature d'un endpoint change — chemin, paramètres, schéma de r
 
 ```bash
 make up                # l'API doit tourner sur :8000
-make generate-api      # régénère les DEUX portails
+make generate-api      # régénère les TROIS applications Next
 ```
 
 **Un oubli bloque la demande de fusion** : le job `api-client-drift` régénère le client
 en CI et échoue si `git status` n'est pas vide. Voir
 [Le client API généré par Orval](../frontends/client-api-orval.md).
+
+## Pagination des listes
+
+Tout endpoint qui renvoie une liste **non bornée par nature** est paginé. Le contrat est
+le même partout, et il n'y en a qu'un :
+
+| Élément               | Convention                                                                |
+| --------------------- | ------------------------------------------------------------------------- |
+| Paramètres de requête | `limit` (1 à 100, défaut 20), `offset` (≥ 0), `search`, plus les filtres  |
+| Tri                   | `sort_by` (un `StrEnum` **liste blanche**) et `sort_dir` (`asc` / `desc`) |
+| Réponse               | `{ items, total, limit, offset }`                                         |
+| Type de retour        | une sous-classe **nommée** de `PageResponse[T]`, jamais le générique brut |
+
+Les alias `LimitQuery`, `OffsetQuery` et `SearchQuery` de
+`shared/presentation/pagination.py` portent les bornes : hors bornes, FastAPI répond
+`422` avant même d'appeler le use case.
+
+Trois points de conception à ne pas rediscuter sans raison :
+
+- **`limit`/`offset` et pas `page`/`page_size`.** C'est déjà la convention de
+  `GET /public/clinics` ; deux conventions dans le même contrat OpenAPI seraient une
+  verrue dans la documentation et dans les trois clients générés. `limit`/`offset` se
+  traduit aussi tel quel en SQL, là où `page`/`page_size` impose une conversion qui est
+  le terrain de jeu classique des erreurs de décalage de un.
+- **Pas de `total_pages`.** C'est une donnée dérivée de `total` et `limit` ; on ne
+  transporte jamais une donnée dérivée, elle finit par contredire celle dont elle dérive.
+- **Une sous-classe nommée par ressource.** FastAPI nomme un générique paramétré
+  `PageResponse_AdminClinicSummary_` : illisible dans la page de référence de l'API comme
+  dans les types TypeScript. Trois lignes (`class AdminClinicPage(PageResponse[AdminClinicSummary])`)
+  et le schéma s'appelle `AdminClinicPage`.
+
+Côté SQL : **deux requêtes** (un `COUNT`, puis le `SELECT` de la tranche) partageant une
+clause `WHERE` construite **une seule fois**, et un `ORDER BY` qui se termine **toujours**
+par un départage sur l'identifiant. Sans ce départage, deux lignes de même nom ont un
+ordre indéfini que PostgreSQL est libre de changer d'une requête à l'autre : la même ligne
+peut apparaître sur deux pages, ou être sautée.
+
+## Une route sous `/api/v1/admin/`
+
+Trois règles supplémentaires, non négociables, parce que cet espace lit à travers tous les
+tenants ([ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md)) :
+
+1. **La route se déclare dans un routeur admin existant**, qui porte déjà
+   `dependencies=[Depends(get_current_admin)]`. On n'ajoute **jamais** une garde
+   d'authentification à la main sur la route : cela marcherait pour celle-ci, et ne
+   protégerait plus la suivante.
+2. **Aucune mutation sur un `GET`.** C'est ce qui rend `SameSite` réellement suffisant
+   contre le CSRF — `Lax` laisse passer les navigations `GET` de premier niveau.
+3. **Jamais `include_in_schema=False`.** Masquer une route la ferait échapper au test
+   `test_admin_routes_protected.py`, qui énumère l'espace depuis le schéma OpenAPI. Et
+   l'obscurité n'est pas un contrôle d'accès : le schéma complet est déjà publié.
+
+Toute mutation écrit une ligne dans `admin_audit_log`, dans la même transaction.
 
 ## Avant de pousser
 

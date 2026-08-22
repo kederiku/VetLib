@@ -14,8 +14,11 @@ from vetolib.identity.application.ports import (
     IdentityUoWFactory,
     PasswordHasher,
 )
+from vetolib.identity.application.use_cases._email_availability import (
+    ensure_email_available,
+)
 from vetolib.identity.domain.clinic import Clinic
-from vetolib.identity.domain.errors import CompromisedPasswordError, EmailAlreadyExistsError
+from vetolib.identity.domain.errors import CompromisedPasswordError
 from vetolib.identity.domain.user import User
 from vetolib.identity.domain.value_objects import Email, HashedPassword, PlainPassword, Role
 from vetolib.shared.application.clock import Clock
@@ -68,13 +71,10 @@ class RegisterClinic:
             # L'email sert d'identifiant de connexion global : il doit être
             # libre dans les deux tables. Recherche pré-tenant (UoW système,
             # la RLS ne s'applique pas : la clinique n'existe pas encore).
-            # Ce contrôle donne un message propre au plus tôt ; la garantie
-            # réelle contre une course reste l'index unique en base.
-            email_taken = await uow.users.get_by_email(
-                email
-            ) is not None or await uow.clinics.exists_with_email(email)
-            if email_taken:
-                raise EmailAlreadyExistsError(f"L'adresse {email} est déjà utilisée.")
+            # L'invariant est extrait, car le back-office plateforme crée lui
+            # aussi des cliniques et du personnel : la règle est écrite une
+            # seule fois, dans _email_availability.py.
+            await ensure_email_available(uow, email)
 
             # La factory du domaine renvoie l'entité ET l'événement associé :
             # c'est le domaine qui décide de ce qui constitue le fait métier

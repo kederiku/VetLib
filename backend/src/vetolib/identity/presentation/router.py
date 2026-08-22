@@ -20,10 +20,23 @@ from vetolib.identity.domain.errors import (
     EmailAlreadyExistsError,
     InvalidCredentialsError,
     InvalidTokenError,
+    LastManagerError,
     OwnerInactiveError,
     UserInactiveError,
 )
 from vetolib.identity.presentation.routers.admin_auth import router as admin_auth_router
+from vetolib.identity.presentation.routers.admin_clinics import (
+    router as admin_clinics_router,
+)
+from vetolib.identity.presentation.routers.admin_owners import (
+    router as admin_owners_router,
+)
+from vetolib.identity.presentation.routers.admin_staff import (
+    router as admin_staff_router,
+)
+from vetolib.identity.presentation.routers.admin_stats import (
+    router as admin_stats_router,
+)
 from vetolib.identity.presentation.routers.auth import router as auth_router
 from vetolib.identity.presentation.routers.clinics import router as clinics_router
 from vetolib.identity.presentation.routers.owner_auth import router as owner_auth_router
@@ -43,6 +56,13 @@ identity_router.include_router(public_clinics_router)
 # Espace PLATEFORME (back-office des fondateurs) : troisieme jeu de cookies,
 # claim kind="platform". Aucune route d'inscription, par construction.
 identity_router.include_router(admin_auth_router)
+# Les quatre routeurs de donnees du back-office. Chacun porte SA garde
+# d'authentification (dependencies=[...] sur l'APIRouter) : une route ajoutee
+# a l'un d'eux est protegee par construction.
+identity_router.include_router(admin_clinics_router)
+identity_router.include_router(admin_owners_router)
+identity_router.include_router(admin_staff_router)
+identity_router.include_router(admin_stats_router)
 
 # Statuts HTTP spécifiques au contexte (fusionnés avec les défauts par main.py).
 IDENTITY_ERROR_STATUS: dict[type[DomainError], int] = {
@@ -53,4 +73,5 @@ IDENTITY_ERROR_STATUS: dict[type[DomainError], int] = {
     AdminInactiveError: status.HTTP_403_FORBIDDEN,  # accès super-admin révoqué
     ClinicSuspendedError: status.HTTP_403_FORBIDDEN,  # clinique suspendue : tout son staff bloqué
     EmailAlreadyExistsError: status.HTTP_409_CONFLICT,  # register : conflit d'unicité sur l'email
+    LastManagerError: status.HTTP_409_CONFLICT,  # dernier gérant : refus de le retirer
 }

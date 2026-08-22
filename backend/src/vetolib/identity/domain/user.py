@@ -93,3 +93,19 @@ class User(Entity):
     def deactivate(self) -> None:
         """Bloque la connexion sans supprimer le compte (distinct du soft delete)."""
         self.is_active = False
+
+    def activate(self) -> None:
+        """Retablit un acces bloque (idempotent : reactiver un compte actif
+        ne fait rien et ne leve pas)."""
+        self.is_active = True
+
+    def change_role(self, role: Role) -> None:
+        """Change le role, donc les permissions derivees.
+
+        Attention a l'effet differe : les permissions sont embarquees dans le
+        jeton d'acces (fat token). Le nouveau role ne s'applique donc a
+        l'interesse qu'au PROCHAIN jeton, dans quinze minutes au plus. C'est
+        la contrepartie assumee du fat token -- l'interface doit le dire,
+        sinon le changement passera pour sans effet.
+        """
+        self.role = role

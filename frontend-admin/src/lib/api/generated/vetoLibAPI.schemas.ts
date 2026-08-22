@@ -5,6 +5,21 @@
  * OpenAPI spec version: 0.1.0
  */
 /**
+ * Filtre de statut des listes du back-office.
+ *
+ * Volontairement DEUX valeurs et non trois : "tous" s'exprime par l'ABSENCE
+ * de filtre (None), pas par une troisieme valeur d'enum. Sinon deux facons
+ * d'ecrire la meme chose se retrouveraient dans l'OpenAPI, donc dans les
+ * trois clients generes -- et un jour l'une des deux serait mal traduite.
+ */
+export type AccountStatus = (typeof AccountStatus)[keyof typeof AccountStatus];
+
+export const AccountStatus = {
+  active: "active",
+  inactive: "inactive",
+} as const;
+
+/**
  * Adresse structuree exposee/recue par l'API (miroir du VO Address).
  *
  * str_strip_whitespace : Pydantic valide les longueurs sur les valeurs
@@ -38,6 +53,211 @@ export interface AddressPayload {
 }
 
 /**
+ * Rôles du personnel d'une clinique, du moins au plus privilégié.
+ *
+ * StrEnum : chaque membre EST une str (Role.MANAGER == "manager"), ce qui
+ * simplifie le stockage en base et la sérialisation JSON/JWT.
+ */
+export type Role = (typeof Role)[keyof typeof Role];
+
+export const Role = {
+  asv: "asv",
+  veterinarian: "veterinarian",
+  manager: "manager",
+} as const;
+
+/**
+ * Corps de PUT /admin/staff/{id}/role.
+ */
+export interface AdminChangeRoleRequest {
+  role: Role;
+}
+
+/**
+ * Fiche complete d'une clinique (adresse et fuseau compris).
+ */
+export interface AdminClinicResponse {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  address: AddressPayload | null;
+  timezone: string;
+  is_active: boolean;
+  staff_count: number;
+  created_at: string;
+}
+
+/**
+ * 201 de la creation d'un compte du personnel.
+ *
+ * ATTENTION -- `temporary_password` est le SEUL moment ou ce secret est
+ * lisible. Il n'est stocke nulle part en clair, ne figure dans aucun
+ * journal, n'apparait pas dans l'audit, et aucune route ne permet de le
+ * relire. Le front doit l'afficher dans un dialogue avec un bouton
+ * "copier" et un avertissement explicite.
+ *
+ * Oui, cela fait transiter un secret dans un corps JSON, ce que la
+ * convention du projet interdit -- pour les JETONS. Ce n'en est pas un :
+ * c'est un identifiant que l'administrateur doit lire et transmettre, et il
+ * n'existe aujourd'hui aucun autre canal (l'envoi d'email n'est pas
+ * branche). Decision assumee, pas oubli.
+ */
+export interface AdminStaffCreatedResponse {
+  user_id: string;
+  email: string;
+  role: Role;
+  /** Mot de passe genere, affiche UNE SEULE FOIS. Non re-consultable. */
+  temporary_password: string;
+}
+
+/**
+ * 201 de la creation d'une clinique, avec son gerant s'il a ete demande.
+ */
+export interface AdminClinicCreatedResponse {
+  clinic: AdminClinicResponse;
+  manager: AdminStaffCreatedResponse | null;
+}
+
+/**
+ * Une ligne de la liste des cliniques.
+ */
+export interface AdminClinicSummary {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  city: string | null;
+  is_active: boolean;
+  /** Nombre de comptes du personnel ACTIFS dans cette clinique. */
+  staff_count: number;
+  created_at: string;
+}
+
+/**
+ * Une page de la liste des cliniques.
+ */
+export interface AdminClinicPage {
+  items: AdminClinicSummary[];
+  /** Nombre total de lignes correspondant au filtre, pagination exclue. */
+  total: number;
+  /** Taille de page demandee, renvoyee telle quelle. */
+  limit: number;
+  /** Index de la premiere ligne, renvoye tel quel. */
+  offset: number;
+}
+
+/**
+ * Le premier gerant d'une clinique, a la creation. Bloc OPTIONNEL.
+ *
+ * Pas de champ mot de passe, et c'est le point : il est GENERE par le
+ * backend et renvoye une seule fois. Voir AdminStaffCreatedResponse.
+ */
+export interface AdminManagerPayload {
+  email: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  first_name: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  last_name: string;
+}
+
+/**
+ * Corps de POST /admin/clinics.
+ *
+ * `manager` absent = on cree la clinique seule, et les gerants arriveront
+ * par POST /admin/clinics/{id}/staff. Un seul endpoint couvre les deux
+ * flux, ce qui evite d'avoir a choisir entre "creer" et "creer avec".
+ */
+export interface AdminCreateClinicRequest {
+  /**
+   * @minLength 2
+   * @maxLength 200
+   */
+  name: string;
+  email: string;
+  phone?: string | null;
+  address?: AddressPayload | null;
+  timezone?: string;
+  manager?: AdminManagerPayload | null;
+}
+
+/**
+ * Corps de POST /admin/clinics/{id}/staff.
+ */
+export interface AdminCreateStaffRequest {
+  email: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  first_name: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  last_name: string;
+  role?: Role;
+}
+
+/**
+ * Une ligne de la liste des proprietaires.
+ */
+export interface AdminOwnerSummary {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  city: string | null;
+  is_active: boolean;
+  pet_count: number;
+  created_at: string;
+}
+
+/**
+ * Une page de la liste des proprietaires.
+ */
+export interface AdminOwnerPage {
+  items: AdminOwnerSummary[];
+  /** Nombre total de lignes correspondant au filtre, pagination exclue. */
+  total: number;
+  /** Taille de page demandee, renvoyee telle quelle. */
+  limit: number;
+  /** Index de la premiere ligne, renvoye tel quel. */
+  offset: number;
+}
+
+/**
+ * Preferences de notification (rappels RDV/vaccins) : opt-in par canal.
+ */
+export interface NotificationPreferencesPayload {
+  email?: boolean;
+  sms?: boolean;
+}
+
+/**
+ * Fiche complete d'un proprietaire.
+ */
+export interface AdminOwnerResponse {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  address: AddressPayload | null;
+  notification_preferences: NotificationPreferencesPayload;
+  is_active: boolean;
+  pet_count: number;
+  created_at: string;
+}
+
+/**
  * Profil du super-admin connecte (login, refresh et /admin/auth/me).
  *
  * Volontairement maigre : ni permissions, ni role, ni date de derniere
@@ -49,6 +269,90 @@ export interface AdminResponse {
   email: string;
   first_name: string;
   last_name: string;
+}
+
+/**
+ * Une ligne de la liste transverse du personnel.
+ */
+export interface AdminStaffSummary {
+  id: string;
+  clinic_id: string;
+  clinic_name: string;
+  /** False si la clinique elle-meme est suspendue : ce compte ne peut alors pas se connecter, quel que soit son propre statut. */
+  clinic_is_active: boolean;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+}
+
+/**
+ * Une page de la liste du personnel.
+ */
+export interface AdminStaffPage {
+  items: AdminStaffSummary[];
+  /** Nombre total de lignes correspondant au filtre, pagination exclue. */
+  total: number;
+  /** Taille de page demandee, renvoyee telle quelle. */
+  limit: number;
+  /** Index de la premiere ligne, renvoye tel quel. */
+  offset: number;
+}
+
+/**
+ * Compteurs du tableau de bord du back-office.
+ */
+export interface AdminStatsResponse {
+  active_clinics: number;
+  suspended_clinics: number;
+  active_owners: number;
+  inactive_owners: number;
+  active_staff: number;
+  inactive_staff: number;
+}
+
+/**
+ * Corps de PUT /admin/clinics/{id}.
+ *
+ * Volontairement SANS email : c'est l'identifiant d'inscription de la
+ * clinique. Qu'un administrateur puisse le changer d'un clic serait une
+ * prise de controle en un geste. L'exclure du schema rend l'oubli
+ * impossible par construction, exactement comme cote domaine.
+ */
+export interface AdminUpdateClinicRequest {
+  /**
+   * @minLength 2
+   * @maxLength 200
+   */
+  name: string;
+  phone?: string | null;
+  address?: AddressPayload | null;
+  timezone?: string;
+}
+
+/**
+ * Corps de PUT /admin/owners/{id}.
+ *
+ * Sans email ni mot de passe, pour les memes raisons que la fiche clinique
+ * -- et une de plus : donner a un exploitant le moyen de changer le mot de
+ * passe d'un client serait lui donner le moyen d'entrer dans son compte.
+ */
+export interface AdminUpdateOwnerRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  first_name: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  last_name: string;
+  phone?: string | null;
+  address?: AddressPayload | null;
+  notification_preferences?: NotificationPreferencesPayload;
 }
 
 /**
@@ -151,6 +455,19 @@ export interface ClinicRegisteredResponse {
   clinic_id: string;
   user_id: string;
 }
+
+/**
+ * Colonnes triables de la liste des cliniques.
+ */
+export type ClinicSortField =
+  (typeof ClinicSortField)[keyof typeof ClinicSortField];
+
+export const ClinicSortField = {
+  name: "name",
+  email: "email",
+  city: "city",
+  created_at: "created_at",
+} as const;
 
 export interface CreateAppointmentTypeRequest {
   /**
@@ -264,14 +581,6 @@ export interface LoginRequest {
   password: string;
 }
 
-/**
- * Preferences de notification (rappels RDV/vaccins) : opt-in par canal.
- */
-export interface NotificationPreferencesPayload {
-  email?: boolean;
-  sms?: boolean;
-}
-
 export interface OwnerAppointmentResponse {
   id: string;
   clinic_id: string;
@@ -319,6 +628,18 @@ export interface OwnerResponse {
   address: AddressPayload | null;
   notification_preferences: NotificationPreferencesPayload;
 }
+
+/**
+ * Colonnes triables de la liste des proprietaires.
+ */
+export type OwnerSortField =
+  (typeof OwnerSortField)[keyof typeof OwnerSortField];
+
+export const OwnerSortField = {
+  last_name: "last_name",
+  email: "email",
+  created_at: "created_at",
+} as const;
 
 /**
  * Fiche d'un animal (liste, lecture unitaire, création et édition).
@@ -429,20 +750,6 @@ export interface ResourceResponse {
   active: boolean;
 }
 
-/**
- * Rôles du personnel d'une clinique, du moins au plus privilégié.
- *
- * StrEnum : chaque membre EST une str (Role.MANAGER == "manager"), ce qui
- * simplifie le stockage en base et la sérialisation JSON/JWT.
- */
-export type Role = (typeof Role)[keyof typeof Role];
-
-export const Role = {
-  asv: "asv",
-  veterinarian: "veterinarian",
-  manager: "manager",
-} as const;
-
 export interface ScheduleExceptionResponse {
   id: string;
   resource_id: string;
@@ -474,6 +781,21 @@ export interface SetWeeklySchedulesRequest {
 }
 
 /**
+ * Sens de tri, exprime sans une ligne de SQL.
+ *
+ * Le domaine et l'API ne connaissent que "asc" et "desc" ; la traduction en
+ * `ORDER BY ... ASC/DESC` vit dans le repository SQLAlchemy. Un StrEnum
+ * plutot qu'une chaine libre rend structurellement impossible de faire
+ * remonter une expression SQL depuis une saisie utilisateur.
+ */
+export type SortDirection = (typeof SortDirection)[keyof typeof SortDirection];
+
+export const SortDirection = {
+  asc: "asc",
+  desc: "desc",
+} as const;
+
+/**
  * RDV cree par la clinique : soit un compte (owner_id +/- pet_id), soit
  * un client de passage (guest_name obligatoire alors). ends_at est derive
  * de la duree du type cote backend -- le front n'envoie que le debut.
@@ -488,6 +810,20 @@ export interface StaffCreateAppointmentRequest {
   guest_pet_name?: string | null;
   reason?: string | null;
 }
+
+/**
+ * Colonnes triables de la liste transverse du personnel.
+ */
+export type StaffSortField =
+  (typeof StaffSortField)[keyof typeof StaffSortField];
+
+export const StaffSortField = {
+  last_name: "last_name",
+  email: "email",
+  role: "role",
+  clinic_name: "clinic_name",
+  created_at: "created_at",
+} as const;
 
 export interface UpdateAppointmentTypeRequest {
   /**
@@ -623,6 +959,92 @@ export type ListClinicsParams = {
    * @minimum 0
    */
   offset?: number;
+};
+
+export type ListAdminClinicsParams = {
+  /**
+   * Taille de page, entre 1 et 100.
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * Index de la premiere ligne.
+   * @minimum 0
+   */
+  offset?: number;
+  /**
+   * Recherche libre, insensible a la casse et aux accents.
+   */
+  search?: string | null;
+  status?: AccountStatus | null;
+  sort_by?: ClinicSortField;
+  sort_dir?: SortDirection;
+};
+
+export type ListAdminClinicStaffParams = {
+  /**
+   * Taille de page, entre 1 et 100.
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * Index de la premiere ligne.
+   * @minimum 0
+   */
+  offset?: number;
+  /**
+   * Recherche libre, insensible a la casse et aux accents.
+   */
+  search?: string | null;
+  status?: AccountStatus | null;
+  sort_by?: StaffSortField;
+  sort_dir?: SortDirection;
+};
+
+export type ListAdminOwnersParams = {
+  /**
+   * Taille de page, entre 1 et 100.
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * Index de la premiere ligne.
+   * @minimum 0
+   */
+  offset?: number;
+  /**
+   * Recherche libre, insensible a la casse et aux accents.
+   */
+  search?: string | null;
+  status?: AccountStatus | null;
+  sort_by?: OwnerSortField;
+  sort_dir?: SortDirection;
+};
+
+export type ListAdminStaffParams = {
+  /**
+   * Taille de page, entre 1 et 100.
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * Index de la premiere ligne.
+   * @minimum 0
+   */
+  offset?: number;
+  /**
+   * Recherche libre, insensible a la casse et aux accents.
+   */
+  search?: string | null;
+  status?: AccountStatus | null;
+  role?: Role | null;
+  clinic_id?: string | null;
+  sort_by?: StaffSortField;
+  sort_dir?: SortDirection;
 };
 
 export type GetAgendaParams = {

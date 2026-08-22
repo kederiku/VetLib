@@ -129,7 +129,7 @@ async def base_vierge(app_env: dict[str, str]) -> None:
             text(
                 "TRUNCATE users, clinics, owners, pets, appointments, "
                 "schedule_exceptions, weekly_schedules, appointment_types, "
-                "resources, platform_admins, outbox_events CASCADE"
+                "resources, platform_admins, admin_audit_log, outbox_events CASCADE"
             )
         )
     await engine.dispose()

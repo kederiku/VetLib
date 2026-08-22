@@ -7,6 +7,11 @@ confiné dans l'entité User et ne traverse jamais cette frontière.
 """
 
 from vetolib.identity.application.dto import (
+    AdminClinicDetail,
+    AdminClinicRow,
+    AdminOwnerDetail,
+    AdminOwnerRow,
+    AdminStaffRow,
     ClinicProfile,
     CurrentAdmin,
     CurrentOwner,
@@ -15,6 +20,7 @@ from vetolib.identity.application.dto import (
 from vetolib.identity.domain.clinic import Clinic
 from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.platform_admin import PlatformAdmin
+from vetolib.identity.domain.repositories import ClinicRow, OwnerRow, StaffRow
 from vetolib.identity.domain.user import User
 
 
@@ -88,4 +94,101 @@ def to_current_admin(admin: PlatformAdmin) -> CurrentAdmin:
         email=admin.email.value,
         first_name=admin.first_name,
         last_name=admin.last_name,
+    )
+
+
+# --- Projections du back-office plateforme -----------------------------------
+
+
+def to_admin_clinic_row(ligne: ClinicRow) -> AdminClinicRow:
+    """Projette une ligne de liste de cliniques.
+
+    La ville est extraite de l'adresse : la liste l'affiche en colonne, mais
+    n'a aucun besoin du reste de l'adresse. Transporter cent adresses
+    completes pour n'en afficher que la ville serait du gaspillage -- et
+    exposerait des donnees dont l'ecran n'a pas l'usage.
+    """
+    clinique = ligne.clinic
+    return AdminClinicRow(
+        id=clinique.id,
+        name=clinique.name,
+        email=clinique.email.value,
+        phone=clinique.phone,
+        city=clinique.address.city if clinique.address is not None else None,
+        is_active=clinique.is_active,
+        staff_count=ligne.staff_count,
+        created_at=clinique.created_at,
+    )
+
+
+def to_admin_clinic_detail(clinique: Clinic, staff_count: int) -> AdminClinicDetail:
+    """Projette la fiche complete d'une clinique (adresse et fuseau compris)."""
+    return AdminClinicDetail(
+        id=clinique.id,
+        name=clinique.name,
+        email=clinique.email.value,
+        phone=clinique.phone,
+        address=clinique.address,
+        timezone=clinique.timezone,
+        is_active=clinique.is_active,
+        staff_count=staff_count,
+        created_at=clinique.created_at,
+    )
+
+
+def to_admin_owner_row(ligne: OwnerRow) -> AdminOwnerRow:
+    """Projette une ligne de liste de proprietaires."""
+    proprietaire = ligne.owner
+    return AdminOwnerRow(
+        id=proprietaire.id,
+        email=proprietaire.email.value,
+        first_name=proprietaire.first_name,
+        last_name=proprietaire.last_name,
+        phone=proprietaire.phone,
+        city=proprietaire.address.city if proprietaire.address is not None else None,
+        is_active=proprietaire.is_active,
+        pet_count=ligne.pet_count,
+        created_at=proprietaire.created_at,
+    )
+
+
+def to_admin_owner_detail(proprietaire: Owner, pet_count: int) -> AdminOwnerDetail:
+    """Projette la fiche complete d'un proprietaire.
+
+    Sans l'empreinte du mot de passe, evidemment : elle reste confinee dans
+    l'entite et ne traverse jamais cette frontiere.
+    """
+    return AdminOwnerDetail(
+        id=proprietaire.id,
+        email=proprietaire.email.value,
+        first_name=proprietaire.first_name,
+        last_name=proprietaire.last_name,
+        phone=proprietaire.phone,
+        address=proprietaire.address,
+        notification_preferences=proprietaire.notification_preferences,
+        is_active=proprietaire.is_active,
+        pet_count=pet_count,
+        created_at=proprietaire.created_at,
+    )
+
+
+def to_admin_staff_row(ligne: StaffRow) -> AdminStaffRow:
+    """Projette une ligne de la liste transverse du personnel.
+
+    Conversion quasi a l'identique : StaffRow est deja une projection de
+    lecture cote domaine. Le passage par un DTO d'application garde malgre
+    tout la couche presentation a distance du domaine -- le jour ou l'ecran
+    demandera un champ calcule, il se posera ici et nulle part ailleurs.
+    """
+    return AdminStaffRow(
+        id=ligne.id,
+        clinic_id=ligne.clinic_id,
+        clinic_name=ligne.clinic_name,
+        clinic_is_active=ligne.clinic_is_active,
+        email=ligne.email,
+        first_name=ligne.first_name,
+        last_name=ligne.last_name,
+        role=ligne.role,
+        is_active=ligne.is_active,
+        created_at=ligne.created_at,
     )

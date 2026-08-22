@@ -28,6 +28,8 @@ from vetolib.identity.application.dto import (
 from vetolib.identity.domain.owner import Owner
 from vetolib.identity.domain.platform_admin import PlatformAdmin
 from vetolib.identity.domain.repositories import (
+    AdminAuditLogRepository,
+    AdminDirectoryRepository,
     ClinicRepository,
     OwnerRepository,
     PlatformAdminRepository,
@@ -176,6 +178,20 @@ class IdentityUnitOfWork(UnitOfWork, Protocol):
     # uniquement sous UoW système, comme les deux autres flux d'authentification.
     @property
     def admins(self) -> PlatformAdminRepository: ...
+
+    # directory : les lectures TRANSVERSES du back-office (listes paginees de
+    # cliniques, proprietaires et personnel). Port distinct des trois
+    # repositories d'agregat parce que ces requetes sont les seules du projet
+    # a traverser les tenants -- voir la note de module de
+    # infrastructure/admin_repositories.py.
+    @property
+    def directory(self) -> AdminDirectoryRepository: ...
+
+    # audit_log : le journal des actions du back-office. Sur la MEME session,
+    # donc la ligne d'audit et la mutation qu'elle decrit sont commitees
+    # ensemble ou pas du tout.
+    @property
+    def audit_log(self) -> AdminAuditLogRepository: ...
 
 
 # Les use cases reçoivent une FABRIQUE et non un UoW déjà ouvert : chaque
