@@ -10,9 +10,11 @@ paths-ignore:
   # prochaine execution de `make generate-api`.
   - frontend-b2c/src/lib/api/generated
   - frontend-b2b/src/lib/api/generated
+  - frontend-admin/src/lib/api/generated
   # Composants installes via la CLI shadcn/ui : code amont, non maintenu ici.
   - frontend-b2c/src/components/ui
   - frontend-b2b/src/components/ui
+  - frontend-admin/src/components/ui
   # Migrations Alembic : SQL genere/ecrit une fois, jamais rejoue tel quel.
   - backend/migrations/versions
   # Sorties de Docusaurus : le site genere et son cache de build. Elles ne sont

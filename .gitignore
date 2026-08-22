@@ -43,5 +43,5 @@ documentation/build/
 .vscode/
 .DS_Store
 
-# NB : uv.lock, les package-lock.json (2 frontends + documentation) et
+# NB : uv.lock, les package-lock.json (3 frontends + documentation) et
 # src/lib/api/generated/ sont VERSIONNÉS.

@@ -10,6 +10,7 @@ body:
         - backend (API)
         - frontend-b2c (portail propriétaires)
         - frontend-b2b (espace clinique)
+        - frontend-admin (back-office plateforme)
         - infra / Docker
         - base de données / migrations
     validations:

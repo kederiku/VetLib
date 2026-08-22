@@ -379,7 +379,7 @@ jobs:
       # casse aussi, plutot que de decouvrir les problemes un par un.
       fail-fast: false
       matrix:
-        app: [frontend-b2c, frontend-b2b]
+        app: [frontend-b2c, frontend-b2b, frontend-admin]
     defaults:
       run:
         working-directory: ${{ matrix.app }}
@@ -523,6 +523,7 @@ jobs:
           cache-dependency-path: |
             frontend-b2c/package-lock.json
             frontend-b2b/package-lock.json
+            frontend-admin/package-lock.json
 
       - name: Installer le backend
         run: uv sync --locked
@@ -570,19 +571,28 @@ jobs:
           npm ci
           npm run generate:api
 
+      - name: Regenerer le client du back-office plateforme
+        working-directory: frontend-admin
+        run: |
+          npm ci
+          npm run generate:api
+
       - name: Comparer avec ce qui est committe
         # git status plutot que git diff : orval est configure avec clean:true,
         # il SUPPRIME puis recree le dossier. Un nouveau tag OpenAPI produirait
         # un fichier non suivi, invisible pour un simple diff.
-        # Les deux chemins sont ecrits en toutes lettres plutot que passes par
-        # une variable : une variable non quotee dependrait du decoupage en
-        # mots du shell, qui ne se comporte pas pareil partout (zsh ne decoupe
-        # pas, bash si). Ici, aucune ambiguite possible.
+        # La variable GENERES n'est deliberement PAS quotee : on VEUT le
+        # decoupage en mots du shell, pour que git recoive trois arguments et
+        # non une seule chaine de 120 caracteres. C'est sans risque ici, les
+        # chemins ne contenant ni espace ni caractere special -- et ce job
+        # tourne sous bash (zsh, lui, ne decouperait pas).
         run: |
-          if [ -n "$(git status --porcelain -- frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated)" ]; then
+          GENERES="frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated frontend-admin/src/lib/api/generated"
+          # shellcheck disable=SC2086
+          if [ -n "$(git status --porcelain -- $GENERES)" ]; then
             echo "::error::Le client API genere n'est plus a jour. Lancez 'make generate-api' et committez le resultat."
-            git status --short -- frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated
-            git --no-pager diff -- frontend-b2c/src/lib/api/generated frontend-b2b/src/lib/api/generated
+            git status --short -- $GENERES
+            git --no-pager diff -- $GENERES
             exit 1
           fi
           echo "Le client API committe correspond bien au schema du backend."
@@ -739,6 +749,10 @@ jobs:
 
       - name: Audit des dependances de l'espace clinique B2B
         working-directory: frontend-b2b
+        run: npm audit --audit-level=high
+
+      - name: Audit des dependances du back-office plateforme
+        working-directory: frontend-admin
         run: npm audit --audit-level=high
 
       - name: Audit des dependances du site de documentation
