@@ -1,9 +1,8 @@
 /**
- * Écran d'accueil du back-office.
+ * Écran d'accueil du back-office : compteurs et derniers inscrits.
  *
- * Volontairement minimal à ce stade : la console n'a encore aucun endpoint de
- * données à afficher. Les compteurs et les listes arrivent avec les écrans
- * Cliniques, Propriétaires et Personnel.
+ * Server Component réduit à ses métadonnées, comme les autres écrans de la
+ * console -- tout le contenu dépend du cache React Query, donc du client.
  */
 import type { Metadata } from "next";
 
