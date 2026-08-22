@@ -58,6 +58,12 @@ class ClinicModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     timezone: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'Europe/Paris'")
     )
+    # Statut d'exploitation pilote par le back-office plateforme (suspension
+    # pour impaye, fin de contrat...). server_default plutot que default
+    # Python : les lignes creees hors ORM (migrations, scripts) recoivent la
+    # bonne valeur, et la migration 0007 n'a pas besoin d'etape de backfill.
+    # Voir Clinic.is_active pour la raison de ne PAS reutiliser deleted_at.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     __table_args__ = (
         # Unicité restreinte aux lignes vivantes (soft delete).
@@ -140,6 +146,9 @@ class OwnerModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     notification_preferences: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text('\'{"email": true, "sms": false}\'::jsonb')
     )
+    # Pendant B2C de UserModel.is_active : desactivation par le back-office,
+    # reversible, sans toucher aux animaux ni aux rendez-vous.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     __table_args__ = (
         # Unicité restreinte aux comptes vivants (soft delete), comme users.

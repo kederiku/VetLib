@@ -57,10 +57,14 @@ class FakeClinicRepository:
         self._store[clinic.id] = clinic
 
     async def list_active(self, *, limit: int, offset: int) -> list[Clinic]:
-        # Reproduit la requete reelle : lignes vivantes, tri par nom, page
-        # limit/offset -- l'ordre est requis pour une pagination stable.
+        # Reproduit la requete reelle, DEUX filtres compris : lignes vivantes
+        # (deleted_at) ET non suspendues (is_active). Un fake qui oublierait
+        # le second validerait un annuaire public qui n'existe pas.
+        # Le tri reprend aussi le departage par id du SQL, pour que la
+        # pagination soit stable entre deux cliniques homonymes.
         alive = sorted(
-            (c for c in self._store.values() if c.deleted_at is None), key=lambda c: c.name
+            (c for c in self._store.values() if c.deleted_at is None and c.is_active),
+            key=lambda c: (c.name, str(c.id)),
         )
         return alive[offset : offset + limit]
 

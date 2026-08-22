@@ -9,7 +9,7 @@ un update_profile).
 from vetolib.identity.application.dto import CurrentOwner
 from vetolib.identity.application.mappers import to_current_owner
 from vetolib.identity.application.ports import IdentityUoWFactory, OwnerTokenProvider
-from vetolib.identity.domain.errors import InvalidTokenError
+from vetolib.identity.domain.errors import InvalidTokenError, OwnerInactiveError
 
 
 class GetCurrentOwner:
@@ -25,4 +25,8 @@ class GetCurrentOwner:
             owner = await uow.owners.get_by_id(claims.owner_id)
             if owner is None:
                 raise InvalidTokenError("Session invalide.")
+            # Rejoue a chaque requete (CurrentOwnerDep) : une desactivation
+            # prend effet immediatement, sans attendre l'expiration du jeton.
+            if not owner.is_active:
+                raise OwnerInactiveError("Compte désactivé.")
             return to_current_owner(owner)

@@ -15,9 +15,11 @@ Chaque bounded context expose exactement deux choses à main.py :
 from fastapi import APIRouter, status
 
 from vetolib.identity.domain.errors import (
+    ClinicSuspendedError,
     EmailAlreadyExistsError,
     InvalidCredentialsError,
     InvalidTokenError,
+    OwnerInactiveError,
     UserInactiveError,
 )
 from vetolib.identity.presentation.routers.auth import router as auth_router
@@ -42,5 +44,7 @@ IDENTITY_ERROR_STATUS: dict[type[DomainError], int] = {
     InvalidCredentialsError: status.HTTP_401_UNAUTHORIZED,  # login : email OU mot de passe faux
     InvalidTokenError: status.HTTP_401_UNAUTHORIZED,  # JWT expiré ou altéré -> se reconnecter
     UserInactiveError: status.HTTP_403_FORBIDDEN,  # compte désactivé (is_active=False)
+    OwnerInactiveError: status.HTTP_403_FORBIDDEN,  # compte propriétaire désactivé
+    ClinicSuspendedError: status.HTTP_403_FORBIDDEN,  # clinique suspendue : tout son staff bloqué
     EmailAlreadyExistsError: status.HTTP_409_CONFLICT,  # register : conflit d'unicité sur l'email
 }

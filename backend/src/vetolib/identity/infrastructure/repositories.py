@@ -66,6 +66,7 @@ def _clinic_to_entity(model: ClinicModel) -> Clinic:
         phone=model.phone,
         address=address,
         timezone=model.timezone,
+        is_active=model.is_active,
     )
 
 
@@ -85,6 +86,7 @@ def _clinic_to_model(entity: Clinic) -> ClinicModel:
         city=address.city if address else None,
         country=address.country if address else None,
         timezone=entity.timezone,
+        is_active=entity.is_active,
     )
 
 
@@ -158,16 +160,25 @@ class SqlAlchemyClinicRepository:
         await self._session.merge(_clinic_to_model(clinic))
 
     async def list_active(self, *, limit: int, offset: int) -> list[Clinic]:
-        """Page de l'annuaire public : cliniques vivantes, triées par nom.
+        """Page de l'annuaire public : cliniques vivantes ET actives.
+
+        Deux filtres, pas un seul : deleted_at (soft delete) exclut les
+        cliniques effacees, is_active exclut celles que le back-office a
+        suspendues. Une clinique suspendue disparait donc de l'annuaire du
+        portail proprietaires -- on ne propose pas de prendre rendez-vous
+        chez quelqu'un qui ne peut plus ouvrir son agenda.
 
         Le tri (order_by) est indispensable à la pagination limit/offset :
         sans ordre stable, deux pages consécutives pourraient répéter ou
-        sauter des lignes.
+        sauter des lignes. Le departage par id est tout aussi indispensable :
+        sans lui, deux cliniques homonymes ont un ordre INDEFINI que
+        PostgreSQL est libre de changer d'une requete a l'autre, et la meme
+        ligne peut alors apparaitre sur deux pages ou etre sautee.
         """
         stmt = (
             select(ClinicModel)
-            .where(ClinicModel.deleted_at.is_(None))
-            .order_by(ClinicModel.name)
+            .where(ClinicModel.deleted_at.is_(None), ClinicModel.is_active.is_(True))
+            .order_by(ClinicModel.name, ClinicModel.id)
             .limit(limit)
             .offset(offset)
         )
@@ -235,6 +246,7 @@ def _owner_to_entity(model: OwnerModel) -> Owner:
         notification_preferences=NotificationPreferences(
             email=bool(prefs.get("email", True)), sms=bool(prefs.get("sms", False))
         ),
+        is_active=model.is_active,
     )
 
 
@@ -259,6 +271,7 @@ def _owner_to_model(entity: Owner) -> OwnerModel:
             "email": entity.notification_preferences.email,
             "sms": entity.notification_preferences.sms,
         },
+        is_active=entity.is_active,
     )
 
 

@@ -12,6 +12,7 @@ from vetolib.identity.application.mappers import to_current_user
 from vetolib.identity.application.ports import IdentityUoWFactory, TokenProvider
 from vetolib.identity.domain.errors import (
     ClinicNotFoundError,
+    ClinicSuspendedError,
     InvalidTokenError,
     UserInactiveError,
 )
@@ -48,4 +49,9 @@ class RefreshToken:
             clinic = await uow.clinics.get_by_id(user.clinic_id)
             if clinic is None:
                 raise ClinicNotFoundError("Clinique introuvable.")
+            # Sans ce controle, une session ouverte AVANT la suspension se
+            # prolongerait de 7 jours en 7 jours : la suspension n'aurait
+            # aucun effet sur les personnes deja connectees.
+            if not clinic.is_active:
+                raise ClinicSuspendedError("Clinique suspendue.")
             return self._tokens.issue_pair(user), to_current_user(user, clinic.name)

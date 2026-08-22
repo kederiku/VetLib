@@ -9,7 +9,11 @@ que la chaîne brute (le use case ignore cookies et HTTP).
 from vetolib.identity.application.dto import CurrentUser
 from vetolib.identity.application.mappers import to_current_user
 from vetolib.identity.application.ports import IdentityUoWFactory, TokenProvider
-from vetolib.identity.domain.errors import ClinicNotFoundError, InvalidTokenError
+from vetolib.identity.domain.errors import (
+    ClinicNotFoundError,
+    ClinicSuspendedError,
+    InvalidTokenError,
+)
 
 
 class GetCurrentUser:
@@ -36,4 +40,9 @@ class GetCurrentUser:
             clinic = await uow.clinics.get_by_id(user.clinic_id)
             if clinic is None:
                 raise ClinicNotFoundError("Clinique introuvable.")
+            # C'est le SEUL controle rejoue a chaque requete (CurrentUserDep) :
+            # il ramene le delai d'effet d'une suspension de 15 minutes (la
+            # duree de vie de l'access token) a zero.
+            if not clinic.is_active:
+                raise ClinicSuspendedError("Clinique suspendue.")
             return to_current_user(user, clinic.name)

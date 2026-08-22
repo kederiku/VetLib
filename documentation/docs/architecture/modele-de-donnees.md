@@ -29,6 +29,7 @@ erDiagram
     string name
     string email
     string timezone "IANA, defaut Europe/Paris"
+    bool is_active "false = suspendue"
     timestamptz deleted_at
   }
   USERS {
@@ -42,6 +43,7 @@ erDiagram
     uuid id PK
     string email
     jsonb notification_preferences
+    bool is_active "false = desactive"
   }
   PETS {
     uuid id PK
@@ -136,6 +138,36 @@ doit filtrer `deleted_at IS NULL`, et c'est le rôle des repositories d'y veille
 
 La règle n'est pas seulement une convention : les `GRANT` accordés à `vetolib_app`
 **n'incluent pas `DELETE`**. Un `DELETE` accidentel échoue au niveau de la base.
+
+#### Suspendre n'est pas supprimer : la colonne `is_active`
+
+`clinics`, `users` et `owners` portent **aussi** un booléen `is_active`. Ce n'est pas un
+doublon de `deleted_at`, et les confondre casserait le produit :
+
+|                        | `is_active = false`           | `deleted_at` renseigné                  |
+| ---------------------- | ----------------------------- | --------------------------------------- |
+| Intention              | gel **réversible** de l'accès | effacement **définitif** (demande RGPD) |
+| L'e-mail reste réservé | oui                           | **non**                                 |
+| La ligne reste lisible | oui                           | non (toutes les lectures la filtrent)   |
+| Qui l'actionne         | le back-office plateforme     | une procédure exceptionnelle            |
+
+Le point décisif est la deuxième ligne. Les index uniques d'e-mail sont **partiels**
+(`WHERE deleted_at IS NULL`, voir juste en dessous) : poser `deleted_at` pour « suspendre »
+libérerait aussitôt l'adresse. Si un tiers la reprenait, la réactivation violerait l'index
+unique et deviendrait impossible depuis l'application — il faudrait du SQL manuel en
+production. Une clinique suspendue, elle, garde son e-mail, ses données et ses rendez-vous.
+
+Une clinique suspendue coupe l'accès de **tout son personnel**, et en cinq points :
+le login (`AuthenticateUser`), la rotation du refresh (`RefreshToken`), `/auth/me`
+(`GetCurrentUser`, seul contrôle rejoué à chaque requête, donc effet immédiat),
+l'annuaire public (`ClinicRepository.list_active`) et les flux publics de `scheduling`
+(`SqlAlchemyClinicInfoReader`, point de passage unique des disponibilités, des types de
+rendez-vous et de l'agenda). Les rendez-vous **déjà pris ne sont pas annulés** : c'est une
+décision métier, pas un effet technique de la suspension.
+
+L'ordre des contrôles au login est une propriété de sécurité : mot de passe, puis
+`user.is_active`, puis `clinic.is_active`. L'inverser transformerait le message
+« clinique suspendue » en oracle permettant d'énumérer les comptes existants.
 
 ### 4. Index uniques partiels
 

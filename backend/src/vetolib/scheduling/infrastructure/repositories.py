@@ -523,14 +523,24 @@ class SqlAlchemyAppointmentRepository:
 
 
 class SqlAlchemyClinicInfoReader:
-    """Lecture minimale des cliniques (table identity, GLOBALE, hors tenant)."""
+    """Lecture minimale des cliniques (table identity, GLOBALE, hors tenant).
+
+    Point de passage UNIQUE de trois flux de scheduling : les disponibilites
+    publiques, les types de rendez-vous publics et l'agenda du staff. C'est
+    donc ici, et seulement ici, qu'il faut exclure les cliniques suspendues
+    par le back-office : une clinique gelee cesse d'un coup d'etre reservable
+    et son agenda repond 404, sans avoir a modifier trois use cases.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def get_info(self, clinic_id: uuid.UUID) -> ClinicInfo | None:
         stmt = select(ClinicModel.id, ClinicModel.name, ClinicModel.timezone).where(
-            ClinicModel.id == clinic_id, ClinicModel.deleted_at.is_(None)
+            ClinicModel.id == clinic_id,
+            ClinicModel.deleted_at.is_(None),
+            # Suspendue = invisible pour scheduling (voir la docstring).
+            ClinicModel.is_active.is_(True),
         )
         row = (await self._session.execute(stmt)).one_or_none()
         if row is None:
