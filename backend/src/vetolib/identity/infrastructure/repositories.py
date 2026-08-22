@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from vetolib.identity.domain.clinic import Clinic
 from vetolib.identity.domain.owner import Owner
+from vetolib.identity.domain.platform_admin import PlatformAdmin
 from vetolib.identity.domain.user import User
 from vetolib.identity.domain.value_objects import (
     Address,
@@ -31,7 +32,12 @@ from vetolib.identity.domain.value_objects import (
     NotificationPreferences,
     Role,
 )
-from vetolib.identity.infrastructure.models import ClinicModel, OwnerModel, UserModel
+from vetolib.identity.infrastructure.models import (
+    ClinicModel,
+    OwnerModel,
+    PlatformAdminModel,
+    UserModel,
+)
 
 # Mapping explicite model <-> entité : les models SQLAlchemy ne fuient
 # jamais hors de la couche infrastructure.
@@ -304,3 +310,85 @@ class SqlAlchemyOwnerRepository:
         # merge : re-fusionne l'entité détachée dans la session (SELECT puis
         # UPDATE) — même approche que pour User, simple et suffisante ici.
         await self._session.merge(_owner_to_model(owner))
+
+
+# --- Comptes du back-office plateforme --------------------------------------
+
+
+def _admin_to_entity(model: PlatformAdminModel) -> PlatformAdmin:
+    return PlatformAdmin(
+        id=model.id,
+        created_at=model.created_at,
+        deleted_at=model.deleted_at,
+        email=Email(model.email),
+        hashed_password=HashedPassword(model.hashed_password),
+        first_name=model.first_name,
+        last_name=model.last_name,
+        is_active=model.is_active,
+        last_login_at=model.last_login_at,
+    )
+
+
+def _admin_to_model(entity: PlatformAdmin) -> PlatformAdminModel:
+    return PlatformAdminModel(
+        id=entity.id,
+        created_at=entity.created_at,
+        deleted_at=entity.deleted_at,
+        email=entity.email.value,
+        hashed_password=entity.hashed_password.value,
+        first_name=entity.first_name,
+        last_name=entity.last_name,
+        is_active=entity.is_active,
+        last_login_at=entity.last_login_at,
+    )
+
+
+class SqlAlchemyPlatformAdminRepository:
+    """Implemente le port PlatformAdminRepository (comptes du back-office).
+
+    Ces requetes ne peuvent s'executer QUE sous UoW systeme : la migration
+    0008 revoque tout droit du role applicatif sur la table. Sous une
+    transaction tenant (SET LOCAL ROLE vetolib_app), elles echoueraient en
+    "permission denied" -- un garde-fou porte par la base, pas par du Python.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(self, admin_id: uuid.UUID) -> PlatformAdmin | None:
+        stmt = select(PlatformAdminModel).where(
+            PlatformAdminModel.id == admin_id, PlatformAdminModel.deleted_at.is_(None)
+        )
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return None if model is None else _admin_to_entity(model)
+
+    async def get_by_email(self, email: Email) -> PlatformAdmin | None:
+        stmt = select(PlatformAdminModel).where(
+            PlatformAdminModel.email == email.value,
+            PlatformAdminModel.deleted_at.is_(None),
+        )
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return None if model is None else _admin_to_entity(model)
+
+    async def add(self, admin: PlatformAdmin) -> None:
+        self._session.add(_admin_to_model(admin))
+
+    async def update(self, admin: PlatformAdmin) -> None:
+        await self._session.merge(_admin_to_model(admin))
+
+    async def count_active(self) -> int:
+        """Nombre de comptes encore capables d'entrer dans le back-office.
+
+        Sert le garde-fou de la commande d'administration : desactiver le
+        dernier administrateur actif verrouillerait tout le monde dehors, et
+        aucune route HTTP ne permet d'en recreer un.
+        """
+        stmt = (
+            select(func.count())
+            .select_from(PlatformAdminModel)
+            .where(
+                PlatformAdminModel.deleted_at.is_(None),
+                PlatformAdminModel.is_active.is_(True),
+            )
+        )
+        return int((await self._session.execute(stmt)).scalar_one())

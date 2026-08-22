@@ -63,6 +63,23 @@ Ces cibles ont besoin de `backend/.env` et d'une infrastructure démarrée
 | `make revision m="..."` | Crée un fichier de migration vide. Le message est **obligatoire** |
 | `make check-migrations` | Un seul `head`, réversibilité, absence de dérive. Base requise    |
 
+## Comptes du back-office plateforme
+
+| Cible                                           | Effet                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| `make create-admin email=prenom.nom@exemple.fr` | Crée un compte du back-office. Mot de passe demandé **à l'invite**  |
+| `… args=--reset-password`                       | Change le mot de passe d'un compte existant (confirmation demandée) |
+| `… args=--disable` / `… args=--enable`          | Révoque ou rétablit un accès                                        |
+
+:::warning Aucun compte n'existe par défaut
+Ni migration, ni script d'initialisation, ni jeu de données ne crée d'administrateur —
+et c'est délibéré : ce dépôt est **public**, un compte par défaut serait un compte en
+production le jour où quelqu'un déploie sans y penser. Le mot de passe n'est jamais passé
+en argument (il apparaîtrait dans l'historique du shell et dans `ps`) : la commande le
+demande à l'invite, ou le lit sur l'entrée standard quand celle-ci est redirigée —
+`pass show vetolib/admin | make create-admin email=...`.
+:::
+
 ## Contrat d'API et client généré
 
 | Cible               | Effet                                                                           |

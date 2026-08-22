@@ -1,22 +1,25 @@
 ---
 sidebar_position: 6
-title: "Authentification : deux espaces cloisonnés"
-description: "Double token JWT, cookies HttpOnly et le claim kind qui sépare le personnel des propriétaires."
-keywords: [jwt, cookies, httponly, refresh token, kind, csrf, samesite]
+title: "Authentification : trois espaces cloisonnés"
+description: "Double token JWT, cookies HttpOnly et le claim kind qui sépare le personnel, les propriétaires et les administrateurs de la plateforme."
+keywords:
+  [jwt, cookies, httponly, refresh token, kind, csrf, samesite, back-office]
 ---
 
-# Authentification : deux espaces cloisonnés
+# Authentification : trois espaces cloisonnés
 
-## Deux populations, un seul backend
+## Trois populations, un seul backend
 
-VetoLib authentifie deux publics qui n'ont rien à voir :
+VetoLib authentifie trois publics qui n'ont rien à voir :
 
 - le **personnel de clinique** (B2B), qui appartient à une clinique et porte un rôle ;
-- les **propriétaires d'animaux** (B2C), comptes globaux sans clinique ni rôle.
+- les **propriétaires d'animaux** (B2C), comptes globaux sans clinique ni rôle ;
+- les **administrateurs de la plateforme**, les exploitants du produit, qui n'appartiennent
+  à aucune clinique et les voient toutes.
 
-Le même email peut exister dans les deux mondes : une vétérinaire peut être cliente
-d'une autre clinique pour son propre chat. Ce sont **deux comptes distincts**, dans deux
-tables distinctes (`users` et `owners`).
+Le même email peut exister dans plusieurs de ces mondes : une vétérinaire peut être cliente
+d'une autre clinique pour son propre chat. Ce sont des **comptes distincts**, dans des
+tables distinctes (`users`, `owners`, `platform_admins`).
 
 ```mermaid
 flowchart TD
@@ -34,7 +37,16 @@ flowchart TD
     OT --- OK["kind = owner<br/>sub + jti"]
   end
 
+  subgraph PLATFORM["Espace plateforme (back-office)"]
+    direction LR
+    PA["/api/v1/admin/*"] --- PC1["cookies<br/>vetolib_admin_access<br/>vetolib_admin_refresh"]
+    PC1 --- PT[("table platform_admins")]
+    PT --- PK["kind = platform<br/>sub + jti"]
+  end
+
   STAFF x--x|"un jeton copié d'un espace<br/>à l'autre est REJETÉ"| OWNER
+  OWNER x--x|"idem"| PLATFORM
+  STAFF x--x|"idem"| PLATFORM
 ```
 
 ## Pourquoi des cookies HttpOnly, et jamais de jeton en JSON
@@ -59,10 +71,14 @@ déclencher une requête authentifiée à l'insu de l'utilisateur. Deux garde-fo
 
 ## Le double jeton
 
-| Jeton            | Durée   | Cookie            | `path`                 | Contenu                                          |
-| ---------------- | ------- | ----------------- | ---------------------- | ------------------------------------------------ |
-| Accès            | 15 min  | `vetolib_access`  | `/`                    | « gras » côté personnel : `cid`, `role`, `perms` |
-| Rafraîchissement | 7 jours | `vetolib_refresh` | `/api/v1/auth/refresh` | maigre : `sub`, `jti`                            |
+| Espace        | Jeton            | Durée    | Cookie                  | `path`                       | Contenu                           |
+| ------------- | ---------------- | -------- | ----------------------- | ---------------------------- | --------------------------------- |
+| Personnel     | Accès            | 15 min   | `vetolib_access`        | `/`                          | « gras » : `cid`, `role`, `perms` |
+| Personnel     | Rafraîchissement | 7 jours  | `vetolib_refresh`       | `/api/v1/auth/refresh`       | maigre : `sub`, `jti`             |
+| Propriétaires | Accès            | 15 min   | `vetolib_owner_access`  | `/`                          | maigre : `sub`, `jti`             |
+| Propriétaires | Rafraîchissement | 7 jours  | `vetolib_owner_refresh` | `/api/v1/owner/auth/refresh` | maigre : `sub`, `jti`             |
+| Plateforme    | Accès            | 15 min   | `vetolib_admin_access`  | **`/api/v1/admin`**          | maigre : `sub`, `jti`             |
+| Plateforme    | Rafraîchissement | **12 h** | `vetolib_admin_refresh` | `/api/v1/admin/auth/refresh` | maigre : `sub`, `jti`             |
 
 Le `path` restreint du jeton de rafraîchissement est un détail à fort rendement. C'est
 le jeton **le plus sensible** (7 jours), et grâce à ce `path`, le navigateur ne le joint
@@ -78,31 +94,60 @@ moment-là.
 
 ## Le claim `kind` : le verrou entre les deux espaces
 
-Les deux espaces partagent le **même secret**, le **même émetteur** et la **même
+Les trois espaces partagent le **même secret**, le **même émetteur** et la **même
 audience**. Sans marquage, un jeton signé pour l'un serait cryptographiquement valide
-pour l'autre.
+pour les deux autres.
 
-Chaque jeton porte donc `kind: "staff"` ou `kind: "owner"`, vérifié au décodage :
+Chaque jeton porte donc `kind: "staff"`, `"owner"` ou `"platform"`, vérifié au décodage :
 
 ```python
-kind = claims.get("kind")
-kind_ok = kind == expected_kind or (kind is None and allow_missing_kind)
-if not kind_ok:
+if claims.get("kind") != expected_kind:
     raise InvalidTokenError("Jeton invalide pour cet espace.")
 ```
+
+Trois classes d'adaptateur plutôt qu'une seule paramétrée par `kind` : le typage doit
+rendre **impossible** d'injecter le fournisseur de jetons d'un espace dans le use case
+d'un autre. Une classe unique capable d'émettre pour n'importe quel espace transformerait
+une erreur de câblage en escalade de privilèges ; ici, elle reste une erreur mypy.
 
 C'est de la défense en profondeur : les cookies ont déjà des noms distincts, et un jeton
 d'accès propriétaire n'a de toute façon ni `cid` ni `role` — le retypage en
 `AccessClaims` échouerait. Mais le `kind` est la barrière **officielle**, vérifiée en
 premier et pour une raison explicite.
 
-:::warning Tolérance temporaire, côté personnel uniquement
-`allow_missing_kind=True` est actif pour les jetons du personnel, le temps que les
-jetons de rafraîchissement émis avant l'introduction du claim expirent (7 jours). Un
-`TODO` dans `identity/infrastructure/token_provider.py` marque le passage à `False`.
-Côté propriétaires, `kind == "owner"` est exigé **sans tolérance** : aucun jeton
-antérieur n'existe.
+:::info Aucune tolérance, pour aucun espace
+Une tolérance « `kind` absent = personnel » a existé, le temps que les jetons de
+rafraîchissement émis avant l'introduction du claim expirent. Elle a été **retirée** à
+l'arrivée du troisième espace : à trois populations, « claim absent = l'une d'elles » est
+une branche _fail-open_ au coeur exact du mécanisme de cloisonnement, c'est-à-dire au pire
+endroit possible. Un test unitaire verrouille sa disparition, pour qu'elle ne revienne pas
+« par symétrie ».
 :::
+
+## Ce que l'espace plateforme fait différemment, et pourquoi
+
+Le back-office est le seul espace dont l'isolation ne repose **pas** sur la Row-Level
+Security : ses lectures traversent, par nature, tous les tenants. Quatre écarts en
+découlent, tous délibérés.
+
+| Écart                                                                               | Raison                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Le jeton d'accès est **maigre**, et le compte est **relu en base à chaque requête** | L'inverse exact du « fat token » du personnel. Ici la révocation doit prendre effet à la requête suivante, pas dans quinze minutes. Sur une table de quelques comptes, la lecture ne coûte rien.                                                                                                                                                   |
+| `path=/api/v1/admin` **dès le jeton d'accès**                                       | Les deux autres espaces posent leur cookie d'accès sur `/`. Le cookie le plus puissant du système, lui, ne suit que les routes du back-office : en développement, les trois frontends partagent l'hôte `localhost` (les cookies ignorent le port), et c'est cette restriction qui l'empêche de partir avec les appels ordinaires du B2C ou du B2B. |
+| `SameSite=Strict` au lieu de `Lax`                                                  | Le back-office n'a aucun parcours d'entrée cross-site (pas d'OAuth, pas de lien par e-mail, pas de retour de paiement) : le seul inconvénient de `Strict` est ici sans effet. Contrainte à respecter en production : l'API et le back-office doivent rester sur le **même domaine enregistrable**.                                                 |
+| **Aucune inscription**                                                              | Il n'existe pas de `POST /api/v1/admin/auth/register`, et il ne doit pas en exister. Les comptes se créent par la commande locale `make create-admin`. Le dépôt est public : un compte créable par HTTP serait un compte créable par n'importe qui, le jour d'un oubli de garde.                                                                   |
+
+S'y ajoute une **limitation de débit** sur `POST /api/v1/admin/auth/login` : cinq échecs
+par quart d'heure, comptés sur l'adresse IP **et** sur l'adresse e-mail (hachée), puis
+`429` avec un en-tête `Retry-After`. Quelques comptes, un mot de passe pour seule barrière
+et un accès aux données de toutes les cliniques : l'attaque en ligne est ici un scénario
+réaliste. Si Redis est injoignable, le compteur **laisse passer** et journalise — refuser
+toutes les connexions parce qu'un service auxiliaire est tombé transformerait une panne
+mineure en panne totale, et plus personne ne pourrait la réparer depuis l'interface. Le
+compte n'est jamais verrouillé définitivement : ce serait offrir un déni de service, alors
+qu'aucun canal de déblocage n'existe.
+
+Voir [ADR-0013](../adr/0013-troisieme-espace-authentification-plateforme.md).
 
 ## Deux autres contrôles au décodage
 

@@ -1,4 +1,4 @@
-"""Modèles SQLAlchemy (tables PostgreSQL) du contexte identity : clinics et users.
+"""Modèles SQLAlchemy du contexte identity : clinics, users, owners, platform_admins.
 
 Couche infrastructure de l'architecture hexagonale. Ces classes ne décrivent
 que le schéma relationnel ; les règles métier vivent dans les entités du
@@ -16,9 +16,10 @@ conventions du projet : PK UUID, created_at, soft delete (deleted_at) et,
 pour les tables liées à une clinique, clinic_id -> cible des policies RLS.
 """
 
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, Index, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -154,6 +155,44 @@ class OwnerModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         # Unicité restreinte aux comptes vivants (soft delete), comme users.
         Index(
             "uq_owners_email_active",
+            "email",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+class PlatformAdminModel(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
+    """Table `platform_admins` : les fondateurs de la plateforme (back-office).
+
+    Troisieme espace de comptes, totalement cloisonne des deux autres. Pas de
+    TenantMixin et pas de RLS : un super-admin n'appartient a AUCUNE clinique,
+    il n'existe donc pas de colonne sur laquelle une policy pourrait filtrer.
+
+    La protection de cette table ne passe donc pas par la RLS mais par les
+    PRIVILEGES : la migration 0008 REVOQUE tout droit du role applicatif
+    vetolib_app dessus. Une requete emise par erreur sous une transaction
+    tenant (SET LOCAL ROLE vetolib_app) echoue franchement en "permission
+    denied", au lieu de renvoyer silencieusement des empreintes de mots de
+    passe tout-puissants.
+    """
+
+    __tablename__ = "platform_admins"
+
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    # Detection des comptes dormants : un UPDATE par login, sur une table de
+    # quelques lignes. Volontairement absent de users et owners, ou la meme
+    # colonne ajouterait une ecriture a chaque connexion de tout le parc.
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        # Meme unicite partielle que les deux autres espaces de comptes.
+        Index(
+            "uq_platform_admins_email_active",
             "email",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),

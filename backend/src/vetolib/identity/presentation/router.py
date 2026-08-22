@@ -15,6 +15,7 @@ Chaque bounded context expose exactement deux choses à main.py :
 from fastapi import APIRouter, status
 
 from vetolib.identity.domain.errors import (
+    AdminInactiveError,
     ClinicSuspendedError,
     EmailAlreadyExistsError,
     InvalidCredentialsError,
@@ -22,6 +23,7 @@ from vetolib.identity.domain.errors import (
     OwnerInactiveError,
     UserInactiveError,
 )
+from vetolib.identity.presentation.routers.admin_auth import router as admin_auth_router
 from vetolib.identity.presentation.routers.auth import router as auth_router
 from vetolib.identity.presentation.routers.clinics import router as clinics_router
 from vetolib.identity.presentation.routers.owner_auth import router as owner_auth_router
@@ -38,6 +40,9 @@ identity_router.include_router(owner_auth_router)
 identity_router.include_router(owner_profile_router)
 # Annuaire public (aucune auth) : prefixe /public pour une intention lisible.
 identity_router.include_router(public_clinics_router)
+# Espace PLATEFORME (back-office des fondateurs) : troisieme jeu de cookies,
+# claim kind="platform". Aucune route d'inscription, par construction.
+identity_router.include_router(admin_auth_router)
 
 # Statuts HTTP spécifiques au contexte (fusionnés avec les défauts par main.py).
 IDENTITY_ERROR_STATUS: dict[type[DomainError], int] = {
@@ -45,6 +50,7 @@ IDENTITY_ERROR_STATUS: dict[type[DomainError], int] = {
     InvalidTokenError: status.HTTP_401_UNAUTHORIZED,  # JWT expiré ou altéré -> se reconnecter
     UserInactiveError: status.HTTP_403_FORBIDDEN,  # compte désactivé (is_active=False)
     OwnerInactiveError: status.HTTP_403_FORBIDDEN,  # compte propriétaire désactivé
+    AdminInactiveError: status.HTTP_403_FORBIDDEN,  # accès super-admin révoqué
     ClinicSuspendedError: status.HTTP_403_FORBIDDEN,  # clinique suspendue : tout son staff bloqué
     EmailAlreadyExistsError: status.HTTP_409_CONFLICT,  # register : conflit d'unicité sur l'email
 }

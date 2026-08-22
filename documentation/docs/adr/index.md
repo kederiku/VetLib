@@ -19,20 +19,21 @@ une maladresse, et quelqu'un la « corrige ».
 
 ## Le tableau
 
-| N°                                               | Titre                                                             | Statut  |
-| ------------------------------------------------ | ----------------------------------------------------------------- | ------- |
-| [0001](0001-architecture-hexagonale-et-ddd.md)   | Architecture hexagonale et DDD, organisation « contexte d'abord » | Accepté |
-| [0002](0002-multi-tenant-par-rls.md)             | Isolation multi-tenant par Row-Level Security PostgreSQL          | Accepté |
-| [0003](0003-jwt-en-cookies-httponly.md)          | JWT en cookies HttpOnly et deux espaces cloisonnés                | Accepté |
-| [0004](0004-pattern-outbox.md)                   | Pattern Outbox pour tous les effets de bord                       | Accepté |
-| [0005](0005-uuid-soft-delete-index-partiels.md)  | UUID, soft delete et index uniques partiels                       | Accepté |
-| [0006](0006-anti-double-reservation-en-base.md)  | Anti-double-réservation délégué à PostgreSQL                      | Accepté |
-| [0007](0007-creneaux-calcules-a-la-volee.md)     | Créneaux calculés à la volée, jamais pré-générés                  | Accepté |
-| [0008](0008-testcontainers-plutot-que-sqlite.md) | Tests d'intégration sur PostgreSQL réel, jamais SQLite            | Accepté |
-| [0009](0009-client-api-genere-et-commite.md)     | Client API Orval généré puis committé                             | Accepté |
-| [0010](0010-un-seul-check-requis-gate.md)        | Un seul check requis devant la branche protégée                   | Accepté |
-| [0011](0011-licence-du-depot.md)                 | Licence MIT pour un dépôt public                                  | Accepté |
-| [0012](0012-politique-de-mot-de-passe.md)        | Politique de mot de passe alignée NIST 800-63B                    | Accepté |
+| N°                                                           | Titre                                                                 | Statut  |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- | ------- |
+| [0001](0001-architecture-hexagonale-et-ddd.md)               | Architecture hexagonale et DDD, organisation « contexte d'abord »     | Accepté |
+| [0002](0002-multi-tenant-par-rls.md)                         | Isolation multi-tenant par Row-Level Security PostgreSQL              | Accepté |
+| [0003](0003-jwt-en-cookies-httponly.md)                      | JWT en cookies HttpOnly et deux espaces cloisonnés                    | Accepté |
+| [0004](0004-pattern-outbox.md)                               | Pattern Outbox pour tous les effets de bord                           | Accepté |
+| [0005](0005-uuid-soft-delete-index-partiels.md)              | UUID, soft delete et index uniques partiels                           | Accepté |
+| [0006](0006-anti-double-reservation-en-base.md)              | Anti-double-réservation délégué à PostgreSQL                          | Accepté |
+| [0007](0007-creneaux-calcules-a-la-volee.md)                 | Créneaux calculés à la volée, jamais pré-générés                      | Accepté |
+| [0008](0008-testcontainers-plutot-que-sqlite.md)             | Tests d'intégration sur PostgreSQL réel, jamais SQLite                | Accepté |
+| [0009](0009-client-api-genere-et-commite.md)                 | Client API Orval généré puis committé                                 | Accepté |
+| [0010](0010-un-seul-check-requis-gate.md)                    | Un seul check requis devant la branche protégée                       | Accepté |
+| [0011](0011-licence-du-depot.md)                             | Licence MIT pour un dépôt public                                      | Accepté |
+| [0012](0012-politique-de-mot-de-passe.md)                    | Politique de mot de passe alignée NIST 800-63B                        | Accepté |
+| [0013](0013-troisieme-espace-authentification-plateforme.md) | Un troisième espace d'authentification pour le back-office plateforme | Accepté |
 
 ## La section qui compte
 

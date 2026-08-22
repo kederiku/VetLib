@@ -20,6 +20,7 @@ from vetolib.identity.domain.errors import EmailAlreadyExistsError
 from vetolib.identity.infrastructure.repositories import (
     SqlAlchemyClinicRepository,
     SqlAlchemyOwnerRepository,
+    SqlAlchemyPlatformAdminRepository,
     SqlAlchemyUserRepository,
 )
 from vetolib.shared.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -31,6 +32,7 @@ _EMAIL_UNIQUE_CONSTRAINTS = (
     "uq_users_email_active",
     "uq_clinics_email_active",
     "uq_owners_email_active",
+    "uq_platform_admins_email_active",
 )
 
 
@@ -40,6 +42,7 @@ class SqlAlchemyIdentityUnitOfWork(SqlAlchemyUnitOfWork):
     users: SqlAlchemyUserRepository
     clinics: SqlAlchemyClinicRepository
     owners: SqlAlchemyOwnerRepository
+    admins: SqlAlchemyPlatformAdminRepository
 
     async def __aenter__(self) -> Self:
         # Le parent ouvre la session (et pose rôle + clinic_id en mode
@@ -49,6 +52,9 @@ class SqlAlchemyIdentityUnitOfWork(SqlAlchemyUnitOfWork):
         self.users = SqlAlchemyUserRepository(self.session)
         self.clinics = SqlAlchemyClinicRepository(self.session)
         self.owners = SqlAlchemyOwnerRepository(self.session)
+        # Utilisable UNIQUEMENT en mode systeme : le role applicatif n'a
+        # aucun droit sur platform_admins (REVOKE de la migration 0008).
+        self.admins = SqlAlchemyPlatformAdminRepository(self.session)
         return self
 
     async def commit(self) -> None:

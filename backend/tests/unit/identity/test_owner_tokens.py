@@ -5,8 +5,8 @@ Deux niveaux :
    (logique des use cases, sans crypto) ;
 2. le CONTROLE DU CLAIM `kind` sur les VRAIS adapters PyJWT (rapides, sans
    IO) : c'est LA barriere qui empeche un jeton staff d'ouvrir une session
-   owner et reciproquement -- y compris la retrocompatibilite des jetons
-   staff "legacy" emis avant l'introduction du claim.
+   owner et reciproquement. Le rejet croise avec le TROISIEME espace
+   (plateforme) est verifie dans test_admin_tokens.py.
 """
 
 import uuid
@@ -199,9 +199,14 @@ def test_un_jeton_owner_est_rejete_par_le_decodage_staff() -> None:
 
 
 def _forge_legacy_staff_token(settings: Settings, *, token_type: str) -> str:
-    """Forge un jeton staff "legacy" SANS claim kind (emis avant le claim),
-    signe avec le meme secret : la retrocompatibilite doit l'accepter cote
-    staff (refresh valides 7 j) mais JAMAIS cote owner."""
+    """Forge un jeton staff SANS claim kind, signe avec le meme secret.
+
+    Ces jetons ont existe : ils ont ete emis avant l'introduction du claim,
+    et une tolerance les acceptait cote staff le temps qu'ils expirent. La
+    tolerance a ete RETIREE a l'arrivee du troisieme espace -- c'etait une
+    branche fail-open au coeur exact du mecanisme de cloisonnement. Ce test
+    verrouille sa disparition : elle ne doit jamais revenir "par symetrie".
+    """
     now = datetime.now(UTC)  # exp valide au moment du decodage
     claims = {
         "iat": int(now.timestamp()),
@@ -217,20 +222,21 @@ def _forge_legacy_staff_token(settings: Settings, *, token_type: str) -> str:
     return pyjwt.encode(claims, _TEST_SECRET, algorithm="HS256")
 
 
-def test_jeton_staff_legacy_sans_kind_accepte_cote_staff_rejete_cote_owner() -> None:
+def test_un_jeton_sans_kind_est_desormais_rejete_partout() -> None:
+    """Non-regression : la tolerance "kind absent = staff" a ete supprimee."""
     staff_provider, owner_provider, settings = _providers()
 
-    legacy_access = _forge_legacy_staff_token(settings, token_type="access")
-    legacy_refresh = _forge_legacy_staff_token(settings, token_type="refresh")
+    sans_kind_access = _forge_legacy_staff_token(settings, token_type="access")
+    sans_kind_refresh = _forge_legacy_staff_token(settings, token_type="refresh")
 
-    # Retrocompat : le decodage staff tolere l'absence de kind...
-    assert staff_provider.decode_access(legacy_access).role is Role.MANAGER
-    staff_provider.decode_refresh(legacy_refresh)
-    # ... mais le decodage owner exige kind == "owner", strictement.
     with pytest.raises(InvalidTokenError):
-        owner_provider.decode_access(legacy_access)
+        staff_provider.decode_access(sans_kind_access)
     with pytest.raises(InvalidTokenError):
-        owner_provider.decode_refresh(legacy_refresh)
+        staff_provider.decode_refresh(sans_kind_refresh)
+    with pytest.raises(InvalidTokenError):
+        owner_provider.decode_access(sans_kind_access)
+    with pytest.raises(InvalidTokenError):
+        owner_provider.decode_refresh(sans_kind_refresh)
 
 
 def test_kind_inconnu_est_rejete_des_deux_cotes() -> None:
@@ -245,7 +251,7 @@ def test_kind_inconnu_est_rejete_des_deux_cotes() -> None:
             "sub": str(uuid.uuid4()),
             "type": "access",
             "jti": str(uuid.uuid4()),
-            "kind": "admin",  # valeur inconnue
+            "kind": "inconnu",  # ni staff, ni owner, ni platform
             "cid": str(uuid.uuid4()),
             "role": "manager",
             "perms": [],

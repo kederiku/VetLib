@@ -76,8 +76,9 @@ def create_app() -> FastAPI:
     # Pas de default_response_class : depuis FastAPI 0.14x, la sérialisation
     # passe directement par Pydantic quand un type de retour est déclaré.
     app = FastAPI(title="VetoLib API", version="0.1.0", lifespan=lifespan)
-    # CORS : les frontends Next.js (B2C :3000, B2B :3001) appellent l'API depuis
-    # une autre origine ; le navigateur exige ces en-têtes pour l'autoriser.
+    # CORS : les frontends Next.js (B2C :3000, B2B :3001, back-office :3003)
+    # appellent l'API depuis une autre origine ; le navigateur exige ces
+    # en-têtes pour l'autoriser.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

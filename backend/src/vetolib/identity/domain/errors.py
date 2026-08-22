@@ -114,3 +114,25 @@ class OwnerInactiveError(PermissionDeniedError):
     """
 
     code = "identity.owner_inactive"
+
+
+class AdminInactiveError(PermissionDeniedError):
+    """Compte super-admin revoque -> 403.
+
+    Troisieme membre de la famille (avec UserInactiveError et
+    OwnerInactiveError). Meme regle : leve APRES la verification du mot de
+    passe, jamais avant.
+    """
+
+    code = "identity.admin_inactive"
+
+
+class PlatformAdminNotFoundError(EntityNotFoundError):
+    """Super-admin inexistant ou efface -> 404.
+
+    Utilise par la commande d'administration (activation/desactivation d'un
+    compte existant), pas par une route HTTP : l'espace admin ne dit jamais
+    a un anonyme si un compte existe.
+    """
+
+    code = "identity.platform_admin_not_found"

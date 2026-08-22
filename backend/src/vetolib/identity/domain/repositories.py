@@ -21,6 +21,7 @@ from typing import Protocol
 
 from vetolib.identity.domain.clinic import Clinic
 from vetolib.identity.domain.owner import Owner
+from vetolib.identity.domain.platform_admin import PlatformAdmin
 from vetolib.identity.domain.user import User
 from vetolib.identity.domain.value_objects import Email
 
@@ -89,3 +90,29 @@ class OwnerRepository(Protocol):
 
     # Rehash transparent au login et mise à jour de la fiche (update_profile).
     async def update(self, owner: Owner) -> None: ...
+
+
+class PlatformAdminRepository(Protocol):
+    """Port d'acces aux comptes du back-office plateforme.
+
+    Memes conventions que les deux autres espaces : pas de commit (role du
+    UoW), pas de delete (soft delete), None traduit par l'appelant. La table
+    etant hors RLS et hors des privileges du role applicatif, ces methodes ne
+    s'executent QUE sous UoW systeme -- une transaction tenant echouerait sur
+    un "permission denied" franc, ce qui est le comportement voulu.
+
+    count_active sert un seul garde-fou, mais essentiel : refuser de
+    desactiver le DERNIER administrateur actif, faute de quoi plus personne
+    ne pourrait entrer dans le back-office (et aucune route ne permet d'en
+    recreer un -- seule la commande locale le peut).
+    """
+
+    async def get_by_id(self, admin_id: uuid.UUID) -> PlatformAdmin | None: ...
+
+    async def get_by_email(self, email: Email) -> PlatformAdmin | None: ...
+
+    async def add(self, admin: PlatformAdmin) -> None: ...
+
+    async def update(self, admin: PlatformAdmin) -> None: ...
+
+    async def count_active(self) -> int: ...

@@ -76,7 +76,7 @@ scripts d'initialisation, pas le backend.
 | `JWT_ACCESS_TTL_SECONDS`      | `900` (15 min)                         | Durée du cookie d'accès                                                                  |
 | `JWT_REFRESH_TTL_SECONDS`     | `604800` (7 j)                         | Durée du cookie de rafraîchissement                                                      |
 | `COOKIE_SECURE`               | `false` en dev                         | `true` en production : cookies réservés au HTTPS                                         |
-| `CORS_ORIGINS`                | les deux portails                      | Liste **exacte**, sans joker : l'authentification par cookies impose `allow_credentials` |
+| `CORS_ORIGINS`                | les trois applications Next            | Liste **exacte**, sans joker : l'authentification par cookies impose `allow_credentials` |
 
 Voir [Authentification](../architecture/authentification.md) pour ce que ces durées
 impliquent.

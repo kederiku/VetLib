@@ -93,13 +93,23 @@ erDiagram
     jsonb payload
     timestamptz processed_at "NULL = en attente"
   }
+  PLATFORM_ADMINS {
+    uuid id PK
+    string email
+    bool is_active
+    timestamptz last_login_at "compte dormant"
+  }
 ```
 
 Les tables annotées **TENANT + RLS** portent `clinic_id` et sont protégées par la
 politique `tenant_isolation`. `owners`, `pets` et `outbox_events` ne le sont pas, pour
 les raisons expliquées dans
 [Isolation multi-tenant et RLS](multi-tenant-et-rls.md#ce-qui-est-tenanté-et-ce-qui-ne-lest-pas).
-`outbox_events` est volontairement isolée du graphe : elle n'a de relation avec rien.
+`outbox_events` et `platform_admins` sont volontairement isolées du graphe : elles n'ont
+de relation avec rien. La seconde est la table des **exploitants** du produit, hors du
+modèle tenant ; elle n'a pas de RLS non plus, mais pour une autre raison — le rôle
+applicatif n'a tout simplement **aucun droit** dessus. Voir
+[Isolation multi-tenant et RLS](multi-tenant-et-rls.md#platform_admins--protégée-par-le-privilège-pas-par-une-politique).
 
 ## Les conventions transverses
 
