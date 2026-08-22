@@ -3,8 +3,8 @@
 # dependances, et surtout des correctifs de securite.
 #
 # Un "ecosysteme" = un couple (gestionnaire de paquets, repertoire). Ce monorepo
-# en compte cinq : les actions GitHub, le backend Python (uv), les DEUX
-# frontends npm et le site de documentation npm (trois projets independants,
+# en compte cinq : les actions GitHub, le backend Python (uv), les TROIS
+# frontends npm et le site de documentation npm (quatre projets independants,
 # sans workspace) et les images Docker.
 #
 # Les mises a jour sont GROUPEES : sans cela, une semaine ordinaire produirait
@@ -130,8 +130,47 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
 
-  # --- 5. Site de documentation (npm) ---------------------------------------
-  # Troisieme projet npm du depot, avec son propre package-lock.json. Docusaurus
+  # --- 5. Back-office plateforme (npm) --------------------------------------
+  # Meme entree que les deux portails : troisieme application Next, troisieme
+  # package-lock.json. Elle porte une dependance que les autres n'ont pas
+  # (@tanstack/react-table, moteur des datatables) : raison de plus pour
+  # qu'elle soit suivie ici comme les autres.
+  - package-ecosystem: npm
+    directory: /frontend-admin
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    open-pull-requests-limit: 5
+    groups:
+      react-et-next:
+        patterns:
+          - next
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+          - eslint-config-next
+      frontend-dev:
+        dependency-type: development
+        patterns: ["*"]
+    ignore:
+      - dependency-name: typescript
+        versions: [">=7"]
+      # @types/node decrit l'API de Node : sa version MAJEURE doit suivre celle
+      # du runtime, definie une seule fois dans .nvmrc (24, la LTS active) et
+      # reprise par la CI et l'image Docker. Laisser passer @types/node 26
+      # (Node courant, non-LTS) ferait accepter par tsc des API absentes a
+      # l'execution. Les correctifs mineurs continuent d'arriver.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  # --- 6. Site de documentation (npm) ---------------------------------------
+  # Quatrieme projet npm du depot, avec son propre package-lock.json. Docusaurus
   # tire beaucoup de dependances transitives : sans groupes, une semaine
   # ordinaire produirait a elle seule une demi-douzaine de PR.
   - package-ecosystem: npm
@@ -167,7 +206,7 @@ updates:
       - dependency-name: typescript
         versions: [">=7"]
 
-  # --- 6. Images de base des Dockerfiles ------------------------------------
+  # --- 7. Images de base des Dockerfiles ------------------------------------
   # Mensuel : les images de base bougent moins vite, et chaque mise a jour
   # demande une verification manuelle un peu plus attentive.
   # Les montees de version MAJEURE sont ignorees : elles sont contraintes

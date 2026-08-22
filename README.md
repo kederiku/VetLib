@@ -21,6 +21,7 @@ docker compose up -d          # postgres, redis, minio (+ buckets), api :8000, w
 cd backend && uv run alembic upgrade head && cd ..
 cd frontend-b2c && npm install && npm run dev     # http://localhost:3000
 cd frontend-b2b && npm install && npm run dev     # http://localhost:3001
+cd frontend-admin && npm install && npm run dev   # http://localhost:3003 (back-office)
 ```
 
 Les frontends tournent **hors Docker** en dev (HMR Turbopack natif). Pour la démo full-stack conteneurisée : `docker compose --profile frontend up -d`.
@@ -32,6 +33,7 @@ Les frontends tournent **hors Docker** en dev (HMR Turbopack natif). Pour la dé
 | API FastAPI        | 8000  |
 | Portal B2C (Next)  | 3000  |
 | Clinic B2B (Next)  | 3001  |
+| Back-office (Next) | 3003  |
 | PostgreSQL         | 5432  |
 | Redis              | 6379  |
 | MinIO S3 / console | 9000 / 9001 |
@@ -39,7 +41,7 @@ Les frontends tournent **hors Docker** en dev (HMR Turbopack natif). Pour la dé
 
 ## Architecture
 
-Monorepo : `/backend` (FastAPI, architecture hexagonale + DDD, 4 bounded contexts), `/frontend-b2c` et `/frontend-b2b` (Next.js App Router), `/documentation` (site Docusaurus publié sur GitHub Pages), `/docker` (Dockerfiles + scripts d'init), `docker-compose.yml`.
+Monorepo : `/backend` (FastAPI, architecture hexagonale + DDD, 4 bounded contexts), `/frontend-b2c`, `/frontend-b2b` et `/frontend-admin` (Next.js App Router), `/documentation` (site Docusaurus publié sur GitHub Pages), `/docker` (Dockerfiles + scripts d'init), `docker-compose.yml`.
 
 Voir [CLAUDE.md](CLAUDE.md) pour les conventions détaillées.
 
@@ -51,7 +53,10 @@ Le client TypeScript (hooks TanStack Query) est généré depuis l'OpenAPI de Fa
 docker compose up -d api      # l'API doit être accessible sur :8000
 cd frontend-b2c && npm run generate:api
 cd ../frontend-b2b && npm run generate:api
+cd ../frontend-admin && npm run generate:api
 ```
+
+(ou `make generate-api`, qui enchaîne les trois.)
 
 Le dossier `src/lib/api/generated/` est **committé** (les builds CI ne dépendent pas d'un backend démarré) et ne doit **jamais être édité à la main**.
 
@@ -88,7 +93,7 @@ Quelques exemples :
 make env            # copie les .env d'exemple
 make up             # infra + api + worker (Docker)
 make migrate        # alembic upgrade head
-make dev-b2c        # frontend B2C sur :3000 (make dev-b2b pour le B2B sur :3001)
+make dev-b2c        # frontend B2C sur :3000 (dev-b2b sur :3001, dev-admin sur :3003)
 make docs           # site de documentation sur :3002
 make check          # toute la qualité sans Docker (lint, mypy, tests unit, ESLint, tsc, doc)
 ```
@@ -123,8 +128,8 @@ parallèle sur chaque PR :
 | pytest `tests/integration` | Régression sur PostgreSQL réel (RLS, index partiels) |
 | Couverture consolidée | Chute de la couverture backend sous le seuil |
 | Migrations Alembic | Deux heads, migration irréversible, ou modèle modifié sans migration |
-| ESLint, build Next, `tsc`, Vitest (×2 apps) | Régression frontend |
-| Couverture frontend | Chute sous le seuil de chaque app (mesuré 65 %, seuil 63 %) |
+| ESLint, build Next, `tsc`, Vitest (×3 apps) | Régression frontend |
+| Couverture frontend | Chute sous le seuil de chaque app (seuils mesurés app par app) |
 | Dérive du client Orval | Endpoint modifié sans `make generate-api` |
 | Prettier, `tsc`, build Docusaurus | Doc mal formatée, lien ou ancre morte, site qui ne se construit plus |
 | pip-audit, npm audit, revue de dépendances | Dépendance vulnérable |
@@ -163,7 +168,7 @@ retirer des jobs sans jamais toucher aux réglages du dépôt.
 
 ```bash
 make check            # tout ce qui ne demande pas Docker (le plus utile au quotidien)
-make coverage-front   # couverture des 2 frontends + application des seuils
+make coverage-front   # couverture des 3 frontends + application des seuils
 make check-all        # + tests d'intégration + contrôle des migrations
 make coverage         # couverture backend consolidée
 make check-docs       # format, types et build du site de documentation

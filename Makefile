@@ -18,12 +18,14 @@
 #   make dev-b2c   (frontend propriétaires d'animaux, http://localhost:3000)
 #   make dev-b2b   (frontend cliniques,               http://localhost:3001)
 #   make docs      (site de documentation,            http://localhost:3002)
+#   make dev-admin (back-office plateforme,           http://localhost:3003)
 # =============================================================================
 
 # Dossiers des sous-projets, pour éviter de répéter les chemins partout.
 BACKEND := backend
 B2C     := frontend-b2c
 B2B     := frontend-b2b
+ADMIN   := frontend-admin
 DOCS    := documentation
 
 # Sans argument, `make` affiche l'aide au lieu d'exécuter la première cible.
@@ -32,7 +34,7 @@ DOCS    := documentation
 # .PHONY déclare que ces cibles ne produisent PAS de fichier du même nom :
 # sans cela, un fichier nommé "test" ou "install" empêcherait la cible de tourner.
 .PHONY: help env install install-ci up up-full down down-volumes ps logs restart \
-        dev-api worker scheduler dev-b2c dev-b2b \
+        dev-api worker scheduler dev-b2c dev-b2b dev-admin \
         migrate revision create-admin openapi generate-api \
         lint format typecheck test test-unit test-integration coverage \
         check-migrations audit \
@@ -61,16 +63,18 @@ env: ## Copie les .env d'exemple s'ils n'existent pas déjà (cp -n = ne jamais 
 	cp -n $(BACKEND)/.env.example $(BACKEND)/.env || true
 	@echo "Fichiers .env prêts (racine = Docker, backend/.env = hors Docker)."
 
-install: ## Installe toutes les dépendances (backend uv + npm des 2 frontends + doc)
+install: ## Installe toutes les dépendances (backend uv + npm des 3 frontends + doc)
 	$(MAKE) -C $(BACKEND) install
 	cd $(B2C) && npm install
 	cd $(B2B) && npm install
+	cd $(ADMIN) && npm install
 	cd $(DOCS) && npm install
 
 install-ci: ## Installe STRICTEMENT les versions verrouillées (ce que fait la CI)
 	$(MAKE) -C $(BACKEND) install-ci
 	cd $(B2C) && npm ci
 	cd $(B2B) && npm ci
+	cd $(ADMIN) && npm ci
 	cd $(DOCS) && npm ci
 
 # -----------------------------------------------------------------------------
@@ -119,6 +123,9 @@ dev-b2c: ## Frontend B2C (propriétaires d'animaux) sur http://localhost:3000
 dev-b2b: ## Frontend B2B (cliniques) sur http://localhost:3001
 	cd $(B2B) && npm run dev
 
+dev-admin: ## Back-office plateforme (fondateurs) sur http://localhost:3003
+	cd $(ADMIN) && npm run dev
+
 # -----------------------------------------------------------------------------
 # Base de données (migrations Alembic, connectées en superuser — voir CLAUDE.md)
 # -----------------------------------------------------------------------------
@@ -143,15 +150,16 @@ create-admin: ## Crée un compte du back-office : make create-admin email=prenom
 
 # -----------------------------------------------------------------------------
 # Client API TypeScript (Orval génère les hooks TanStack Query depuis l'OpenAPI).
-# À relancer après TOUT changement d'endpoint backend, dans LES DEUX frontends.
+# À relancer après TOUT changement d'endpoint backend, dans LES TROIS frontends.
 # -----------------------------------------------------------------------------
 
 openapi: ## Exporte le schéma OpenAPI du backend dans backend/openapi.json
 	$(MAKE) -C $(BACKEND) openapi
 
-generate-api: ## Régénère les clients API des 2 frontends (l'API doit tourner sur :8000)
+generate-api: ## Régénère les clients API des 3 frontends (l'API doit tourner sur :8000)
 	cd $(B2C) && npm run generate:api
 	cd $(B2B) && npm run generate:api
+	cd $(ADMIN) && npm run generate:api
 
 # -----------------------------------------------------------------------------
 # Qualité backend (aucune de ces cibles ne nécessite Docker, sauf test-integration)
@@ -181,12 +189,13 @@ coverage: ## Couverture backend consolidée (unitaires + intégration ; Docker r
 check-migrations: ## Migrations : head unique, réversibilité, aucune dérive (base requise)
 	$(MAKE) -C $(BACKEND) check-migrations
 
-audit: ## Vulnérabilités connues dans les dépendances (backend + les 2 frontends)
+audit: ## Vulnérabilités connues dans les dépendances (backend + les 3 frontends)
 	cd $(BACKEND) && uv export --format requirements-txt --no-emit-project \
 		--no-hashes --all-groups -o /tmp/vetolib-requirements.txt \
 		&& uvx pip-audit --requirement /tmp/vetolib-requirements.txt --strict
 	cd $(B2C) && npm audit --audit-level=high
 	cd $(B2B) && npm audit --audit-level=high
+	cd $(ADMIN) && npm audit --audit-level=high
 	@# Le site passe par un script maison : npm audit ne sait pas ecarter
 	@# UNE faille precise, et image-size (tire par Docusaurus) porte deux
 	@# avis high sans correctif publie. Voir documentation/scripts/audit.mjs.
@@ -196,28 +205,33 @@ audit: ## Vulnérabilités connues dans les dépendances (backend + les 2 fronte
 # Qualité frontends
 # -----------------------------------------------------------------------------
 
-lint-front: ## ESLint sur les 2 frontends
+lint-front: ## ESLint sur les 3 frontends
 	cd $(B2C) && npm run lint
 	cd $(B2B) && npm run lint
+	cd $(ADMIN) && npm run lint
 
-build-front: ## Build de production des 2 frontends
+build-front: ## Build de production des 3 frontends
 	cd $(B2C) && npm run build
 	cd $(B2B) && npm run build
+	cd $(ADMIN) && npm run build
 
-typecheck-front: ## Vérification TypeScript (tsc --noEmit) sur les 2 frontends
+typecheck-front: ## Vérification TypeScript (tsc --noEmit) sur les 3 frontends
 	cd $(B2C) && npm run typecheck
 	cd $(B2B) && npm run typecheck
+	cd $(ADMIN) && npm run typecheck
 
-test-front: ## Tests Vitest des 2 frontends, SANS couverture (boucle de dev rapide)
+test-front: ## Tests Vitest des 3 frontends, SANS couverture (boucle de dev rapide)
 	cd $(B2C) && npm test
 	cd $(B2B) && npm test
+	cd $(ADMIN) && npm test
 
-coverage-front: ## Couverture Vitest des 2 frontends + seuils (ce que fait la CI)
+coverage-front: ## Couverture Vitest des 3 frontends + seuils (ce que fait la CI)
 	@# Exactement la commande du job "frontend" de .github/workflows/ci.yml.
 	@# Les seuils vivent dans les vitest.config.mts : quand ils ne sont pas
 	@# atteints, vitest sort en code 1 et make s'arrete ici.
 	cd $(B2C) && npm run test:coverage
 	cd $(B2B) && npm run test:coverage
+	cd $(ADMIN) && npm run test:coverage
 
 # ATTENTION A L'ORDRE : tsconfig.json inclut next-env.d.ts, lequel importe
 # .next/types/routes.d.ts. Ces deux fichiers sont GENERES par `npm run build`

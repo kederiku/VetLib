@@ -5,6 +5,8 @@ frontend-b2c/node_modules/
 frontend-b2c/.next/
 frontend-b2b/node_modules/
 frontend-b2b/.next/
+frontend-admin/node_modules/
+frontend-admin/.next/
 backend/.venv/
 backend/.mypy_cache/
 backend/.pytest_cache/

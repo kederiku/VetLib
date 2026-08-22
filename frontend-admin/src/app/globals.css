@@ -1,0 +1,157 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Tokens de marque VetoLib Admin (back-office plateforme — teinte azur).
+   Pourquoi 220 et pas autre chose : le cercle OKLCH est deja occupe par
+   l'emeraude du B2C (163), l'indigo du B2B (277) et le rouge destructive
+   (27). La teinte 220 est a 57 degres des DEUX marques produit, donc
+   impossible a confondre avec l'une ou l'autre en un coup d'oeil ; et elle
+   est quasi complementaire du rouge. Dans une console ou "suspendre" et
+   "desactiver" sont des gestes courants, l'alerte doit rester la couleur la
+   plus saillante de l'ecran -- jamais la marque. */
+@theme {
+  --color-brand: oklch(0.52 0.13 220);
+  --color-brand-foreground: oklch(0.98 0.01 220);
+  --color-brand-muted: oklch(0.93 0.04 220);
+
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Police système — pas de next/font/google (aucune dépendance réseau au build).
+   Le bloc @theme inline ci-dessous mappe --font-sans via var(). */
+:root {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.52 0.13 220);
+  --primary-foreground: oklch(0.98 0.01 220);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  /* Tokens chart-1..5 : ici ils ont un SENS METIER, pas decoratif. Le
+     tableau de bord compte trois populations, et la console EMPRUNTE la
+     couleur de chaque produit pour les designer -- un coup d'oeil suffit
+     alors a savoir de quoi on parle, sans lire la legende. */
+  --chart-1: oklch(0.52 0.13 220); /* azur     - cliniques (marque admin) */
+  --chart-2: oklch(0.6 0.13 163); /* emeraude - proprietaires (= B2C) */
+  --chart-3: oklch(0.51 0.23 277); /* indigo   - personnel (= B2B) */
+  --chart-4: oklch(0.72 0.15 85); /* ambre    - suspendu / desactive */
+  --chart-5: oklch(0.62 0.17 10); /* rose     - anomalies */
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.6 0.12 220);
+  --sidebar-primary-foreground: oklch(0.98 0.01 220);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.45 0.11 220);
+  --primary-foreground: oklch(0.98 0.01 220);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  /* Memes teintes qu'en clair (voir bloc :root), luminosite +0.08 pour
+     rester lisibles sur fond sombre. */
+  --chart-1: oklch(0.6 0.13 220); /* azur     - cliniques */
+  --chart-2: oklch(0.68 0.13 163); /* emeraude - proprietaires */
+  --chart-3: oklch(0.59 0.23 277); /* indigo   - personnel */
+  --chart-4: oklch(0.8 0.15 85); /* ambre    - suspendu */
+  --chart-5: oklch(0.7 0.17 10); /* rose     - anomalies */
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.7 0.1 220);
+  --sidebar-primary-foreground: oklch(0.98 0.01 220);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

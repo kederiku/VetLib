@@ -17,7 +17,7 @@ Bounded contexts : `identity` (implémenté : clinics, users, auth JWT), `patien
 ## Monorepo
 
 ```
-docker-compose.yml  docker/  backend/  frontend-b2c/ (:3000)  frontend-b2b/ (:3001)  documentation/ (:3002)
+docker-compose.yml  docker/  backend/  frontend-b2c/ (:3000)  frontend-b2b/ (:3001)  documentation/ (:3002)  frontend-admin/ (:3003)
 ```
 
 ## Conventions
@@ -36,18 +36,18 @@ docker-compose.yml  docker/  backend/  frontend-b2c/ (:3000)  frontend-b2b/ (:30
 - Tests d'intégration : testcontainers PostgreSQL (jamais SQLite — RLS/JSONB/SET LOCAL non émulables).
 - **Commentaires pédagogiques** : tout le code (backend, frontends, Docker, tests) est commenté **en français, pour qu'un novice comprenne son fonctionnement** — docstring de module (rôle du fichier dans l'architecture), docstrings de classes/fonctions, et le *pourquoi* des choix (RLS, outbox, cookies HttpOnly…). Maintenir ce niveau sur tout code nouveau ou modifié. Contrainte ruff dans les commentaires Python : ponctuation ASCII (pas de tirets cadratins ni guillemets typographiques ; lettres accentuées OK), lignes ≤ 100.
 - **Frontends : utilise les composants `shadcn/ui` le plus possible et du style Tailwind.** Pas de CSS maison; les nouveaux composants s'ajoutent via la CLI shadcn dans `src/components/ui/`. Attention : la CLI ECRASE les fichiers `ui/` existants (elle emporte leurs docstrings francaises) et genere un `hooks/use-mobile.ts` refuse par les regles `react-hooks` du projet -- verifier `git status` apres chaque `shadcn add` et restaurer ce qui ne devait pas bouger.
-- **Les deux portails partagent la meme coquille** : `AppShell` + `AppSidebar` + `SiteHeader` + `UserMenu`, avec `lib/navigation.ts` comme source unique des entrees de menu et du titre de page, et `components/shared/` pour `PageContainer` / `PageHeader` / `EmptyState` / `ErrorState`. Un ecran ne fixe JAMAIS sa propre largeur ni son propre `<main>` (le `SidebarInset` en est deja un). Regle des retours : **inline** quand l'utilisateur doit AGIR (erreur de champ, dialogue qui reste ouvert), **toast** quand on l'informe que c'est fait ou que ca a echoue.
+- **Les trois applications Next partagent la meme coquille** (les deux portails clients et le back-office) : `AppShell` + `AppSidebar` + `SiteHeader` + `UserMenu`, avec `lib/navigation.ts` comme source unique des entrees de menu et du titre de page, et `components/shared/` pour `PageContainer` / `PageHeader` / `EmptyState` / `ErrorState`. Un ecran ne fixe JAMAIS sa propre largeur ni son propre `<main>` (le `SidebarInset` en est deja un). Regle des retours : **inline** quand l'utilisateur doit AGIR (erreur de champ, dialogue qui reste ouvert), **toast** quand on l'informe que c'est fait ou que ca a echoue.
 - **Documentation** : site Docusaurus 3 dans `documentation/` (TypeScript, français, *docs-only* — pas de blog), publié sur <https://kederiku.github.io/VetLib/> à chaque merge sur `main`. La page de référence de l'API est produite au build par `redocusaurus` depuis `backend/openapi.json` : **ne jamais l'écrire à la main**, exactement comme le client Orval. Écrire en `.md` (CommonMark, `markdown.format: 'detect'`) sauf besoin réel de JSX. Le dépôt étant **public**, le site l'est aussi : aucun secret, aucune URL interne, aucun nom de client réel dans les pages. Toute modification de comportement visible ou du contrat d'API s'accompagne de la mise à jour de la page correspondante.
 
 ## Commandes
 
 Le **Makefile racine** est le point d'entrée unique de toutes les commandes du projet — Claude est autorisé à utiliser librement ses cibles (`make help` pour la liste ; il délègue à `backend/Makefile`).
 
-- `make up` : infra + api + worker (Docker). Frontends **hors Docker** en dev : `make dev-b2c` / `make dev-b2b`.
+- `make up` : infra + api + worker (Docker). Frontends **hors Docker** en dev : `make dev-b2c` / `make dev-b2b` / `make dev-admin`.
 - Deux fichiers d'env distincts (`make env` copie les deux) : `.env` racine = interpolation docker-compose (hostnames Docker) ; `backend/.env` = backend lancé hors Docker (`make dev-api`, alembic, tâches locales — URLs localhost).
 - `make migrate` : migrations Alembic (connectées via `ALEMBIC_DATABASE_URL`, superuser).
 - `make check` : toute la qualité sans Docker (ruff, mypy, tests unit, ESLint, tsc) ; en ciblé : `make lint typecheck test-unit` (backend) ou `make lint-front typecheck-front`.
-- Après tout changement d'endpoint : `make generate-api` (API démarrée sur :8000) — régénère le client Orval des **2** frontends. La CI le vérifie (job `api-client-drift`) : un oubli bloque la PR.
+- Après tout changement d'endpoint : `make generate-api` (API démarrée sur :8000) — régénère le client Orval des **3** frontends. La CI le vérifie (job `api-client-drift`) : un oubli bloque la PR.
 - **Ne jamais éditer `src/lib/api/generated/`** (sortie Orval, committée).
 - `make check-front` impose l'ordre **lint → build → typecheck → test** : `tsc` a besoin de `next-env.d.ts` et `.next/types/`, générés par le build et gitignorés. Ne jamais lancer `typecheck-front` seul sur un dépôt fraîchement cloné.
 - `make docs` : site de documentation en local sur :3002 (`make docs-build`, `make docs-serve`). Ces cibles régénèrent d'abord `backend/openapi.json` — sans lui, le site perd sa référence d'API.
