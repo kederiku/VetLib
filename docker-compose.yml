@@ -213,7 +213,7 @@ services:
 
   # ----- Frontends Next.js (profile "frontend" : optionnels) -----
   # En dev courant, les frontends tournent HORS Docker (npm run dev dans chaque dossier) :
-  # HMR plus rapide, tooling natif. Ces deux services n'existent que pour une stack 100 %
+  # HMR plus rapide, tooling natif. Ces trois services n'existent que pour une stack 100 %
   # conteneurisée : docker compose --profile frontend up -d (sans le profile, ils sont ignorés).
   # frontend-portal = B2C (:3000, propriétaires d'animaux).
   frontend-portal:
@@ -256,6 +256,29 @@ services:
       - /app/node_modules
     ports:
       - "3001:3001"
+
+  # frontend-admin = back-office plateforme (:3003, equipe VetoLib). Meme gabarit
+  # que les deux portails. Il est dans le MEME profile qu'eux : la stack complete
+  # sert a une demo ou a une recette de bout en bout, et le back-office en fait
+  # partie. Rien ici ne le protege d'un acces exterieur -- c'est le role du
+  # cloisonnement d'authentification (cookies Path=/api/v1/admin, SameSite=Strict)
+  # et de l'en-tete X-Robots-Tag pose par next.config.ts, pas celui de compose.
+  frontend-admin:
+    profiles: ["frontend"]
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      target: dev
+      args:
+        APP_DIR: frontend-admin
+    command: npm run dev # le script dev de l'app fait `next dev -p 3003`
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    volumes:
+      - ./frontend-admin:/app
+      - /app/node_modules
+    ports:
+      - "3003:3003"
 
 # Volumes nommés, gérés par Docker : les données survivent aux "docker compose down"
 # et aux rebuilds d'images. Seul "docker compose down -v" les détruit (ce qui, pour

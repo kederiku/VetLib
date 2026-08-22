@@ -79,13 +79,13 @@ install-ci: ## Installe STRICTEMENT les versions verrouillées (ce que fait la C
 
 # -----------------------------------------------------------------------------
 # Infrastructure Docker (postgres, redis, minio, api :8000, worker)
-# Les frontends tournent HORS Docker en dev (voir dev-b2c / dev-b2b).
+# Les frontends tournent HORS Docker en dev (voir dev-b2c / dev-b2b / dev-admin).
 # -----------------------------------------------------------------------------
 
 up: ## Démarre l'infra + l'API + le worker en arrière-plan
 	docker compose up -d
 
-up-full: ## Démo full-stack : idem `up` + les 2 frontends conteneurisés
+up-full: ## Démo full-stack : idem `up` + les 3 frontends conteneurisés
 	docker compose --profile frontend up -d
 
 down: ## Arrête tous les conteneurs (les données sont conservées)

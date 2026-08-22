@@ -368,7 +368,7 @@ jobs:
           uv run alembic upgrade head
 
   # ---------------------------------------------------------------------------
-  # FRONTENDS - lint, build, types et tests (les 2 apps en parallele)
+  # FRONTENDS - lint, build, types et tests (les 3 apps en parallele)
   # ---------------------------------------------------------------------------
   frontend:
     name: frontend - ${{ matrix.app }}
@@ -519,7 +519,7 @@ jobs:
         with:
           node-version-file: frontend-b2c/.nvmrc
           cache: npm
-          # Un seul cache couvrant les deux applications.
+          # Un seul cache couvrant les trois applications.
           cache-dependency-path: |
             frontend-b2c/package-lock.json
             frontend-b2b/package-lock.json
@@ -537,7 +537,7 @@ jobs:
         run: make -C backend openapi
 
       - name: Servir le schema sur le port attendu par Orval
-        # Les deux orval.config.ts pointent sur http://localhost:8000/openapi.json.
+        # Les trois orval.config.ts pointent sur http://localhost:8000/openapi.json.
         # Plutot que de demarrer toute la stack, on sert le fichier deja genere :
         # le resultat est identique et on teste la vraie configuration, sans la
         # modifier. nohup + redirection : sans cela l'etape ne rendrait jamais
@@ -626,7 +626,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          # Troisieme projet npm du depot, avec son propre .nvmrc et son propre
+          # Quatrieme projet npm du depot, avec son propre .nvmrc et son propre
           # package-lock.json : la documentation n'est pas un sous-paquet des
           # frontends (le depot n'utilise pas de workspace npm).
           node-version-file: documentation/.nvmrc
@@ -859,7 +859,7 @@ jobs:
             target: runner
             build-args: APP_DIR=frontend-b2c
             # mode=min pour les frontends : le cache GitHub est plafonne a 10 Go
-            # par depot et il est partage avec les caches npm, uv et Next. Trois
+            # par depot et il est partage avec les caches npm, uv et Next. Quatre
             # images en mode=max evinceraient tout le reste.
             cache-mode: min
           - name: clinic
@@ -867,6 +867,12 @@ jobs:
             dockerfile: docker/frontend/Dockerfile
             target: runner
             build-args: APP_DIR=frontend-b2b
+            cache-mode: min
+          - name: admin
+            context: .
+            dockerfile: docker/frontend/Dockerfile
+            target: runner
+            build-args: APP_DIR=frontend-admin
             cache-mode: min
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -888,7 +894,7 @@ jobs:
           load: false
           provenance: false
           tags: vetolib-${{ matrix.name }}:ci
-          # "scope" isole les trois images : sans lui, elles s'ecraseraient
+          # "scope" isole les quatre images : sans lui, elles s'ecraseraient
           # mutuellement dans le cache.
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=${{ matrix.cache-mode }},scope=${{ matrix.name }}
@@ -993,6 +999,12 @@ jobs:
             dockerfile: docker/frontend/Dockerfile
             target: runner
             build-args: APP_DIR=frontend-b2b
+            cache-mode: min
+          - name: admin
+            context: .
+            dockerfile: docker/frontend/Dockerfile
+            target: runner
+            build-args: APP_DIR=frontend-admin
             cache-mode: min
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
